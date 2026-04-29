@@ -1,0 +1,22 @@
+[
+  {
+    "slipNo": "DS-0001",
+    "date": "27/04/2026",
+    "employeeName": "Vishal Bhattacharya",
+    "employeeId": "EMP-123",
+    "reportingManager": "Manager Name",
+    "contactNo": "9999999999",
+    "fromDate": "27/04/2026",
+    "toDate": "27/04/2026",
+    "dutyType": "Outdoor",
+    "startTime": "10:00",
+    "endTime": "14:30",
+    "totalHours": "4.5",
+    "pickupLocation": "Dwarka Sector 26, Delhi",
+    "dropLocation": "IGI Airport, Delhi",
+    "approverName": "Supervisor Name",
+    "approverDate": "27/04/2026",
+    "gpsMapImagePath": ""
+  }
+]
+

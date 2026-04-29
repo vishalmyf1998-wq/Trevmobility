@@ -1,0 +1,14 @@
+{
+  "name": "trev-duty-slip",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Generate Trev duty slip PDFs from JSON using a Tailwind HTML template.",
+  "type": "module",
+  "scripts": {
+    "generate": "node ./generate-pdf.js"
+  },
+  "dependencies": {
+    "puppeteer": "^24.10.2"
+  }
+}
+

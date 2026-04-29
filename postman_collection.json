@@ -1,0 +1,2966 @@
+{
+  "info": {
+    "name": "Supabase CRUD API Auto-Generated",
+    "description": "Auto-generated Postman collection for all 25 Supabase tables.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "cities",
+      "item": [
+        {
+          "name": "Get All cities",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/cities",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cities"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get cities by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/cities?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cities"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create cities",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/cities",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cities"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update cities",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/cities?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cities"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete cities",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/cities?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cities"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "hubs",
+      "item": [
+        {
+          "name": "Get All hubs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/hubs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hubs"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get hubs by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/hubs?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hubs"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create hubs",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/hubs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hubs"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update hubs",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/hubs?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hubs"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete hubs",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/hubs?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "hubs"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "car_categories",
+      "item": [
+        {
+          "name": "Get All car_categories",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/car_categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "car_categories"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get car_categories by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/car_categories?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "car_categories"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create car_categories",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/car_categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "car_categories"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update car_categories",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/car_categories?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "car_categories"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete car_categories",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/car_categories?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "car_categories"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "cars",
+      "item": [
+        {
+          "name": "Get All cars",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/cars",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cars"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get cars by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/cars?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cars"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create cars",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/cars",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cars"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update cars",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/cars?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cars"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete cars",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/cars?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cars"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "drivers",
+      "item": [
+        {
+          "name": "Get All drivers",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/drivers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "drivers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get drivers by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/drivers?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "drivers"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create drivers",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/drivers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "drivers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update drivers",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/drivers?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "drivers"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete drivers",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/drivers?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "drivers"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "b2c_customers",
+      "item": [
+        {
+          "name": "Get All b2c_customers",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/b2c_customers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2c_customers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get b2c_customers by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/b2c_customers?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2c_customers"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create b2c_customers",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/b2c_customers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2c_customers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update b2c_customers",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/b2c_customers?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2c_customers"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete b2c_customers",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/b2c_customers?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2c_customers"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "fare_groups",
+      "item": [
+        {
+          "name": "Get All fare_groups",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/fare_groups",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fare_groups"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get fare_groups by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/fare_groups?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fare_groups"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create fare_groups",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/fare_groups",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fare_groups"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update fare_groups",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/fare_groups?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fare_groups"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete fare_groups",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/fare_groups?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fare_groups"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "b2b_clients",
+      "item": [
+        {
+          "name": "Get All b2b_clients",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/b2b_clients",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2b_clients"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get b2b_clients by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/b2b_clients?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2b_clients"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create b2b_clients",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/b2b_clients",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2b_clients"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update b2b_clients",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/b2b_clients?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2b_clients"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete b2b_clients",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/b2b_clients?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2b_clients"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "b2b_entities",
+      "item": [
+        {
+          "name": "Get All b2b_entities",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/b2b_entities",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2b_entities"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get b2b_entities by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/b2b_entities?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2b_entities"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create b2b_entities",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/b2b_entities",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2b_entities"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update b2b_entities",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/b2b_entities?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2b_entities"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete b2b_entities",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/b2b_entities?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2b_entities"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "b2b_employees",
+      "item": [
+        {
+          "name": "Get All b2b_employees",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/b2b_employees",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2b_employees"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get b2b_employees by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/b2b_employees?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2b_employees"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create b2b_employees",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/b2b_employees",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2b_employees"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update b2b_employees",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/b2b_employees?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2b_employees"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete b2b_employees",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/b2b_employees?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "b2b_employees"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "airports",
+      "item": [
+        {
+          "name": "Get All airports",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/airports",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "airports"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get airports by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/airports?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "airports"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create airports",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/airports",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "airports"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update airports",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/airports?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "airports"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete airports",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/airports?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "airports"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "airport_terminals",
+      "item": [
+        {
+          "name": "Get All airport_terminals",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/airport_terminals",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "airport_terminals"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get airport_terminals by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/airport_terminals?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "airport_terminals"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create airport_terminals",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/airport_terminals",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "airport_terminals"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update airport_terminals",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/airport_terminals?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "airport_terminals"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete airport_terminals",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/airport_terminals?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "airport_terminals"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "admin_roles",
+      "item": [
+        {
+          "name": "Get All admin_roles",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/admin_roles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin_roles"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get admin_roles by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/admin_roles?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin_roles"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create admin_roles",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/admin_roles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin_roles"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update admin_roles",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/admin_roles?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin_roles"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete admin_roles",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/admin_roles?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin_roles"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "admin_users",
+      "item": [
+        {
+          "name": "Get All admin_users",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/admin_users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin_users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get admin_users by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/admin_users?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin_users"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create admin_users",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/admin_users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin_users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update admin_users",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/admin_users?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin_users"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete admin_users",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/admin_users?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin_users"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "booking_tags",
+      "item": [
+        {
+          "name": "Get All booking_tags",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/booking_tags",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "booking_tags"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get booking_tags by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/booking_tags?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "booking_tags"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create booking_tags",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/booking_tags",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "booking_tags"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update booking_tags",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/booking_tags?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "booking_tags"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete booking_tags",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/booking_tags?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "booking_tags"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "cancellation_policies",
+      "item": [
+        {
+          "name": "Get All cancellation_policies",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/cancellation_policies",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cancellation_policies"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get cancellation_policies by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/cancellation_policies?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cancellation_policies"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create cancellation_policies",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/cancellation_policies",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cancellation_policies"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update cancellation_policies",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/cancellation_policies?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cancellation_policies"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete cancellation_policies",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/cancellation_policies?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cancellation_policies"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "promo_codes",
+      "item": [
+        {
+          "name": "Get All promo_codes",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/promo_codes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "promo_codes"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get promo_codes by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/promo_codes?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "promo_codes"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create promo_codes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/promo_codes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "promo_codes"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update promo_codes",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/promo_codes?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "promo_codes"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete promo_codes",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/promo_codes?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "promo_codes"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "city_polygons",
+      "item": [
+        {
+          "name": "Get All city_polygons",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/city_polygons",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "city_polygons"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get city_polygons by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/city_polygons?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "city_polygons"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create city_polygons",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/city_polygons",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "city_polygons"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update city_polygons",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/city_polygons?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "city_polygons"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete city_polygons",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/city_polygons?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "city_polygons"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "car_locations",
+      "item": [
+        {
+          "name": "Get All car_locations",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/car_locations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "car_locations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get car_locations by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/car_locations?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "car_locations"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create car_locations",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/car_locations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "car_locations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update car_locations",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/car_locations?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "car_locations"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete car_locations",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/car_locations?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "car_locations"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "gst_configs",
+      "item": [
+        {
+          "name": "Get All gst_configs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/gst_configs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "gst_configs"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get gst_configs by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/gst_configs?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "gst_configs"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create gst_configs",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/gst_configs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "gst_configs"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update gst_configs",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/gst_configs?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "gst_configs"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete gst_configs",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/gst_configs?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "gst_configs"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "communication_templates",
+      "item": [
+        {
+          "name": "Get All communication_templates",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/communication_templates",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "communication_templates"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get communication_templates by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/communication_templates?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "communication_templates"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create communication_templates",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/communication_templates",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "communication_templates"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update communication_templates",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/communication_templates?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "communication_templates"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete communication_templates",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/communication_templates?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "communication_templates"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "bookings",
+      "item": [
+        {
+          "name": "Get All bookings",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/bookings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bookings"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get bookings by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/bookings?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bookings"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create bookings",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/bookings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bookings"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update bookings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/bookings?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bookings"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete bookings",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/bookings?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bookings"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "booking_event_logs",
+      "item": [
+        {
+          "name": "Get All booking_event_logs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/booking_event_logs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "booking_event_logs"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get booking_event_logs by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/booking_event_logs?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "booking_event_logs"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create booking_event_logs",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/booking_event_logs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "booking_event_logs"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update booking_event_logs",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/booking_event_logs?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "booking_event_logs"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete booking_event_logs",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/booking_event_logs?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "booking_event_logs"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "duty_slips",
+      "item": [
+        {
+          "name": "Get All duty_slips",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/duty_slips",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "duty_slips"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get duty_slips by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/duty_slips?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "duty_slips"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create duty_slips",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/duty_slips",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "duty_slips"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update duty_slips",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/duty_slips?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "duty_slips"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete duty_slips",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/duty_slips?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "duty_slips"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "invoices",
+      "item": [
+        {
+          "name": "Get All invoices",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/invoices",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "invoices"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get invoices by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/invoices?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "invoices"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create invoices",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields according to the schema\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/invoices",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "invoices"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update invoices",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  // Add fields to update\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/invoices?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "invoices"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete invoices",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/invoices?id=YOUR_ID_HERE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "invoices"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "YOUR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000/api/crud",
+      "type": "string"
+    }
+  ]
+}
