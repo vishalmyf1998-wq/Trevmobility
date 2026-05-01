@@ -13,11 +13,12 @@ const ALLOWED_TABLES = [
   'airport_terminals', 'admin_roles', 'admin_users', 'booking_tags',
   'cancellation_policies', 'promo_codes', 'city_polygons', 'car_locations',
   'gst_configs', 'communication_templates', 'bookings', 'booking_event_logs',
-  'duty_slips', 'invoices'
+  'duty_slips', 'invoices', 'b2b_approval_rules'
 ];
 
-export async function GET(request: Request, { params }: { params: { table: string } }) {
-  const table = params.table;
+export async function GET(request: Request, { params }: { params: Promise<{ table: string }> }) {
+  const resolvedParams = await params;
+  const table = resolvedParams.table;
   
   if (!ALLOWED_TABLES.includes(table)) {
     return NextResponse.json({ error: 'Invalid table name' }, { status: 400 });
@@ -27,7 +28,7 @@ export async function GET(request: Request, { params }: { params: { table: strin
   const id = searchParams.get('id');
 
   try {
-    let query = supabase.from(table).select('*');
+    let query: any = supabase.from(table).select('*');
     
     if (id) {
       query = query.eq('id', id).single();
@@ -47,8 +48,9 @@ export async function GET(request: Request, { params }: { params: { table: strin
   }
 }
 
-export async function POST(request: Request, { params }: { params: { table: string } }) {
-  const table = params.table;
+export async function POST(request: Request, { params }: { params: Promise<{ table: string }> }) {
+  const resolvedParams = await params;
+  const table = resolvedParams.table;
   
   if (!ALLOWED_TABLES.includes(table)) {
     return NextResponse.json({ error: 'Invalid table name' }, { status: 400 });
@@ -66,8 +68,9 @@ export async function POST(request: Request, { params }: { params: { table: stri
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { table: string } }) {
-  const table = params.table;
+export async function PUT(request: Request, { params }: { params: Promise<{ table: string }> }) {
+  const resolvedParams = await params;
+  const table = resolvedParams.table;
   
   if (!ALLOWED_TABLES.includes(table)) {
     return NextResponse.json({ error: 'Invalid table name' }, { status: 400 });
@@ -92,8 +95,9 @@ export async function PUT(request: Request, { params }: { params: { table: strin
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { table: string } }) {
-  const table = params.table;
+export async function DELETE(request: Request, { params }: { params: Promise<{ table: string }> }) {
+  const resolvedParams = await params;
+  const table = resolvedParams.table;
   
   if (!ALLOWED_TABLES.includes(table)) {
     return NextResponse.json({ error: 'Invalid table name' }, { status: 400 });

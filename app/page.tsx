@@ -1,8 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useAdmin } from '@/lib/admin-context'
+import { supabase } from '@/lib/supabaseClient'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -35,7 +36,14 @@ import {
   FileText,
   Plus,
   ChevronRight,
-  CalendarDays
+  CalendarDays,
+  Wallet,
+  Gift,
+  Star,
+  Headset,
+  Percent,
+  ReceiptText,
+  ShieldCheck
 } from 'lucide-react'
 
 type DateFilterType = 'today' | 'yesterday' | 'last7days' | 'last30days' | 'thisMonth' | 'lastMonth' | 'custom'
@@ -46,11 +54,17 @@ export default function DashboardPage() {
     cars,
     cities,
     fareGroups,
+    b2cCustomers,
     b2bClients,
+    b2bApprovalRules,
     carCategories,
     bookings,
+    walletTransactions,
     invoices,
     dutySlips,
+    promoCodes,
+    cityPolygons,
+    driverPayouts,
     getDriver,
     getCar,
     getCity,
@@ -61,6 +75,87 @@ export default function DashboardPage() {
   const [customDateFrom, setCustomDateFrom] = useState<Date | undefined>(undefined)
   const [customDateTo, setCustomDateTo] = useState<Date | undefined>(undefined)
   const [showCustomPicker, setShowCustomPicker] = useState(false)
+  const [adminCounts, setAdminCounts] = useState({
+    openTickets: 0,
+    pendingReferrals: 0,
+    lowReviews: 0,
+    peakRules: 0,
+    extrasRules: 0,
+  })
+
+  useEffect(() => {
+    const fetchAdminCounts = async () => {
+      const safeCount = async (query: PromiseLike<{ count: number | null; error: unknown }>) => {
+        const { count, error } = await query
+        return error ? 0 : count || 0
+      }
+
+      const [
+        openTickets,
+        pendingReferrals,
+        lowDriverReviews,
+        lowCarReviews,
+        peakRules,
+        routeTolls,
+        stateTaxes,
+        parkingFees,
+      ] = await Promise.all([
+        safeCount(
+          supabase
+            .from('open_support_tickets')
+            .select('id', { count: 'exact', head: true })
+        ),
+        safeCount(
+          supabase
+            .from('referrals')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', 'pending')
+        ),
+        safeCount(
+          supabase
+            .from('trip_reviews')
+            .select('id', { count: 'exact', head: true })
+            .lte('driver_rating', 3)
+        ),
+        safeCount(
+          supabase
+            .from('trip_reviews')
+            .select('id', { count: 'exact', head: true })
+            .lte('car_rating', 3)
+        ),
+        safeCount(
+          supabase
+            .from('peak_hours')
+            .select('id', { count: 'exact', head: true })
+        ),
+        safeCount(
+          supabase
+            .from('route_tolls')
+            .select('id', { count: 'exact', head: true })
+        ),
+        safeCount(
+          supabase
+            .from('state_taxes')
+            .select('id', { count: 'exact', head: true })
+        ),
+        safeCount(
+          supabase
+            .from('parking_fees')
+            .select('id', { count: 'exact', head: true })
+        ),
+      ])
+
+      setAdminCounts({
+        openTickets,
+        pendingReferrals,
+        lowReviews: lowDriverReviews + lowCarReviews,
+        peakRules,
+        extrasRules: routeTolls + stateTaxes + parkingFees,
+      })
+    }
+
+    fetchAdminCounts()
+  }, [])
 
   // Get date range based on filter
   const dateRange = useMemo(() => {
@@ -142,6 +237,10 @@ export default function DashboardPage() {
     const activeDrivers = drivers.filter(d => d.status === 'active')
     const availableCars = cars.filter(c => c.status === 'available')
     const onTripCars = cars.filter(c => c.status === 'on_trip')
+    const totalWalletBalance = b2cCustomers.reduce((sum, c) => sum + (c.walletBalance || 0), 0)
+    const activePromoCodes = promoCodes.filter(p => p.isActive).length
+    const activeSurgeZones = cityPolygons.filter((p: any) => (p.surgeMultiplier || p.surge_multiplier || 1) > 1).length
+    const pendingDriverPayouts = driverPayouts.filter(p => p.status === 'pending').length
     
     return {
       filteredBookings: filteredBookings.length,
@@ -159,9 +258,29 @@ export default function DashboardPage() {
       onTripCars: onTripCars.length,
       totalCars: cars.length,
       b2bClients: b2bClients.filter(c => c.status === 'active').length,
-      pendingBookings: filteredBookings.filter(b => b.status === 'pending').length
+      pendingBookings: filteredBookings.filter(b => b.status === 'pending').length,
+      b2cCustomers: b2cCustomers.length,
+      totalWalletBalance,
+      walletTransactions: walletTransactions.length,
+      activePromoCodes,
+      b2bApprovalRules: b2bApprovalRules.length,
+      activeSurgeZones,
+      pendingDriverPayouts
     }
-  }, [bookings, invoices, drivers, cars, b2bClients, dateRange])
+  }, [
+    bookings,
+    invoices,
+    drivers,
+    cars,
+    b2bClients,
+    b2cCustomers,
+    walletTransactions,
+    promoCodes,
+    cityPolygons,
+    b2bApprovalRules,
+    driverPayouts,
+    dateRange
+  ])
 
   // Get live trips (dispatched, arrived, picked_up)
   const liveTrips = useMemo(() => {
@@ -509,6 +628,71 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      {/* New Admin Modules */}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <ModuleCard
+          href="/b2c-wallet"
+          icon={Wallet}
+          title="Wallet Management"
+          value={formatCurrency(stats.totalWalletBalance)}
+          description={`${stats.b2cCustomers} customers, ${stats.walletTransactions} transactions`}
+        />
+        <ModuleCard
+          href="/admin-users/referrals"
+          icon={Gift}
+          title="Refer & Earn"
+          value={adminCounts.pendingReferrals.toString()}
+          description="Pending referral rewards"
+          tone="amber"
+        />
+        <ModuleCard
+          href="/admin-users/reviews"
+          icon={Star}
+          title="Reviews & Ratings"
+          value={adminCounts.lowReviews.toString()}
+          description="Low rating reviews to monitor"
+          tone="red"
+        />
+        <ModuleCard
+          href="/admin-users/support"
+          icon={Headset}
+          title="Support & Tickets"
+          value={adminCounts.openTickets.toString()}
+          description="Open support tickets"
+          tone="blue"
+        />
+        <ModuleCard
+          href="/admin-users/surge"
+          icon={Percent}
+          title="Surge Pricing"
+          value={(adminCounts.peakRules + stats.activeSurgeZones).toString()}
+          description={`${adminCounts.peakRules} peak rules, ${stats.activeSurgeZones} active zones`}
+        />
+        <ModuleCard
+          href="/admin-users/extras"
+          icon={ReceiptText}
+          title="Tolls & Taxes"
+          value={adminCounts.extrasRules.toString()}
+          description="Toll, tax and parking rules"
+        />
+        <ModuleCard
+          href="/b2b-approvals"
+          icon={ShieldCheck}
+          title="B2B Approvals"
+          value={stats.b2bApprovalRules.toString()}
+          description="Approval workflow rules"
+          tone="blue"
+        />
+        <ModuleCard
+          href="/driver-payouts"
+          icon={DollarSign}
+          title="Driver Payouts"
+          value={stats.pendingDriverPayouts.toString()}
+          description="Pending settlement payouts"
+          tone="amber"
+        />
+      </div>
+
       {/* Main Content Grid */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Live Trips */}
@@ -692,6 +876,18 @@ export default function DashboardPage() {
                 title="Configure Fares"
                 description="Manage fare groups"
               />
+              <QuickAction
+                href="/admin-users/support"
+                icon={Headset}
+                title="Support Queue"
+                description="Resolve customer tickets"
+              />
+              <QuickAction
+                href="/admin-users/surge"
+                icon={Percent}
+                title="Surge Rules"
+                description="Manage peak hour pricing"
+              />
             </div>
           </CardContent>
         </Card>
@@ -769,11 +965,60 @@ export default function DashboardPage() {
                 </div>
                 <span className="text-sm font-medium">{dutySlips.length}</span>
               </div>
+              <div className="flex items-center justify-between rounded-lg bg-muted/50 p-3">
+                <div className="flex items-center gap-2">
+                  <Gift className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">Promo Codes</span>
+                </div>
+                <span className="text-sm font-medium">{stats.activePromoCodes} active</span>
+              </div>
             </div>
           </CardContent>
         </Card>
       </div>
     </div>
+  )
+}
+
+function ModuleCard({
+  href,
+  icon: Icon,
+  title,
+  value,
+  description,
+  tone = 'green',
+}: {
+  href: string
+  icon: React.ElementType
+  title: string
+  value: string
+  description: string
+  tone?: 'green' | 'amber' | 'red' | 'blue'
+}) {
+  const toneClasses = {
+    green: 'bg-emerald-500/10 text-emerald-600',
+    amber: 'bg-amber-500/10 text-amber-600',
+    red: 'bg-red-500/10 text-red-600',
+    blue: 'bg-blue-500/10 text-blue-600',
+  }
+
+  return (
+    <Link href={href} className="group block">
+      <Card className="h-full transition-colors group-hover:border-primary/60">
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm text-muted-foreground">{title}</p>
+              <p className="mt-1 truncate text-2xl font-bold">{value}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+            </div>
+            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${toneClasses[tone]}`}>
+              <Icon className="h-5 w-5" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
   )
 }
 

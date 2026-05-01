@@ -9,7 +9,8 @@ import {
   Driver, Car, CarCategory, City, B2CCustomer, Airport, AirportTerminal, FareGroup, B2BClient, B2BEntity, GSTConfig,
   Booking, DutySlip, Invoice, PeakHourConfig, NightChargeConfig,
   Hub, PromoCode, CityPolygon, CarLocation,
-  B2BEmployee, CommunicationTemplate, AdminRole, AdminUser, BookingTag, CancellationPolicy
+  B2BEmployee, B2BApprovalRule, CommunicationTemplate, AdminRole, AdminUser, BookingTag, CancellationPolicy, WalletTransaction,
+  UserType
 } from './types'
 
 export interface DriverPayout {
@@ -51,6 +52,28 @@ export interface DriverPayout {
   status: 'pending' | 'paid'
   remarks?: string
   createdAt: string
+}
+
+export interface TicketComment {
+  id: string
+  text: string
+  senderName: string
+  isAdmin: boolean
+  timestamp: string
+}
+
+export interface SupportTicket {
+  id: string
+  ticketNumber: string
+  subject: string
+  customerName: string
+  type: string
+  priority: string
+  status: string
+  description: string
+  createdAt: string
+  updatedAt: string
+  comments?: TicketComment[]
 }
 
 // Default peak hour and night charge configs
@@ -122,8 +145,10 @@ const initialB2CCustomers: B2CCustomer[] = []
 const initialB2BClients: B2BClient[] = []
 
 const initialB2BEmployees: B2BEmployee[] = []
+const initialB2BApprovalRules: B2BApprovalRule[] = []
 
 const initialBookings: Booking[] = []
+const initialWalletTransactions: WalletTransaction[] = []
 
 const initialDutySlips: DutySlip[] = []
 
@@ -138,10 +163,12 @@ const initialCarLocations: CarLocation[] = []
 const initialCommunicationTemplates: CommunicationTemplate[] = []
 
 const initialAdminUsers: AdminUser[] = [
-  { id: 'e5555555-5555-4555-e555-555555555555', name: 'Trev Admin', email: 'vishal@trevcabs.com', roleId: 'a1111111-1111-4111-a111-111111111111', status: 'active', lastLoginAt: new Date().toISOString(), createdAt: new Date().toISOString() }
+  { id: 'e5555555-5555-4555-e555-555555555555', name: 'Trev Admin', email: 'vishal@trevcabs.com', roleId: 'a1111111-1111-4111-a111-111111111111', status: 'active', lastLogin: new Date().toISOString(), createdAt: new Date().toISOString() }
 ]
 
 const initialCancellationPolicies: CancellationPolicy[] = []
+
+const initialSupportTickets: SupportTicket[] = []
 
 const loadState = <T,>(key: string, fallback: T): T => {
   if (typeof window !== 'undefined') {
@@ -164,9 +191,140 @@ const loadState = <T,>(key: string, fallback: T): T => {
   return fallback
 }
 
+const dummyClient: B2BClient = {
+  id: 'dummy-corp-client',
+  companyName: 'Dummy Corp',
+  industry: 'Tech',
+  contactPerson: 'John Doe',
+  email: 'admin@dummycorp.com',
+  phone: '9999999999',
+  billingAddress: '123 Dummy St',
+  gstNumber: '22AAAAA0000A1Z5',
+  billingType: 'point_to_point',
+  paymentTerms: 30,
+  status: 'active',
+  isGSTEnabled: true,
+  createdAt: new Date().toISOString()
+}
+
+const dummyAdmin: B2BEmployee = {
+  id: 'dummy-corp-admin',
+  b2bClientId: 'dummy-corp-client',
+  name: 'Corp Admin',
+  phone: '9876543210',
+  officeEmail: 'admin@dummycorp.com',
+  employeeId: 'EMP-001',
+  approverEmail: 'ceo@dummycorp.com',
+  status: 'approved',
+  canLogin: true,
+  createdAt: new Date().toISOString(),
+  // @ts-ignore
+  isCorpAdmin: true
+}
+
+const dummyEmployee: B2BEmployee = {
+  id: 'dummy-corp-emp',
+  b2bClientId: 'dummy-corp-client',
+  name: 'Corp Employee',
+  phone: '9876543211',
+  officeEmail: 'employee@dummycorp.com',
+  employeeId: 'EMP-002',
+  approverEmail: 'admin@dummycorp.com',
+  status: 'approved',
+  canLogin: true,
+  createdAt: new Date().toISOString(),
+  // @ts-ignore
+  isCorpAdmin: false
+}
+
+const dummyBookings: Booking[] = [
+  {
+    id: 'dummy-bk-1',
+    bookingNumber: 'BK' + Date.now().toString().slice(-6) + '1',
+    b2bClientId: 'dummy-corp-client',
+    b2bEmployeeId: 'dummy-corp-admin',
+    customerName: 'Corp Admin',
+    customerPhone: '9876543210',
+    customerEmail: 'admin@dummycorp.com',
+    customerAddress: '123 Dummy St',
+    cityId: 'demo-city',
+    carCategoryId: 'demo-cat',
+    tripType: 'city_ride',
+    pickupLocation: 'Dummy Corp HQ',
+    dropLocation: 'Client Site A',
+    pickupDate: new Date().toISOString().split('T')[0],
+    pickupTime: '09:00',
+    estimatedKm: 20,
+    estimatedFare: 600,
+    actualKm: 0,
+    actualFare: 0,
+    extraCharges: 0,
+    peakHourCharge: 0,
+    nightCharge: 0,
+    waitingCharge: 0,
+    tollCharges: 0,
+    parkingCharges: 0,
+    miscCharges: 0,
+    totalFare: 600,
+    gstAmount: 30,
+    grandTotal: 630,
+    advancePaid: 0,
+    promoDiscount: 0,
+    status: 'pending',
+    paymentStatus: 'pending',
+    remarks: 'Dummy booking created by Corp Admin',
+    createdAt: new Date().toISOString(),
+    createdBy: 'Admin',
+    eventLog: []
+  },
+  {
+    id: 'dummy-bk-2',
+    bookingNumber: 'BK' + Date.now().toString().slice(-6) + '2',
+    b2bClientId: 'dummy-corp-client',
+    b2bEmployeeId: 'dummy-corp-emp',
+    customerName: 'Corp Employee',
+    customerPhone: '9876543211',
+    customerEmail: 'employee@dummycorp.com',
+    customerAddress: '123 Dummy St',
+    cityId: 'demo-city',
+    carCategoryId: 'demo-cat',
+    tripType: 'airport_drop',
+    pickupLocation: 'Dummy Corp HQ',
+    dropLocation: 'Airport Terminal 2',
+    pickupDate: new Date().toISOString().split('T')[0],
+    pickupTime: '17:30',
+    estimatedKm: 45,
+    estimatedFare: 1500,
+    actualKm: 0,
+    actualFare: 0,
+    extraCharges: 0,
+    peakHourCharge: 0,
+    nightCharge: 0,
+    waitingCharge: 0,
+    tollCharges: 0,
+    parkingCharges: 0,
+    miscCharges: 0,
+    totalFare: 1500,
+    gstAmount: 75,
+    grandTotal: 1575,
+    advancePaid: 0,
+    promoDiscount: 0,
+    status: 'confirmed',
+    paymentStatus: 'pending',
+    remarks: 'Dummy booking created by Corp Employee',
+    createdAt: new Date().toISOString(),
+    createdBy: 'Employee',
+    eventLog: []
+  }
+]
+
 interface AdminContextType {
+  userType: UserType
+  setUserType: (type: UserType) => void
+  
   // Data
   drivers: Driver[]
+
   cars: Car[]
   carCategories: CarCategory[]
   cities: City[]
@@ -176,6 +334,7 @@ interface AdminContextType {
   b2bClients: B2BClient[]
   gstConfig: GSTConfig
   bookings: Booking[]
+  walletTransactions: WalletTransaction[]
   dutySlips: DutySlip[]
   invoices: Invoice[]
   hubs: Hub[]
@@ -183,12 +342,14 @@ interface AdminContextType {
   cityPolygons: CityPolygon[]
   carLocations: CarLocation[]
   b2bEmployees: B2BEmployee[]
+  b2bApprovalRules: B2BApprovalRule[]
   communicationTemplates: CommunicationTemplate[]
   adminRoles: AdminRole[]
   adminUsers: AdminUser[]
   bookingTags: BookingTag[]
   cancellationPolicies: CancellationPolicy[]
   driverPayouts: DriverPayout[]
+  supportTickets: SupportTicket[]
   
   // Actions - Drivers
   addDriver: (driver: Omit<Driver, 'id' | 'createdAt'>) => void
@@ -216,6 +377,8 @@ interface AdminContextType {
 
   // Actions - B2C Customers
   upsertB2CCustomer: (customer: Omit<B2CCustomer, 'id' | 'customerCode' | 'createdAt' | 'updatedAt'>) => Promise<B2CCustomer>
+  updateB2CCustomer: (id: string, updates: Partial<B2CCustomer>) => Promise<void>
+  addWalletTransaction: (transaction: Omit<WalletTransaction, 'id' | 'createdAt'>) => Promise<void>
   getB2CCustomer: (id: string) => B2CCustomer | undefined
   findB2CCustomer: (query: { name?: string; phone?: string; email?: string }) => B2CCustomer | undefined
 
@@ -283,6 +446,12 @@ interface AdminContextType {
   deleteB2BEmployee: (id: string) => void
   bulkAddB2BEmployees: (employees: Omit<B2BEmployee, 'id' | 'createdAt'>[]) => void
   
+  // Actions - B2B Approval Rules
+  addB2BApprovalRule: (rule: Omit<B2BApprovalRule, 'id' | 'createdAt'>) => void
+  updateB2BApprovalRule: (id: string, rule: Partial<B2BApprovalRule>) => void
+  deleteB2BApprovalRule: (id: string) => void
+  getB2BApprovalRule: (id: string) => B2BApprovalRule | undefined
+  
   // Actions - Communication Templates
   addCommunicationTemplate: (template: Omit<CommunicationTemplate, 'id' | 'createdAt'>) => void
   updateCommunicationTemplate: (id: string, template: Partial<CommunicationTemplate>) => void
@@ -313,6 +482,11 @@ interface AdminContextType {
   updateDriverPayout: (id: string, payout: Partial<DriverPayout>) => void
   deleteDriverPayout: (id: string) => void
   
+  // Actions - Support Tickets
+  addSupportTicket: (ticket: Omit<SupportTicket, 'id' | 'ticketNumber' | 'createdAt' | 'updatedAt'>) => void
+  updateSupportTicket: (id: string, ticket: Partial<SupportTicket>) => void
+  deleteSupportTicket: (id: string) => void
+  
   // Helpers
   getCarCategory: (id: string) => CarCategory | undefined
   getCity: (id: string) => City | undefined
@@ -331,6 +505,10 @@ interface AdminContextType {
   getAdminRole: (id: string) => AdminRole | undefined
   getBookingTag: (id: string) => BookingTag | undefined
   getCancellationPolicy: (id: string) => CancellationPolicy | undefined
+  
+  // Actions - Booking Edits Approval
+  approveBookingEdit: (bookingId: string) => void
+  rejectBookingEdit: (bookingId: string, reason: string) => void
   
   currentUser: any | null
   logout: () => Promise<void>
@@ -377,6 +555,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   const [b2bClients, setB2BClients] = useState<B2BClient[]>(() => loadState('b2bClients', initialB2BClients))
   const [gstConfig, setGstConfig] = useState<GSTConfig>(initialGstConfig)
   const [bookings, setBookings] = useState<Booking[]>(() => loadState('bookings', initialBookings))
+  const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>(() => loadState('walletTransactions', initialWalletTransactions))
   const [dutySlips, setDutySlips] = useState<DutySlip[]>(() => loadState('dutySlips', initialDutySlips))
   const [invoices, setInvoices] = useState<Invoice[]>(() => loadState('invoices', initialInvoices))
   const [hubs, setHubs] = useState<Hub[]>(() => loadState('hubs', initialHubs))
@@ -384,12 +563,35 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   const [cityPolygons, setCityPolygons] = useState<CityPolygon[]>(() => loadState('cityPolygons', initialCityPolygons))
   const [carLocations, setCarLocations] = useState<CarLocation[]>(() => loadState('carLocations', initialCarLocations))
   const [b2bEmployees, setB2BEmployees] = useState<B2BEmployee[]>(() => loadState('b2bEmployees', initialB2BEmployees))
+  const [b2bApprovalRules, setB2BApprovalRules] = useState<B2BApprovalRule[]>(() => loadState('b2bApprovalRules', initialB2BApprovalRules))
   const [communicationTemplates, setCommunicationTemplates] = useState<CommunicationTemplate[]>(() => loadState('communicationTemplates', initialCommunicationTemplates))
   const [adminRoles, setAdminRoles] = useState<AdminRole[]>(() => loadState('adminRoles', initialAdminRoles))
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>(() => loadState('adminUsers', initialAdminUsers))
   const [bookingTags, setBookingTags] = useState<BookingTag[]>(() => loadState('bookingTags', initialBookingTags))
   const [cancellationPolicies, setCancellationPolicies] = useState<CancellationPolicy[]>(() => loadState('cancellationPolicies', initialCancellationPolicies))
   const [driverPayouts, setDriverPayouts] = useState<DriverPayout[]>(() => loadState('driverPayouts', initialDriverPayouts))
+  const [supportTickets, setSupportTickets] = useState<SupportTicket[]>(() => loadState('supportTickets', initialSupportTickets))
+
+  // UserType state
+  const loadUserType = (): UserType => {
+    if (typeof window === 'undefined') return 'trev-admin' as UserType
+    try {
+      const saved = localStorage.getItem('userType')
+      if (saved && ['trev-admin', 'corporate-admin', 'corporate-employee'].includes(saved)) {
+        return saved as UserType
+      }
+    } catch {}
+    return 'trev-admin' as UserType
+  }
+
+  const [userType, setUserTypeState] = useState<UserType>(loadUserType())
+
+  const setUserType = useCallback((type: UserType) => {
+    setUserTypeState(type)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('userType', type)
+    }
+  }, [])
 
   const generateCustomerCode = () => `B2C${Date.now().toString().slice(-6)}${Math.random().toString(36).substring(2, 5).toUpperCase()}`
 
@@ -435,6 +637,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => { localStorage.setItem('bookings', JSON.stringify(bookings)) }, [bookings])
+  useEffect(() => { localStorage.setItem('walletTransactions', JSON.stringify(walletTransactions)) }, [walletTransactions])
   useEffect(() => { localStorage.setItem('drivers', JSON.stringify(drivers)) }, [drivers])
   useEffect(() => { localStorage.setItem('cars', JSON.stringify(cars)) }, [cars])
   useEffect(() => { localStorage.setItem('carCategories', JSON.stringify(carCategories)) }, [carCategories])
@@ -449,13 +652,63 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { localStorage.setItem('cityPolygons', JSON.stringify(cityPolygons)) }, [cityPolygons])
   useEffect(() => { localStorage.setItem('b2bClients', JSON.stringify(b2bClients)) }, [b2bClients])
   useEffect(() => { localStorage.setItem('b2bEmployees', JSON.stringify(b2bEmployees)) }, [b2bEmployees])
+  useEffect(() => { localStorage.setItem('b2bApprovalRules', JSON.stringify(b2bApprovalRules)) }, [b2bApprovalRules])
   useEffect(() => { localStorage.setItem('communicationTemplates', JSON.stringify(communicationTemplates)) }, [communicationTemplates])
   useEffect(() => { localStorage.setItem('adminRoles', JSON.stringify(adminRoles)) }, [adminRoles])
   useEffect(() => { localStorage.setItem('adminUsers', JSON.stringify(adminUsers)) }, [adminUsers])
   useEffect(() => { localStorage.setItem('bookingTags', JSON.stringify(bookingTags)) }, [bookingTags])
   useEffect(() => { localStorage.setItem('cancellationPolicies', JSON.stringify(cancellationPolicies)) }, [cancellationPolicies])
   useEffect(() => { localStorage.setItem('driverPayouts', JSON.stringify(driverPayouts)) }, [driverPayouts])
+  useEffect(() => { localStorage.setItem('supportTickets', JSON.stringify(supportTickets)) }, [supportTickets])
   useEffect(() => { localStorage.setItem('b2cCustomers', JSON.stringify(b2cCustomers)) }, [b2cCustomers])
+
+  // Inject Dummy Bookings
+  useEffect(() => {
+    const addedDummies = localStorage.getItem('dummy_b2b_bookings_v3')
+    if (!addedDummies) {
+      setB2BClients(prev => {
+        if (!prev.some(c => c.id === 'dummy-corp-client')) return [...prev, dummyClient]
+        return prev
+      })
+      setB2BEmployees(prev => {
+        const newEmps = []
+        if (!prev.some(e => e.id === 'dummy-corp-admin')) newEmps.push(dummyAdmin)
+        if (!prev.some(e => e.id === 'dummy-corp-emp')) newEmps.push(dummyEmployee)
+        return [...prev, ...newEmps]
+      })
+      setBookings(prev => {
+        const newBks = []
+        if (!prev.some(b => b.id === 'dummy-bk-1')) newBks.push(dummyBookings[0])
+        if (!prev.some(b => b.id === 'dummy-bk-2')) newBks.push(dummyBookings[1])
+        return [...prev, ...newBks]
+      })
+      localStorage.setItem('dummy_b2b_bookings_v3', 'true')
+    }
+  }, [])
+
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'userType') {
+        if (e.newValue) {
+          const newType = e.newValue as UserType
+          if (['trev-admin', 'corporate-admin', 'corporate-employee'].includes(newType)) {
+            setUserTypeState(newType)
+          }
+        }
+      }
+      if (e.key === 'bookings') {
+        if (e.newValue) {
+          try {
+            setBookings(JSON.parse(e.newValue))
+          } catch (err) {
+            console.error('Failed to parse bookings from storage event:', err)
+          }
+        }
+      }
+    }
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
+  }, [setUserTypeState, setBookings])
 
   useEffect(() => {
     let mounted = true
@@ -464,15 +717,16 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       try {
         const { data, error } = await supabase.auth.getSession()
         if (error) throw error
-        if (mounted) {
-          setCurrentUser(data.session?.user ?? null)
-          if (!data.session && pathname !== '/login') {
-            router.push('/login')
-          }
+      if (mounted) {
+        setCurrentUser(data.session?.user ?? null)
+        // Skip redirect entirely for demo purposes
+        if (!data.session && pathname !== '/login' && !pathname?.startsWith('/auth/')) {
+          // router.push('/login')
         }
-      } catch (err) {
+      }
+    } catch (err) {
         console.error('Supabase Auth Error:', err)
-        if (mounted && pathname !== '/login') router.push('/login')
+        // if (mounted && pathname !== '/login' && !pathname?.startsWith('/auth/')) router.push('/login')
       } finally {
         if (mounted) setIsLoadingAuth(false)
       }
@@ -484,10 +738,16 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       if (mounted) {
         setCurrentUser(session?.user ?? null)
         setIsLoadingAuth(false)
-        if (!session && pathname !== '/login') {
-          router.push('/login')
-        } else if (session && pathname === '/login') {
-          router.push('/')
+        // Skip redirect entirely for demo purposes
+        if (!session && pathname !== '/login' && !pathname?.startsWith('/auth/')) {
+          // router.push('/login')
+        } else if (session && (pathname === '/login' || pathname?.startsWith('/auth/'))) {
+          // Redirect based on userType or email hint
+          const type = loadUserType()
+          const redirectPath = type === 'trev-admin' ? '/trev-admin/dashboard' : 
+                              type === 'corporate-admin' ? '/corporate-admin/dashboard' : 
+                              '/employee/dashboard'
+          router.push(redirectPath)
         }
       }
     })
@@ -500,6 +760,9 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     await supabase.auth.signOut()
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('userType')
+    }
     router.push('/login')
   }
 
@@ -580,6 +843,28 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true }
   }, [])
   
+  useEffect(() => {
+    let cancelled = false
+    const fetchSupportTickets = async () => {
+      try {
+        const { data, error } = await supabase.from('support_tickets').select('*')
+        if (cancelled) return
+        if (error) {
+          console.error('Error fetching support tickets from Supabase:', error)
+        } else if (data && data.length > 0) {
+          setSupportTickets(prev => {
+            if (prev.length === 0) return data as SupportTicket[]
+            const existingIds = new Set(prev.map(t => t.id))
+            const newOnes = (data as SupportTicket[]).filter(t => !existingIds.has(t.id))
+            return [...prev, ...newOnes]
+          })
+        }
+      } catch (err) {}
+    }
+    fetchSupportTickets()
+    return () => { cancelled = true }
+  }, [])
+
   // Driver actions
   const addDriver = useCallback((driver: Omit<Driver, 'id' | 'createdAt'>) => {
     setDrivers(prev => [...prev, { ...driver, id: generateId(), createdAt: new Date().toISOString() }])
@@ -681,7 +966,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     )
   }, [b2cCustomers])
 
-  const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 'customerCode' | 'createdAt' | 'updatedAt'>) => {
+const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 'customerCode' | 'createdAt' | 'updatedAt'>) => {
     const existing =
       b2cCustomers.find(c => customer.phone && c.phone.toLowerCase() === customer.phone.toLowerCase()) ||
       b2cCustomers.find(c => customer.email && c.email?.toLowerCase() === customer.email.toLowerCase()) ||
@@ -694,12 +979,16 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
           ...customer,
           email: customer.email || existing.email,
           address: customer.address || existing.address,
+          walletBalance: existing.walletBalance ?? 0,
+          status: customer.status || existing.status || 'active',
           updatedAt: now,
         }
       : {
           ...customer,
           id: generateId(),
           customerCode: generateCustomerCode(),
+          walletBalance: 0,
+          status: customer.status || 'active',
           createdAt: now,
           updatedAt: now,
         }
@@ -717,6 +1006,68 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
 
     return savedCustomer
   }, [b2cCustomers])
+
+  const updateB2CCustomer = useCallback(async (id: string, updates: Partial<B2CCustomer>) => {
+    const existing = b2cCustomers.find(c => c.id === id);
+    if (!existing) return;
+    
+    const savedCustomer = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+    setB2CCustomers(prev => prev.map(c => c.id === id ? savedCustomer : c));
+    
+    const { error } = await supabase.from('b2c_customers').update(savedCustomer).eq('id', id);
+    if (error) {
+      handleDbError(error, 'Error updating B2C customer in Supabase:');
+    }
+  }, [b2cCustomers]);
+
+  const addWalletTransaction = useCallback(async (transaction: Omit<WalletTransaction, 'id' | 'createdAt'> & { referenceId?: string; referenceType?: string }) => {
+    try {
+      const { data, error } = await supabase.rpc('add_wallet_transaction', {
+        p_customer_id: transaction.customerId,
+        p_amount: transaction.amount,
+        p_type: transaction.type,
+        p_description: transaction.description,
+        p_reference_id: transaction.referenceId,
+        p_reference_type: transaction.referenceType
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        // Refresh local state
+        const { data: customer } = await supabase
+          .from('b2c_customers')
+          .select('id, walletBalance')
+          .eq('id', transaction.customerId)
+          .single();
+
+        if (customer) {
+          setB2CCustomers(prev => prev.map(c => 
+            c.id === customer.id ? { ...c, walletBalance: customer.walletBalance! } : c
+          ));
+        }
+
+        // Refresh transactions
+        const { data: transactions } = await supabase
+          .from('wallet_transactions')
+          .select('*')
+          .eq('customer_id', transaction.customerId)
+          .order('created_at', { ascending: false });
+
+        if (transactions) {
+          setWalletTransactions(prev => {
+            const existingIds = new Set(prev.map(t => t.id));
+            const newOnes = transactions.filter((t: any) => !existingIds.has(t.id));
+            return [...prev.filter(t => t.customerId !== transaction.customerId), ...transactions] as WalletTransaction[];
+          });
+        }
+
+        toast.success(`Wallet ${transaction.type === 'credit' ? 'credited' : 'debited'}: ₹${transaction.amount.toLocaleString()}`);
+      }
+    } catch (error: any) {
+      handleDbError(error, 'Wallet transaction failed:');
+    }
+  }, []);
 
   // Airport actions
   const addAirport = useCallback((airport: Omit<Airport, 'id' | 'createdAt' | 'terminals'>) => {
@@ -844,26 +1195,130 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   }, [])
   
   // Booking actions
-  const addBooking = useCallback(async (booking: Omit<Booking, 'id' | 'createdAt'>) => {
-    const newBooking = { ...booking, id: generateId(), createdAt: new Date().toISOString() }
-    setBookings(prev => [...prev, newBooking as Booking])
+  const addBooking = useCallback(async (booking: Omit<Booking, 'id' | 'createdAt' | 'eventLog'> & { eventLog: BookingEventLog[] }) => {
+    const newBooking = { ...booking, id: generateId(), createdAt: new Date().toISOString() };
+    setBookings(prev => [...prev, newBooking as Booking]);
 
-    const payload = sanitizeForSupabase(newBooking)
-    const { error } = await supabase.from('bookings').insert([payload])
+    const payload = sanitizeForSupabase(newBooking);
+    const { error } = await supabase.from('bookings').insert([payload]);
     if (error) {
-      handleDbError(error, 'Error adding booking to Supabase:')
+      handleDbError(error, 'Error adding booking to Supabase:');
     }
-  }, [])
+  }, []);
 
-  const updateBooking = useCallback(async (id: string, booking: Partial<Booking>) => {
-    setBookings(prev => prev.map(b => b.id === id ? { ...b, ...booking } as Booking : b))
+  const updateBooking = useCallback(async (id: string, updates: Partial<Booking>) => {
+    const isB2BUser = userType === 'corporate-admin' || userType === 'corporate-employee';
+    const originalBooking = bookings.find(b => b.id === id);
 
-    const payload = sanitizeForSupabase(booking)
-    const { error } = await supabase.from('bookings').update(payload).eq('id', id)
-    if (error) {
-      handleDbError(error, 'Error updating booking in Supabase:')
+    if (!originalBooking) {
+      console.error(`updateBooking failed: booking with id ${id} not found.`);
+      return;
     }
-  }, [])
+
+    const updateKeys = Object.keys(updates);
+    const isContentEdit = updateKeys.some(k => !['status', 'eventLog', 'driverId', 'carId', 'tags', 'pendingEdits', 'originalStatus'].includes(k));
+
+    // If a B2B user is editing a booking, put it into a pending state for approval.
+    if (isB2BUser && isContentEdit && originalBooking.status !== 'pending_edit_approval') {
+        const { eventLog, ...actualEdits } = updates;
+        
+        const editRequestEvent: BookingEventLog = {
+            id: crypto.randomUUID(),
+            event: 'edit_requested' as any,
+            fromStatus: originalBooking.status,
+            toStatus: 'pending_edit_approval',
+            performedBy: currentUser?.email || 'B2B User',
+            performedAt: new Date().toISOString(),
+            notes: 'Booking edit submitted for approval'
+        };
+        const newEventLog = [...(originalBooking.eventLog || []), editRequestEvent];
+
+        const updatedBookingWithPendingState = {
+            ...originalBooking,
+            pendingEdits: actualEdits, // Store the proposed changes
+            originalStatus: originalBooking.status, // Save the status before this edit
+            status: 'pending_edit_approval' as const, // Set a new status
+            eventLog: newEventLog
+        };
+
+        const payload = {
+            pendingEdits: actualEdits,
+            originalStatus: originalBooking.status,
+            status: 'pending_edit_approval',
+            eventLog: newEventLog
+        };
+        
+        const { error } = await supabase.from('bookings').update(sanitizeForSupabase(payload)).eq('id', id);
+
+        if (error) {
+            handleDbError(error, 'Error submitting booking edit for approval:');
+        } else {
+            setBookings(prev => prev.map(b => b.id === id ? updatedBookingWithPendingState as Booking : b));
+            toast.info("Booking edit has been submitted for approval.");
+        }
+    } else {
+        // For Trev Admins or for simple status changes, update directly.
+        const payload = sanitizeForSupabase(updates)
+        const { error } = await supabase.from('bookings').update(payload).eq('id', id)
+        if (error) {
+          handleDbError(error, 'Error updating booking in Supabase:')
+        } else {
+          setBookings(prev => prev.map(b => b.id === id ? { ...b, ...updates } as Booking : b))
+        }
+    }
+  }, [userType, bookings])
+
+  const approveBookingEdit = useCallback(async (bookingId: string) => {
+    const booking = bookings.find(b => b.id === bookingId);
+    if (!booking || !booking.pendingEdits) return;
+
+    const eventLogEntry: BookingEventLog = {
+        id: crypto.randomUUID(),
+        event: 'edit_approved' as any,
+        fromStatus: 'pending_edit_approval',
+        toStatus: booking.originalStatus || 'confirmed',
+        performedBy: currentUser?.email || 'Admin',
+        performedAt: new Date().toISOString(),
+        notes: 'Booking edit approved'
+    };
+
+    const approvedUpdates: Partial<Booking> = {
+        ...booking.pendingEdits,
+        status: booking.originalStatus || 'confirmed',
+        pendingEdits: undefined,
+        originalStatus: undefined,
+        eventLog: [...(booking.eventLog || []), eventLogEntry]
+    };
+    
+    await updateBooking(bookingId, approvedUpdates);
+    toast.success(`Booking ${booking.bookingNumber} edit approved.`);
+  }, [bookings, updateBooking]);
+
+  const rejectBookingEdit = useCallback(async (bookingId: string, reason: string) => {
+    const booking = bookings.find(b => b.id === bookingId);
+    if (!booking || !booking.pendingEdits) return;
+
+    const rejectedUpdates: Partial<Booking> = {
+        status: booking.originalStatus || 'confirmed',
+        pendingEdits: undefined,
+        originalStatus: undefined,
+    };
+
+    const eventLog: BookingEventLog = {
+        id: crypto.randomUUID(),
+        event: 'rejected' as any,
+        fromStatus: 'pending_edit_approval',
+        toStatus: booking.originalStatus || 'confirmed',
+        performedBy: currentUser?.email || 'Admin',
+        performedAt: new Date().toISOString(),
+        notes: `Edit request rejected. Reason: ${reason}`
+    };
+
+    rejectedUpdates.eventLog = [...(booking.eventLog || []), eventLog];
+
+    await updateBooking(bookingId, rejectedUpdates);
+    toast.warning(`Booking ${booking.bookingNumber} edit rejected.`);
+  }, [bookings, updateBooking, currentUser]);
 
   const deleteBooking = useCallback(async (id: string) => {
     setBookings(prev => prev.filter(b => b.id !== id))
@@ -957,6 +1412,19 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   const bulkAddB2BEmployees = useCallback((employees: Omit<B2BEmployee, 'id' | 'createdAt'>[]) => {
     const newEmployees = employees.map(e => ({ ...e, id: generateId(), createdAt: new Date().toISOString() }))
     setB2BEmployees(prev => [...prev, ...newEmployees])
+  }, [])
+
+  // B2B Approval Rule actions
+  const addB2BApprovalRule = useCallback((rule: Omit<B2BApprovalRule, 'id' | 'createdAt'>) => {
+    setB2BApprovalRules(prev => [...prev, { ...rule, id: generateId(), createdAt: new Date().toISOString() }])
+  }, [])
+
+  const updateB2BApprovalRule = useCallback((id: string, rule: Partial<B2BApprovalRule>) => {
+    setB2BApprovalRules(prev => prev.map(r => r.id === id ? { ...r, ...rule } : r))
+  }, [])
+
+  const deleteB2BApprovalRule = useCallback((id: string) => {
+    setB2BApprovalRules(prev => prev.filter(r => r.id !== id))
   }, [])
   
   // Communication Template actions
@@ -1109,6 +1577,38 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  // Support Ticket actions
+  const addSupportTicket = useCallback(async (ticket: Omit<SupportTicket, 'id' | 'ticketNumber' | 'createdAt' | 'updatedAt'>) => {
+    const newTicket = { 
+      ...ticket, 
+      id: generateId(), 
+      ticketNumber: `TK${Date.now().toString().slice(-6)}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+    setSupportTickets(prev => [...prev, newTicket as SupportTicket])
+
+    const payload = sanitizeForSupabase(newTicket)
+    const { error } = await supabase.from('support_tickets').insert([payload])
+    if (error) handleDbError(error, 'Error adding support ticket to Supabase:')
+  }, [])
+  
+  const updateSupportTicket = useCallback(async (id: string, ticket: Partial<SupportTicket>) => {
+    const updated = { ...ticket, updatedAt: new Date().toISOString() }
+    setSupportTickets(prev => prev.map(t => t.id === id ? { ...t, ...updated } as SupportTicket : t))
+
+    const payload = sanitizeForSupabase(updated)
+    const { error } = await supabase.from('support_tickets').update(payload).eq('id', id)
+    if (error) handleDbError(error, 'Error updating support ticket in Supabase:')
+  }, [])
+  
+  const deleteSupportTicket = useCallback(async (id: string) => {
+    setSupportTickets(prev => prev.filter(t => t.id !== id))
+
+    const { error } = await supabase.from('support_tickets').delete().eq('id', id)
+    if (error) handleDbError(error, 'Error deleting support ticket from Supabase:')
+  }, [])
+
   // Helper functions
   const getCarCategory = useCallback((id: string) => carCategories.find(c => c.id === id), [carCategories])
   const getCity = useCallback((id: string) => cities.find(c => c.id === id), [cities])
@@ -1131,6 +1631,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   const getPromoCode = useCallback((id: string) => promoCodes.find(p => p.id === id), [promoCodes])
   const getPromoCodeByCode = useCallback((code: string) => promoCodes.find(p => p.code.toLowerCase() === code.toLowerCase()), [promoCodes])
   const getB2BEmployee = useCallback((id: string) => b2bEmployees.find(e => e.id === id), [b2bEmployees])
+  const getB2BApprovalRule = useCallback((id: string) => b2bApprovalRules.find(r => r.id === id), [b2bApprovalRules])
   const getAdminRole = useCallback((id: string) => adminRoles.find(r => r.id === id), [adminRoles])
   const getBookingTag = useCallback((id: string) => bookingTags.find(t => t.id === id), [bookingTags])
   const getCancellationPolicy = useCallback((id: string) => cancellationPolicies.find(p => p.id === id), [cancellationPolicies])
@@ -1146,21 +1647,22 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AdminContext.Provider value={{
-      drivers, cars, carCategories, cities, b2cCustomers, airports, fareGroups, b2bClients, gstConfig, bookings, dutySlips, invoices,
-      hubs, promoCodes, cityPolygons, carLocations, driverPayouts,
-      b2bEmployees, communicationTemplates, adminRoles, adminUsers, bookingTags, cancellationPolicies,
+      drivers, cars, carCategories, cities, b2cCustomers, airports, fareGroups, b2bClients, gstConfig, bookings, walletTransactions, dutySlips, invoices,
+      hubs, promoCodes, cityPolygons, carLocations, driverPayouts, supportTickets,
+      b2bEmployees, b2bApprovalRules, communicationTemplates, adminRoles, adminUsers, bookingTags, cancellationPolicies,
       addDriver, updateDriver, deleteDriver,
       addCar, updateCar, deleteCar,
       mapDriverToCar, unmapDriverFromCar,
       addCarCategory, updateCarCategory, deleteCarCategory,
       addCity, updateCity, deleteCity,
-      upsertB2CCustomer,
+      upsertB2CCustomer, updateB2CCustomer, addWalletTransaction,
       addAirport, updateAirport, deleteAirport, addAirportTerminal, updateAirportTerminal, deleteAirportTerminal,
       addFareGroup, updateFareGroup, deleteFareGroup,
       addB2BClient, updateB2BClient, deleteB2BClient,
       addB2BEntity, updateB2BEntity, deleteB2BEntity, getB2BEntities,
       updateGSTConfig,
       addBooking, updateBooking, deleteBooking,
+      approveBookingEdit, rejectBookingEdit,
       addDutySlip, updateDutySlip,
       addInvoice, updateInvoice,
       addHub, updateHub, deleteHub,
@@ -1168,14 +1670,18 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       addCityPolygon, updateCityPolygon, deleteCityPolygon,
       updateCarLocation,
       addB2BEmployee, updateB2BEmployee, deleteB2BEmployee, bulkAddB2BEmployees,
+      addB2BApprovalRule, updateB2BApprovalRule, deleteB2BApprovalRule,
       addCommunicationTemplate, updateCommunicationTemplate, deleteCommunicationTemplate,
       addAdminRole, updateAdminRole, deleteAdminRole,
       addAdminUser, updateAdminUser, deleteAdminUser,
       addBookingTag, updateBookingTag, deleteBookingTag,
       addCancellationPolicy, updateCancellationPolicy, deleteCancellationPolicy,
       addDriverPayout, updateDriverPayout, deleteDriverPayout,
+      addSupportTicket, updateSupportTicket, deleteSupportTicket,
       getCarCategory, getCity, getB2CCustomer, findB2CCustomer, getAirport, getAirportTerminal, getDriver, getCar, getFareGroup, getB2BClient, getB2BEntity, getBooking,
-      getHub, getPromoCode, getPromoCodeByCode, getB2BEmployee, getAdminRole, getBookingTag, getCancellationPolicy,
+      getHub, getPromoCode, getPromoCodeByCode, getB2BEmployee, getB2BApprovalRule, getAdminRole, getBookingTag,
+      getCancellationPolicy,
+      userType, setUserType,
       currentUser, logout
     }}>
       {children}
@@ -1189,4 +1695,15 @@ export function useAdmin() {
     throw new Error('useAdmin must be used within an AdminProvider')
   }
   return context
+}
+
+export function useUserType() {
+  const context = useContext(AdminContext)
+  if (!context) {
+    throw new Error('useUserType must be used within an AdminProvider')
+  }
+  return {
+    userType: context.userType,
+    setUserType: context.setUserType
+  }
 }

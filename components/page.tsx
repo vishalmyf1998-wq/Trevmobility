@@ -196,7 +196,30 @@
       bookingTags,
       getBookingTag,
       getBooking,
+      userType,
+      currentUser
     } = useAdmin()
+
+    const isEmployee = userType === 'corporate-employee'
+    const isCorpAdmin = userType === 'corporate-admin'
+    const isB2BUser = isEmployee || isCorpAdmin
+
+    const currentCorpClientId = isCorpAdmin 
+      ? (b2bEmployees.find(e => e.officeEmail === currentUser?.email)?.b2bClientId || b2bClients[0]?.id || 'demo-client')
+      : null
+
+    const currentEmployee = isEmployee 
+      ? b2bEmployees.find(e => e.officeEmail === currentUser?.email) || (b2bEmployees.length > 0 ? b2bEmployees[0] : {
+          id: 'demo',
+          name: 'Demo Employee',
+          employeeId: 'EMP001',
+          b2bClientId: b2bClients[0]?.id || 'demo-client',
+          officeEmail: currentUser?.email || 'employee@company.com',
+          phone: '+91 98765 43210',
+          status: 'approved',
+          canLogin: true
+        } as any)
+      : null
 
     const [searchQuery, setSearchQuery] = useState("")
     const [statusFilter, setStatusFilter] = useState<string>("all")
@@ -227,7 +250,7 @@
     const [printingSlip, setPrintingSlip] = useState<DutySlip | null>(null)
     const [formData, setFormData] = useState<BookingFormData>(initialFormData)
     const [eventConfirmData, setEventConfirmData] = useState<EventConfirmData | null>(null)
-    const [customerType, setCustomerType] = useState<"b2c" | "b2b">("b2c")
+    const [customerType, setCustomerType] = useState<"b2c" | "b2b">(isB2BUser ? "b2b" : "b2c")
     const [assignData, setAssignData] = useState({ driverId: "", carId: "" })
     const [reassignData, setReassignData] = useState({ driverId: "", carId: "", reason: "" })
     const [pairData, setPairData] = useState({ driverId: "", carId: "" })
@@ -1173,7 +1196,7 @@
       setIsDialogOpen(false)
       setEditingBooking(null)
       setFormData(initialFormData)
-      setCustomerType("b2c")
+      setCustomerType(isEmployee ? "b2b" : "b2c")
     }
 
     const handleViewVoucher = (booking: Booking) => {
@@ -1342,6 +1365,8 @@
 
     const filteredBookings = bookings.filter((booking) => {
     if (!booking) return false;
+      if (isCorpAdmin && booking.b2bClientId !== currentCorpClientId) return false;
+      if (isEmployee && booking.b2bEmployeeId !== currentEmployee?.id) return false;
       const matchesSearch =
       (booking.bookingNumber || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (booking.customerName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1474,7 +1499,7 @@
               <Link2 className="mr-2 h-4 w-4" />
               Pair Driver & Car
             </Button>
-            <Button onClick={() => setIsDialogOpen(true)}>
+          <Button onClick={handleOpenNewDialog}>
               <Plus className="mr-2 h-4 w-4" />
               New Booking
             </Button>
@@ -2013,16 +2038,18 @@
             </DialogHeader>
             <form onSubmit={handleSubmit}>
               <Tabs value={customerType} onValueChange={(v) => setCustomerType(v as "b2c" | "b2b")}>
-                <TabsList className="grid w-full grid-cols-2 mb-4">
-                  <TabsTrigger value="b2c">
-                    <User className="mr-2 h-4 w-4" />
-                    Individual (B2C)
-                  </TabsTrigger>
-                  <TabsTrigger value="b2b">
-                    <Building2 className="mr-2 h-4 w-4" />
-                    Business (B2B)
-                  </TabsTrigger>
-                </TabsList>
+                {!isB2BUser && (
+                  <TabsList className="grid w-full grid-cols-2 mb-4">
+                    <TabsTrigger value="b2c">
+                      <User className="mr-2 h-4 w-4" />
+                      Individual (B2C)
+                    </TabsTrigger>
+                    <TabsTrigger value="b2b">
+                      <Building2 className="mr-2 h-4 w-4" />
+                      Business (B2B)
+                    </TabsTrigger>
+                  </TabsList>
+                )}
 
                 <TabsContent value="b2c" className="space-y-4">
                   <FieldGroup className="grid grid-cols-2 gap-4">
@@ -2100,6 +2127,7 @@
                       onValueChange={(value) =>
                         setFormData({ ...formData, b2bClientId: value, b2bEmployeeId: undefined })
                       }
+                      disabled={isB2BUser}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select a B2B client" />
@@ -2124,6 +2152,7 @@
                         onValueChange={(value) =>
                           setFormData({ ...formData, b2bEmployeeId: value })
                         }
+                      disabled={isEmployee}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select an employee" />
@@ -2379,49 +2408,51 @@
                   />
                 </Field>
 
-                <Field>
-                  <FieldLabel>Promo Code</FieldLabel>
-                  <Select
-                    value={formData.promoCodeId || "none"}
-                    onValueChange={(value) =>
-                      setFormData({
-                        ...formData,
-                        promoCodeId: value === "none" ? undefined : value,
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select promo code" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No promo code</SelectItem>
-                      {selectedFormPromo && selectedPromoError && (
-                        <SelectItem value={selectedFormPromo.id} disabled>
-                          {selectedFormPromo.code} - {selectedPromoError}
-                        </SelectItem>
-                      )}
-                      {eligiblePromoCodes.map((promo) => (
-                        <SelectItem key={promo.id} value={promo.id}>
-                          {promo.code} -{" "}
-                          {promo.discountType === "percentage"
-                            ? `${promo.discountValue}% off`
-                            : `Rs. ${promo.discountValue} off`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedPromoError ? (
-                    <p className="text-xs text-destructive mt-1">{selectedPromoError}</p>
-                  ) : selectedFormPromo ? (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {selectedFormPromo.description}
-                    </p>
-                  ) : eligiblePromoCodes.length === 0 ? (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      No promo codes are available for this booking.
-                    </p>
-                  ) : null}
-                </Field>
+                {!isEmployee && (
+                  <Field>
+                    <FieldLabel>Promo Code</FieldLabel>
+                    <Select
+                      value={formData.promoCodeId || "none"}
+                      onValueChange={(value) =>
+                        setFormData({
+                          ...formData,
+                          promoCodeId: value === "none" ? undefined : value,
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select promo code" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No promo code</SelectItem>
+                        {selectedFormPromo && selectedPromoError && (
+                          <SelectItem value={selectedFormPromo.id} disabled>
+                            {selectedFormPromo.code} - {selectedPromoError}
+                          </SelectItem>
+                        )}
+                        {eligiblePromoCodes.map((promo) => (
+                          <SelectItem key={promo.id} value={promo.id}>
+                            {promo.code} -{" "}
+                            {promo.discountType === "percentage"
+                              ? `${promo.discountValue}% off`
+                              : `Rs. ${promo.discountValue} off`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedPromoError ? (
+                      <p className="text-xs text-destructive mt-1">{selectedPromoError}</p>
+                    ) : selectedFormPromo ? (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {selectedFormPromo.description}
+                      </p>
+                    ) : eligiblePromoCodes.length === 0 ? (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        No promo codes are available for this booking.
+                      </p>
+                    ) : null}
+                  </Field>
+                )}
 
                 {/* Fare Summary - Auto-calculated */}
                 {formData.cityId && formData.carCategoryId && (

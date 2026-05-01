@@ -14,9 +14,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { PhoneInput } from "@/components/ui/phone-input"
 import { toast } from "sonner"
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, Upload, Download, CheckCircle, XCircle, Clock, Users, FileSpreadsheet, UserCheck, Building2 } from "lucide-react"
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, Upload, Download, CheckCircle, XCircle, Clock, Users, FileSpreadsheet, UserCheck, Building2, ShieldAlert } from "lucide-react"
 
-type EmployeeFormData = Omit<B2BEmployee, 'id' | 'createdAt' | 'approvedBy' | 'approvedAt'>
+type EmployeeFormData = Omit<B2BEmployee, 'id' | 'createdAt' | 'approvedBy' | 'approvedAt'> & { isCorpAdmin?: boolean }
 
 const initialFormData: EmployeeFormData = {
   b2bClientId: '',
@@ -29,13 +29,15 @@ const initialFormData: EmployeeFormData = {
   entity: '',
   status: 'pending_approval',
   canLogin: false,
+  isCorpAdmin: false,
 }
 
 export default function B2BEmployeesPage() {
   const { 
     b2bEmployees, b2bClients, 
     addB2BEmployee, updateB2BEmployee, deleteB2BEmployee, bulkAddB2BEmployees,
-    getB2BClient
+    getB2BClient,
+    userType
   } = useAdmin()
   
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -89,6 +91,7 @@ export default function B2BEmployeesPage() {
       entity: employee.entity,
       status: employee.status,
       canLogin: employee.canLogin,
+      isCorpAdmin: (employee as any).isCorpAdmin || false,
     })
     setIsDialogOpen(true)
   }
@@ -388,6 +391,9 @@ export default function B2BEmployeesPage() {
                           <p className="font-medium">{employee.name}</p>
                           <p className="text-sm text-muted-foreground">{employee.officeEmail}</p>
                           <p className="text-xs text-muted-foreground">{employee.phone}</p>
+                          {(employee as any).isCorpAdmin && (
+                            <Badge variant="outline" className="mt-1 bg-blue-500/10 text-blue-600 border-blue-200 text-[10px] py-0 h-4">Corporate Admin</Badge>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -684,6 +690,27 @@ export default function B2BEmployeesPage() {
               </FieldGroup>
             )}
             
+            {userType === 'trev-admin' && (
+              <Field>
+                <FieldLabel>Assign Corporate Admin Role?</FieldLabel>
+                <Select
+                  value={formData.isCorpAdmin ? 'yes' : 'no'}
+                  onValueChange={(value) => setFormData({ ...formData, isCorpAdmin: value === 'yes' })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="yes">Yes (Has Admin Dashboard Access)</SelectItem>
+                    <SelectItem value="no">No (Regular Employee Portal)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Corporate Admins can manage bookings and see invoices for the entire company.
+                </p>
+              </Field>
+            )}
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                 Cancel

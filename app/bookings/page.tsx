@@ -1,6 +1,7 @@
   "use client"
 
-  import { useState, useEffect, useCallback, useRef } from "react"
+  import { useState, useEffect, useCallback, useRef, Suspense } from "react"
+  import { useSearchParams } from "next/navigation"
   import { useAdmin } from "@/lib/admin-context"
   import { Booking, BookingEventLog, PromoCode } from "@/lib/types"
   import { Button } from "@/components/ui/button"
@@ -74,6 +75,7 @@
     Pencil,
     Trash2,
     UserPlus,
+    CheckCircle,
     CheckCircle2,
     XCircle,
     Car,
@@ -103,6 +105,7 @@
     Route,
     ExternalLink,
     Printer,
+    Headset,
   } from "lucide-react"
   import { toast } from "sonner"
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field"
@@ -164,6 +167,7 @@ import { PhoneInput } from "@/components/ui/phone-input"
   // Status flow for forward/backward navigation
   const STATUS_FLOW: Booking["status"][] = [
     "pending",
+    "pending_edit_approval",
     "confirmed", 
     "assigned",
     "dispatched",
@@ -174,6 +178,14 @@ import { PhoneInput } from "@/components/ui/phone-input"
   ]
 
   export default function BookingsPage() {
+    return (
+      <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading Bookings...</div>}>
+        <BookingsContent />
+      </Suspense>
+    )
+  }
+
+  function BookingsContent() {
     const {
       bookings,
       b2cCustomers,
@@ -209,7 +221,30 @@ import { PhoneInput } from "@/components/ui/phone-input"
       bookingTags,
       getBookingTag,
       getBooking,
+      userType,
+      currentUser,
+      approveBookingEdit,
+      rejectBookingEdit,
+      addSupportTicket
     } = useAdmin()
+
+    const isCorpEmployee = userType === 'corporate-employee'
+    const isCorpAdmin = userType === 'corporate-admin'
+    const isB2BUser = isCorpEmployee || isCorpAdmin
+    const currentB2BUser = isB2BUser 
+      ? b2bEmployees.find(e => e.officeEmail === currentUser?.email) || 
+        b2bEmployees.find(e => e.id === (isCorpAdmin ? 'dummy-corp-admin' : 'dummy-corp-emp')) || 
+        (b2bEmployees.length > 0 ? b2bEmployees[0] : {
+          id: 'demo',
+          name: 'Demo Employee',
+          employeeId: 'EMP001',
+          b2bClientId: b2bClients[0]?.id || 'demo-client',
+          officeEmail: currentUser?.email || 'employee@company.com',
+          phone: '+91 98765 43210',
+          status: 'approved',
+          canLogin: true
+        } as any)
+      : null
 
     const [searchQuery, setSearchQuery] = useState("")
     const [statusFilter, setStatusFilter] = useState<string>("all")
@@ -221,6 +256,9 @@ import { PhoneInput } from "@/components/ui/phone-input"
     const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false)
     const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false)
     const [isPairDialogOpen, setIsPairDialogOpen] = useState(false)
+    const [isRejectingEdit, setIsRejectingEdit] = useState(false)
+    const [editRejectionReason, setEditRejectionReason] = useState("")
+    const [isReviewEditDialogOpen, setIsReviewEditDialogOpen] = useState(false)
     const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false)
     const [isPickupDialogOpen, setIsPickupDialogOpen] = useState(false)
     const [isEventLogDialogOpen, setIsEventLogDialogOpen] = useState(false)
@@ -228,11 +266,15 @@ import { PhoneInput } from "@/components/ui/phone-input"
     const [isDutySlipDialogOpen, setIsDutySlipDialogOpen] = useState(false)
     const [isEditClosedDutyDialogOpen, setIsEditClosedDutyDialogOpen] = useState(false)
     const [isAddCustomerDialogOpen, setIsAddCustomerDialogOpen] = useState(false)
+    const [isTicketDialogOpen, setIsTicketDialogOpen] = useState(false)
+    const [ticketBooking, setTicketBooking] = useState<Booking | null>(null)
+    const [ticketData, setTicketData] = useState({ subject: "", type: "Complaint", priority: "medium", description: "" })
     const [b2cSearchOpen, setB2cSearchOpen] = useState(false)
     const [b2cSearchQuery, setB2cSearchQuery] = useState("")
     const [editingBooking, setEditingBooking] = useState<Booking | null>(null)
     const [assigningBooking, setAssigningBooking] = useState<Booking | null>(null)
     const [reassigningBooking, setReassigningBooking] = useState<Booking | null>(null)
+    const [reviewingBooking, setReviewingBooking] = useState<Booking | null>(null)
     const [closingBooking, setClosingBooking] = useState<Booking | null>(null)
     const [pickingUpBooking, setPickingUpBooking] = useState<Booking | null>(null)
     const [editingClosedDutyBooking, setEditingClosedDutyBooking] = useState<Booking | null>(null)
@@ -243,7 +285,7 @@ import { PhoneInput } from "@/components/ui/phone-input"
     const [printingSlip, setPrintingSlip] = useState<DutySlip | null>(null)
     const [formData, setFormData] = useState<BookingFormData>(initialFormData)
     const [eventConfirmData, setEventConfirmData] = useState<EventConfirmData | null>(null)
-    const [customerType, setCustomerType] = useState<"b2c" | "b2b">("b2c")
+    const [customerType, setCustomerType] = useState<"b2c" | "b2b">(isB2BUser ? "b2b" : "b2c")
     const [assignData, setAssignData] = useState({ driverId: "", carId: "" })
     const [reassignData, setReassignData] = useState({ driverId: "", carId: "", reason: "" })
     const [pairData, setPairData] = useState({ driverId: "", carId: "" })
@@ -266,6 +308,10 @@ import { PhoneInput } from "@/components/ui/phone-input"
     })
 const [newCustomerData, setNewCustomerData] = useState({ name: "", phone: "", email: "", address: "" })
     const fileInputRef = useRef<HTMLInputElement>(null)
+
+    const searchParams = useSearchParams()
+    const urlStatus = searchParams?.get('status')
+    const isChangesApproval = urlStatus === 'pending_edit_approval'
 
     const activeDrivers = drivers.filter((d) => d.status === "active")
     const availableCars = cars.filter((c) => c.status === "available" || c.status === "on_trip")
@@ -510,7 +556,43 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
       return { baseFare: 0, perKmRate: 0, calculationType: "fixed" as const }
     }, [fareGroups, b2bClients])
 
+    // Auto-open review dialog if URL has ?review=bookingId
     useEffect(() => {
+      if (bookings.length > 0) {
+        const reviewId = searchParams?.get('review');
+        if (reviewId) {
+          const bookingToReview = bookings.find((b) => b.id === reviewId);
+          if (bookingToReview && bookingToReview.status === 'pending_edit_approval') {
+            setReviewingBooking(bookingToReview);
+            setIsReviewEditDialogOpen(true);
+            if (typeof window !== 'undefined') {
+              const newUrl = new URL(window.location.href);
+              newUrl.searchParams.delete('review');
+              window.history.replaceState(null, '', newUrl.pathname + newUrl.search);
+            }
+          }
+        }
+      }
+    }, [bookings, searchParams]);
+
+    // Auto-apply status filter from URL parameter
+    useEffect(() => {
+      if (urlStatus) {
+        setStatusFilter(urlStatus);
+      } else {
+        setStatusFilter("all");
+      }
+    }, [urlStatus]);
+
+    useEffect(() => {
+      if (isB2BUser && currentB2BUser?.id && (!formData.b2bClientId || (isCorpEmployee && !formData.b2bEmployeeId))) {
+        setFormData(prev => ({
+          ...prev,
+          b2bClientId: currentB2BUser.b2bClientId || prev.b2bClientId,
+          b2bEmployeeId: isCorpEmployee ? currentB2BUser.id : prev.b2bEmployeeId
+        }));
+      }
+
       if (formData.cityId && formData.carCategoryId && formData.tripType) {
         const fareConfig = calculateFareFromConfig(
           formData.cityId,
@@ -717,7 +799,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
     customerName: employee.name,
     customerPhone: employee.phone,
     customerEmail: employee.officeEmail,
-    customerAddress: client.billingAddress,
+    customerAddress: client.billingAddress || employee.address || '',
     }
     }
     }
@@ -1175,6 +1257,38 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
       setEventConfirmData({ title, description, onConfirm })
     }
 
+    const handleOpenTicketDialog = (booking: Booking) => {
+      setTicketBooking(booking)
+      setTicketData({
+        subject: `Issue with Booking ${booking.bookingNumber}`,
+        type: "Complaint",
+        priority: "medium",
+        description: ""
+      })
+      setIsTicketDialogOpen(true)
+    }
+
+    const handleCreateTicket = () => {
+      if (!ticketData.subject) {
+        toast.error("Subject is required")
+        return
+      }
+      if (!ticketBooking) return
+
+      addSupportTicket({
+        subject: ticketData.subject,
+        customerName: ticketBooking.customerName || "Unknown",
+        type: ticketData.type,
+        priority: ticketData.priority,
+        description: `Booking Reference: ${ticketBooking.bookingNumber}\n\n${ticketData.description}`,
+        status: "open"
+      })
+
+      toast.success("Support ticket created successfully")
+      setIsTicketDialogOpen(false)
+      setTicketBooking(null)
+    }
+
 
     const handleEdit = (booking: Booking) => {
       setEditingBooking(booking)
@@ -1400,6 +1514,11 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
 
     const filteredBookings = bookings.filter((booking) => {
     if (!booking) return false;
+
+      // B2B Role based filtering
+      if (isCorpAdmin && currentB2BUser && booking.b2bClientId !== currentB2BUser.b2bClientId) return false;
+      if (isCorpEmployee && currentB2BUser && booking.b2bEmployeeId !== currentB2BUser.id) return false;
+
       const matchesSearch =
       (booking.bookingNumber || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (booking.customerName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1437,6 +1556,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
     const getStatusBadge = (status: Booking["status"]) => {
       const styles: Record<string, string> = {
         pending: "bg-warning/10 text-warning border-warning/20",
+        pending_edit_approval: "bg-purple-500/10 text-purple-600 border-purple-500/20",
         confirmed: "bg-primary/10 text-primary border-primary/20",
         assigned: "bg-blue-500/10 text-blue-600 border-blue-500/20",
         dispatched: "bg-indigo-500/10 text-indigo-600 border-indigo-500/20",
@@ -1448,6 +1568,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
       }
       const labels: Record<string, string> = {
         pending: "Pending",
+        pending_edit_approval: "Pending Edit",
         confirmed: "Confirmed",
         assigned: "Assigned",
         dispatched: "Dispatched",
@@ -1507,36 +1628,44 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
       <div className="flex flex-col gap-6 print:hidden">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Bookings</h1>
-            <p className="text-muted-foreground">
-              Manage trip bookings and track driver events
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight">
+              {isChangesApproval ? "Changes Pending" : "Bookings"}
+            </h1>
+            {!isChangesApproval && (
+              <p className="text-muted-foreground">
+                Manage trip bookings and track driver events
+              </p>
+            )}
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleDownloadTemplate} title="Download CSV Template">
-              <Download className="mr-2 h-4 w-4" />
-              Template
-            </Button>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              accept=".csv" 
-              className="hidden" 
-              onChange={handleFileUpload} 
-            />
-            <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-              <Upload className="mr-2 h-4 w-4" />
-              Upload CSV
-            </Button>
-            <Button variant="outline" onClick={() => setIsPairDialogOpen(true)}>
-              <Link2 className="mr-2 h-4 w-4" />
-              Pair Driver & Car
-            </Button>
-            <Button onClick={() => setIsDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              New Booking
-            </Button>
-          </div>
+          {!isChangesApproval && (
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleDownloadTemplate} title="Download CSV Template">
+                <Download className="mr-2 h-4 w-4" />
+                Template
+              </Button>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                accept=".csv" 
+                className="hidden" 
+                onChange={handleFileUpload} 
+              />
+              <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+                <Upload className="mr-2 h-4 w-4" />
+                Upload CSV
+              </Button>
+              {!isB2BUser && (
+                <Button variant="outline" onClick={() => setIsPairDialogOpen(true)}>
+                  <Link2 className="mr-2 h-4 w-4" />
+                  Pair Driver & Car
+                </Button>
+              )}
+              <Button onClick={() => setIsDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                New Booking
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Filters */}
@@ -1562,16 +1691,23 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                     <SelectValue placeholder="Filter by status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="confirmed">Confirmed</SelectItem>
-                    <SelectItem value="assigned">Assigned</SelectItem>
-                    <SelectItem value="dispatched">Dispatched</SelectItem>
-                    <SelectItem value="arrived">Arrived</SelectItem>
-                    <SelectItem value="picked_up">Picked Up</SelectItem>
-                    <SelectItem value="dropped">Dropped</SelectItem>
-                    <SelectItem value="closed">Closed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                    {isChangesApproval ? (
+                      <SelectItem value="pending_edit_approval">Pending Edit</SelectItem>
+                    ) : (
+                      <>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="pending_edit_approval">Pending Edit</SelectItem>
+                        <SelectItem value="confirmed">Confirmed</SelectItem>
+                        <SelectItem value="assigned">Assigned</SelectItem>
+                        <SelectItem value="dispatched">Dispatched</SelectItem>
+                        <SelectItem value="arrived">Arrived</SelectItem>
+                        <SelectItem value="picked_up">Picked Up</SelectItem>
+                        <SelectItem value="dropped">Dropped</SelectItem>
+                        <SelectItem value="closed">Closed</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -1617,14 +1753,16 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                 </Button>
               </div>
             </div>
-            {(searchQuery || statusFilter !== "all" || dateFrom || dateTo) && (
+            {(searchQuery || (!isChangesApproval && statusFilter !== "all") || dateFrom || dateTo) && (
               <div className="mt-4 flex justify-end">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => {
                     setSearchQuery("")
-                    setStatusFilter("all")
+                    if (!isChangesApproval) {
+                      setStatusFilter("all")
+                    }
                     setDateFrom("")
                     setDateTo("")
                   }}
@@ -1726,6 +1864,13 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                                     </span>
                                   ) : null
                                 })}
+                              </div>
+                            )}
+                            {/* Show rejection remarks for B2B users */}
+                            {isB2BUser && booking.eventLog?.slice().reverse().find(e => e.event === 'rejected' && e.fromStatus === 'pending_edit_approval') && (
+                              <div className="mt-2 text-[11px] text-destructive bg-destructive/10 px-2 py-1.5 rounded border border-destructive/20 leading-tight max-w-[200px] whitespace-normal">
+                                <span className="font-semibold block mb-0.5 flex items-center gap-1"><XCircle className="h-3 w-3"/> Edit Rejected:</span>
+                                {booking.eventLog.slice().reverse().find(e => e.event === 'rejected' && e.fromStatus === 'pending_edit_approval')?.notes?.replace('Edit request rejected. Reason: ', '')}
                               </div>
                             )}
                           </div>
@@ -1830,213 +1975,254 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                           </div>
                         </TableCell>
                         <TableCell className="text-right align-top">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreHorizontal className="h-4 w-4" />
+                          {booking.status === 'pending_edit_approval' && !isB2BUser ? (
+                            <div className="flex items-center justify-end gap-2">
+                              <Button 
+                                size="sm" 
+                                className="bg-green-100 text-green-700 hover:bg-green-200 border border-green-200 shadow-sm" 
+                                onClick={() => {
+                                  setReviewingBooking(booking);
+                                  setIsRejectingEdit(false);
+                                  setIsReviewEditDialogOpen(true);
+                                }}
+                              >
+                                <CheckCircle className="mr-1 h-4 w-4" />
+                                Accept
                               </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleEdit(booking)}>
-                                <Pencil className="mr-2 h-4 w-4" />
-                                Edit
-                              </DropdownMenuItem>
-                              
-                              <DropdownMenuItem onClick={() => handleViewVoucher(booking)}>
-                                <Ticket className="mr-2 h-4 w-4" />
-                                View Voucher
-                              </DropdownMenuItem>
+                              <Button 
+                                size="sm" 
+                                className="bg-red-100 text-red-700 hover:bg-red-200 border border-red-200 shadow-sm" 
+                                onClick={() => {
+                                  setReviewingBooking(booking);
+                                  setIsRejectingEdit(true);
+                                  setIsReviewEditDialogOpen(true);
+                                }}
+                              >
+                                <XCircle className="mr-1 h-4 w-4" />
+                                Reject
+                              </Button>
+                            </div>
+                          ) : (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem 
+                                  onClick={() => handleEdit(booking)} 
+                                  disabled={booking.status === 'pending_edit_approval'}
+                                >
+                                  <Pencil className="mr-2 h-4 w-4" />
+                                  {booking.status === 'pending_edit_approval' ? 'Edit Pending Approval' : 'Edit'}
+                                </DropdownMenuItem>
 
-                              {/* Tags Submenu */}
-                              <DropdownMenuSub>
-                                <DropdownMenuSubTrigger>
-                                  <Tag className="mr-2 h-4 w-4" />
-                                  Manage Tags
-                                </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent>
-                                  {bookingTags.length === 0 ? (
-                                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                                      No tags available
-                                    </div>
-                                  ) : (
-                                    bookingTags.map((tag) => (
-                                      <DropdownMenuItem
-                                        key={tag.id}
-                                        onSelect={(e) => {
-                                          e.preventDefault()
-                                          handleToggleTag(booking.id, tag.id)
-                                        }}
-                                      >
-                                        <div className="flex items-center gap-2 w-full">
-                                          <span
-                                            className="inline-block w-3 h-3 rounded-full"
-                                            style={{ backgroundColor: tag.color }}
-                                          />
-                                          <span>{tag.name}</span>
-                                          {booking.tags?.includes(tag.id) && (
-                                            <Check className="ml-auto h-4 w-4" />
-                                          )}
-                                        </div>
-                                      </DropdownMenuItem>
-                                    ))
-                                  )}
-                                </DropdownMenuSubContent>
-                              </DropdownMenuSub>
-                              
-                              <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleViewVoucher(booking)}>
+                                  <Ticket className="mr-2 h-4 w-4" />
+                                  View Voucher
+                                </DropdownMenuItem>
 
-                              {/* Driver Events (Next Action) */}
-                              {booking.status === "pending" && (
-                                <DropdownMenuItem onClick={() => handleConfirmEvent("Confirm Booking", "Are you sure you want to confirm this booking?", () => updateStatusWithLog(booking, "confirmed", "confirmed", "Booking confirmed"))}>
-                                  <CheckCircle2 className="mr-2 h-4 w-4 text-primary" /> Confirm Booking
+                                <DropdownMenuItem onClick={() => handleOpenTicketDialog(booking)}>
+                                  <Headset className="mr-2 h-4 w-4" />
+                                  Raise Ticket
                                 </DropdownMenuItem>
-                              )}
-                              {(booking.status === "pending" || booking.status === "confirmed") && (
-                                <DropdownMenuItem onClick={() => { setAssigningBooking(booking); setIsAssignDialogOpen(true); }}>
-                                  <UserPlus className="mr-2 h-4 w-4 text-primary" /> Assign Driver
-                                </DropdownMenuItem>
-                              )}
-                              {booking.status === "assigned" && (
-                                <DropdownMenuItem onClick={() => handleConfirmEvent("Dispatch Driver", "Are you sure you want to dispatch the driver? This will generate a Duty Slip.", () => handleDispatch(booking))}>
-                                  <Send className="mr-2 h-4 w-4 text-indigo-600" /> Dispatch Driver
-                                </DropdownMenuItem>
-                              )}
-                              {booking.status === "dispatched" && (
-                                <DropdownMenuItem onClick={() => handleConfirmEvent("Mark Arrived", "Has the driver arrived at the pickup location?", () => handleArrived(booking))}>
-                                  <MapPinned className="mr-2 h-4 w-4 text-purple-600" /> Mark Arrived
-                                </DropdownMenuItem>
-                              )}
-                              {booking.status === "arrived" && (
-                              <DropdownMenuItem onClick={() => handleOpenPickupDialog(booking)}>
-                                  <UserCheck className="mr-2 h-4 w-4 text-orange-600" /> Mark Picked Up
-                                </DropdownMenuItem>
-                              )}
-                              {booking.status === "picked_up" && (
-                                <DropdownMenuItem onClick={() => handleConfirmEvent("Mark Dropped", "Has the customer been dropped at the destination?", () => handleDrop(booking))}>
-                                  <Flag className="mr-2 h-4 w-4 text-teal-600" /> Mark Dropped
-                                </DropdownMenuItem>
-                              )}
-                              {booking.status === "dropped" && (
-                                <DropdownMenuItem onClick={() => handleOpenCloseDialog(booking)}>
-                                  <CheckCircle2 className="mr-2 h-4 w-4 text-success" /> Close Trip
-                                </DropdownMenuItem>
-                              )}
 
-                              {/* Forward / Backward Navigation Submenu */}
-                              {(previousStatuses.length > 0 || futureStatuses.length > 0) && !["closed", "cancelled"].includes(booking.status) && (
+                                {/* Tags Submenu */}
                                 <DropdownMenuSub>
                                   <DropdownMenuSubTrigger>
-                                    <ArrowUpDown className="mr-2 h-4 w-4" /> Change Status Manually
+                                    <Tag className="mr-2 h-4 w-4" />
+                                    Manage Tags
                                   </DropdownMenuSubTrigger>
                                   <DropdownMenuSubContent>
-                                    {previousStatuses.length > 0 && (
-                                      <>
-                                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground flex items-center">
-                                          <ArrowLeft className="mr-1 h-3 w-3" /> Revert to
-                                        </div>
-                                        {previousStatuses.map((status) => (
-                                          <DropdownMenuItem key={status} onClick={() => handleConfirmEvent("Revert Status", `Are you sure you want to revert to '${status.replace(/_/g, " ")}'?`, () => handleRevertStatus(booking, status))}>
-                                            {status.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
-                                          </DropdownMenuItem>
-                                        ))}
-                                      </>
-                                    )}
-                                    {previousStatuses.length > 0 && futureStatuses.length > 0 && <DropdownMenuSeparator />}
-                                    {futureStatuses.length > 0 && (
-                                      <>
-                                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground flex items-center">
-                                          Skip to <ArrowRight className="ml-1 h-3 w-3" />
-                                        </div>
-                                        {futureStatuses.map((status) => (
-                                          <DropdownMenuItem key={status} onClick={() => handleConfirmEvent("Skip Status", `Are you sure you want to skip to '${status.replace(/_/g, " ")}'?`, () => {
-                                            if (status === "closed") handleOpenCloseDialog(booking);
-                                            else updateStatusWithLog(booking, status, status as BookingEventLog["event"], `Status changed to ${status} by admin`);
-                                          })}>
-                                            {status.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
-                                          </DropdownMenuItem>
-                                        ))}
-                                      </>
+                                    {bookingTags.length === 0 ? (
+                                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                                        No tags available
+                                      </div>
+                                    ) : (
+                                      bookingTags.map((tag) => (
+                                        <DropdownMenuItem
+                                          key={tag.id}
+                                          onSelect={(e) => {
+                                            e.preventDefault()
+                                            handleToggleTag(booking.id, tag.id)
+                                          }}
+                                        >
+                                          <div className="flex items-center gap-2 w-full">
+                                            <span
+                                              className="inline-block w-3 h-3 rounded-full"
+                                              style={{ backgroundColor: tag.color }}
+                                            />
+                                            <span>{tag.name}</span>
+                                            {booking.tags?.includes(tag.id) && (
+                                              <Check className="ml-auto h-4 w-4" />
+                                            )}
+                                          </div>
+                                        </DropdownMenuItem>
+                                      ))
                                     )}
                                   </DropdownMenuSubContent>
                                 </DropdownMenuSub>
-                              )}
+                                
+                                <DropdownMenuSeparator />
 
-                              {/* Reassign Driver */}
-                              {booking.driverId && !["closed", "cancelled", "pending", "confirmed"].includes(booking.status) && (
-                                <DropdownMenuItem onClick={() => {
-                                  setReassigningBooking(booking)
-                                  setReassignData({ driverId: booking.driverId || "", carId: booking.carId || "", reason: "" })
-                                  setIsReassignDialogOpen(true)
-                                }}>
-                                  <RefreshCw className="mr-2 h-4 w-4" /> Reassign Driver
-                                </DropdownMenuItem>
-                              )}
+                                {/* Driver Events (Next Action) */}
+                                {!isB2BUser && (
+                                  <>
+                                    {booking.status === "pending" && (
+                                      <DropdownMenuItem onClick={() => handleConfirmEvent("Confirm Booking", "Are you sure you want to confirm this booking?", () => updateStatusWithLog(booking, "confirmed", "confirmed", "Booking confirmed"))}>
+                                        <CheckCircle2 className="mr-2 h-4 w-4 text-primary" /> Confirm Booking
+                                      </DropdownMenuItem>
+                                    )}
+                                    {(booking.status === "pending" || booking.status === "confirmed") && (
+                                      <DropdownMenuItem onClick={() => { setAssigningBooking(booking); setIsAssignDialogOpen(true); }}>
+                                        <UserPlus className="mr-2 h-4 w-4 text-primary" /> Assign Driver
+                                      </DropdownMenuItem>
+                                    )}
+                                    {booking.status === "assigned" && (
+                                      <DropdownMenuItem onClick={() => handleConfirmEvent("Dispatch Driver", "Are you sure you want to dispatch the driver? This will generate a Duty Slip.", () => handleDispatch(booking))}>
+                                        <Send className="mr-2 h-4 w-4 text-indigo-600" /> Dispatch Driver
+                                      </DropdownMenuItem>
+                                    )}
+                                    {booking.status === "dispatched" && (
+                                      <DropdownMenuItem onClick={() => handleConfirmEvent("Mark Arrived", "Has the driver arrived at the pickup location?", () => handleArrived(booking))}>
+                                        <MapPinned className="mr-2 h-4 w-4 text-purple-600" /> Mark Arrived
+                                      </DropdownMenuItem>
+                                    )}
+                                    {booking.status === "arrived" && (
+                                    <DropdownMenuItem onClick={() => handleOpenPickupDialog(booking)}>
+                                        <UserCheck className="mr-2 h-4 w-4 text-orange-600" /> Mark Picked Up
+                                      </DropdownMenuItem>
+                                    )}
+                                    {booking.status === "picked_up" && (
+                                      <DropdownMenuItem onClick={() => handleConfirmEvent("Mark Dropped", "Has the customer been dropped at the destination?", () => handleDrop(booking))}>
+                                        <Flag className="mr-2 h-4 w-4 text-teal-600" /> Mark Dropped
+                                      </DropdownMenuItem>
+                                    )}
+                                    {booking.status === "dropped" && (
+                                      <DropdownMenuItem onClick={() => handleOpenCloseDialog(booking)}>
+                                        <CheckCircle2 className="mr-2 h-4 w-4 text-success" /> Close Trip
+                                      </DropdownMenuItem>
+                                    )}
 
-                              {/* Edit Closed Duty */}
-                              {booking.status === "closed" && (
-                                <DropdownMenuItem onClick={() => handleOpenEditClosedDutyDialog(booking)}>
-                                  <Pencil className="mr-2 h-4 w-4" />
-                                  Edit Closed Duty
-                                </DropdownMenuItem>
-                              )}
+                                    {/* Forward / Backward Navigation Submenu */}
+                                    {(previousStatuses.length > 0 || futureStatuses.length > 0) && !["closed", "cancelled"].includes(booking.status) && (
+                                      <DropdownMenuSub>
+                                        <DropdownMenuSubTrigger>
+                                          <ArrowUpDown className="mr-2 h-4 w-4" /> Change Status Manually
+                                        </DropdownMenuSubTrigger>
+                                        <DropdownMenuSubContent>
+                                          {previousStatuses.length > 0 && (
+                                            <>
+                                              <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground flex items-center">
+                                                <ArrowLeft className="mr-1 h-3 w-3" /> Revert to
+                                              </div>
+                                              {previousStatuses.map((status) => (
+                                                <DropdownMenuItem key={status} onClick={() => handleConfirmEvent("Revert Status", `Are you sure you want to revert to '${status.replace(/_/g, " ")}'?`, () => handleRevertStatus(booking, status))}>
+                                                  {status.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
+                                                </DropdownMenuItem>
+                                              ))}
+                                            </>
+                                          )}
+                                          {previousStatuses.length > 0 && futureStatuses.length > 0 && <DropdownMenuSeparator />}
+                                          {futureStatuses.length > 0 && (
+                                            <>
+                                              <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground flex items-center">
+                                                Skip to <ArrowRight className="ml-1 h-3 w-3" />
+                                              </div>
+                                              {futureStatuses.map((status) => (
+                                                <DropdownMenuItem key={status} onClick={() => handleConfirmEvent("Skip Status", `Are you sure you want to skip to '${status.replace(/_/g, " ")}'?`, () => {
+                                                  if (status === "closed") handleOpenCloseDialog(booking);
+                                                  else updateStatusWithLog(booking, status, status as BookingEventLog["event"], `Status changed to ${status} by admin`);
+                                                })}>
+                                                  {status.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
+                                                </DropdownMenuItem>
+                                              ))}
+                                            </>
+                                          )}
+                                        </DropdownMenuSubContent>
+                                      </DropdownMenuSub>
+                                    )}
 
-                              <DropdownMenuSeparator />
+                                    {/* Reassign Driver */}
+                                    {booking.driverId && !["closed", "cancelled", "pending", "confirmed"].includes(booking.status) && (
+                                      <DropdownMenuItem onClick={() => {
+                                        setReassigningBooking(booking)
+                                        setReassignData({ driverId: booking.driverId || "", carId: booking.carId || "", reason: "" })
+                                        setIsReassignDialogOpen(true)
+                                      }}>
+                                        <RefreshCw className="mr-2 h-4 w-4" /> Reassign Driver
+                                      </DropdownMenuItem>
+                                    )}
 
-                              {/* Event Log */}
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setViewingEventLogBooking(booking)
-                                  setIsEventLogDialogOpen(true)
-                                }}
-                              >
-                                <History className="mr-2 h-4 w-4" />
-                                View Event Log
-                              </DropdownMenuItem>
+                                    {/* Edit Closed Duty */}
+                                    {booking.status === "closed" && (
+                                      <DropdownMenuItem onClick={() => handleOpenEditClosedDutyDialog(booking)}>
+                                        <Pencil className="mr-2 h-4 w-4" />
+                                        Edit Closed Duty
+                                      </DropdownMenuItem>
+                                    )}
 
-                              {/* Duty Slip */}
-                              {booking.b2bClientId && (
-                                <>
+                                    <DropdownMenuSeparator />
+
+                                    {/* Event Log */}
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        setViewingEventLogBooking(booking)
+                                        setIsEventLogDialogOpen(true)
+                                      }}
+                                    >
+                                      <History className="mr-2 h-4 w-4" />
+                                      View Event Log
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+
+                                {/* Duty Slip */}
+                                {booking.b2bClientId && (
+                                  <>
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        setViewingDutySlipBooking(booking)
+                                        setIsDutySlipDialogOpen(true)
+                                      }}
+                                    >
+                                      <FileText className="mr-2 h-4 w-4" />
+                                      View Duty Slip
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => handlePrintSlip(displayDutySlip)}
+                                    >
+                                      <Printer className="mr-2 h-4 w-4" />
+                                      Print Duty Slip
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+
+                                <DropdownMenuSeparator />
+
+                                {/* Cancel / Reactivate */}
+                                {!["closed", "cancelled"].includes(booking.status) && (
                                   <DropdownMenuItem
-                                    onClick={() => {
-                                      setViewingDutySlipBooking(booking)
-                                      setIsDutySlipDialogOpen(true)
-                                    }}
+                                    onClick={() => handleConfirmEvent("Cancel Booking", "Are you sure you want to cancel this booking?", () => handleCancelBooking(booking))}
+                                    className="text-destructive"
                                   >
-                                    <FileText className="mr-2 h-4 w-4" />
-                                    View Duty Slip
+                                    <XCircle className="mr-2 h-4 w-4" />
+                                    Cancel Booking
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => handlePrintSlip(displayDutySlip)}
-                                  >
-                                    <Printer className="mr-2 h-4 w-4" />
-                                    Print Duty Slip
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-
-                              <DropdownMenuSeparator />
-
-                              {/* Cancel / Reactivate */}
-                              {!["closed", "cancelled"].includes(booking.status) && (
+                                )}
+                              {!isB2BUser && booking.status === "cancelled" && (
                                 <DropdownMenuItem
-                                  onClick={() => handleConfirmEvent("Cancel Booking", "Are you sure you want to cancel this booking?", () => handleCancelBooking(booking))}
-                                  className="text-destructive"
+                                  onClick={() => handleConfirmEvent("Reactivate Booking", "Are you sure you want to reactivate this cancelled booking?", () => handleReactivateBooking(booking))}
+                                  className="text-success"
                                 >
-                                  <XCircle className="mr-2 h-4 w-4" />
-                                  Cancel Booking
+                                  <RefreshCw className="mr-2 h-4 w-4" />
+                                  Reactivate Booking
                                 </DropdownMenuItem>
                               )}
-                            {booking.status === "cancelled" && (
-                              <DropdownMenuItem
-                                onClick={() => handleConfirmEvent("Reactivate Booking", "Are you sure you want to reactivate this cancelled booking?", () => handleReactivateBooking(booking))}
-                                className="text-success"
-                              >
-                                <RefreshCw className="mr-2 h-4 w-4" />
-                                Reactivate Booking
-                              </DropdownMenuItem>
-                            )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </TableCell>
                       </TableRow>
                     )
@@ -2071,16 +2257,27 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
             </DialogHeader>
             <form onSubmit={handleSubmit}>
               <Tabs value={customerType} onValueChange={(v) => setCustomerType(v as "b2c" | "b2b")}>
-                <TabsList className="grid w-full grid-cols-2 mb-4">
-                  <TabsTrigger value="b2c">
-                    <User className="mr-2 h-4 w-4" />
-                    Individual (B2C)
-                  </TabsTrigger>
-                  <TabsTrigger value="b2b">
-                    <Building2 className="mr-2 h-4 w-4" />
-                    Business (B2B)
-                  </TabsTrigger>
-                </TabsList>
+              {!isB2BUser && (
+                  <TabsList className="grid w-full grid-cols-2 mb-4">
+                    <TabsTrigger value="b2c">
+                      <User className="mr-2 h-4 w-4" />
+                      Individual (B2C)
+                    </TabsTrigger>
+                    <TabsTrigger value="b2b">
+                      <Building2 className="mr-2 h-4 w-4" />
+                      Business (B2B)
+                    </TabsTrigger>
+                  </TabsList>
+                )}
+              {isB2BUser && (
+                  <div className="flex items-center gap-2 p-3 bg-muted rounded-lg mb-4">
+                    <Building2 className="h-5 w-5 text-primary" />
+                    <div>
+                      <p className="font-medium text-sm">B2B Booking Only</p>
+                    <p className="text-xs text-muted-foreground">Your account is restricted to corporate bookings</p>
+                    </div>
+                  </div>
+                )}
 
                 <TabsContent value="b2c" className="space-y-4">
                   {/* Customer Search */}
@@ -2255,6 +2452,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                       onValueChange={(value) =>
                         setFormData({ ...formData, b2bClientId: value, b2bEmployeeId: undefined })
                       }
+                      disabled={isB2BUser}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select a B2B client" />
@@ -2271,14 +2469,15 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                     </Select>
                   </Field>
                   
-                  {formData.b2bClientId && (
+  {formData.b2bClientId && (
                     <Field>
-                      <FieldLabel>Select Employee *</FieldLabel>
+                      <FieldLabel>Select Employee {isCorpEmployee && "(Auto-selected)"}</FieldLabel>
                       <Select
                         value={formData.b2bEmployeeId || ""}
                         onValueChange={(value) =>
                           setFormData({ ...formData, b2bEmployeeId: value })
                         }
+                        disabled={isCorpEmployee}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select an employee" />
@@ -2298,9 +2497,16 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                           )}
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Only approved employees with login access are shown
-                      </p>
+                      {isB2BUser && currentB2BUser && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Logged in as: <strong>{currentB2BUser.name}</strong> ({currentB2BUser.employeeId})
+                        </p>
+                      )}
+                      {!isB2BUser && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Only approved employees with login access are shown
+                        </p>
+                      )}
                     </Field>
                   )}
                 </TabsContent>
@@ -2534,49 +2740,58 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                   />
                 </Field>
 
-                <Field>
-                  <FieldLabel>Promo Code</FieldLabel>
-                  <Select
-                    value={formData.promoCodeId || "none"}
-                    onValueChange={(value) =>
-                      setFormData({
-                        ...formData,
-                        promoCodeId: value === "none" ? undefined : value,
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select promo code" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No promo code</SelectItem>
-                      {selectedFormPromo && selectedPromoError && (
-                        <SelectItem value={selectedFormPromo.id} disabled>
-                          {selectedFormPromo.code} - {selectedPromoError}
-                        </SelectItem>
-                      )}
-                      {eligiblePromoCodes.map((promo) => (
-                        <SelectItem key={promo.id} value={promo.id}>
-                          {promo.code} -{" "}
-                          {promo.discountType === "percentage"
-                            ? `${promo.discountValue}% off`
-                            : `Rs. ${promo.discountValue} off`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedPromoError ? (
-                    <p className="text-xs text-destructive mt-1">{selectedPromoError}</p>
-                  ) : selectedFormPromo ? (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {selectedFormPromo.description}
+                {!isB2BUser && (
+                  <Field>
+                    <FieldLabel>Promo Code</FieldLabel>
+                    <Select
+                      value={formData.promoCodeId || "none"}
+                      onValueChange={(value) =>
+                        setFormData({
+                          ...formData,
+                          promoCodeId: value === "none" ? undefined : value,
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select promo code" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No promo code</SelectItem>
+                        {selectedFormPromo && selectedPromoError && (
+                          <SelectItem value={selectedFormPromo.id} disabled>
+                            {selectedFormPromo.code} - {selectedPromoError}
+                          </SelectItem>
+                        )}
+                        {eligiblePromoCodes.map((promo) => (
+                          <SelectItem key={promo.id} value={promo.id}>
+                            {promo.code} -{" "}
+                            {promo.discountType === "percentage"
+                              ? `${promo.discountValue}% off`
+                              : `Rs. ${promo.discountValue} off`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedPromoError ? (
+                      <p className="text-xs text-destructive mt-1">{selectedPromoError}</p>
+                    ) : selectedFormPromo ? (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {selectedFormPromo.description}
+                      </p>
+                    ) : eligiblePromoCodes.length === 0 ? (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        No promo codes are available for this booking.
+                      </p>
+                    ) : null}
+                  </Field>
+                )}
+                {isB2BUser && (
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-medium text-sm">Promo Code:</span> Not available for corporate bookings
                     </p>
-                  ) : eligiblePromoCodes.length === 0 ? (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      No promo codes are available for this booking.
-                    </p>
-                  ) : null}
-                </Field>
+                  </div>
+                )}
 
                 {/* Fare Summary - Auto-calculated */}
                 {formData.cityId && formData.carCategoryId && (
@@ -2934,69 +3149,71 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
         </Dialog>
 
         {/* Pair Driver & Car Dialog */}
-        <Dialog open={isPairDialogOpen} onOpenChange={setIsPairDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Pair Driver & Car</DialogTitle>
-              <DialogDescription>
-                Manually pair a driver with a car when they haven&apos;t logged in through the app
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <Field>
-                <FieldLabel>Select Driver</FieldLabel>
-                <Select
-                  value={pairData.driverId}
-                  onValueChange={(value) => setPairData({ ...pairData, driverId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a driver" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {activeDrivers.map((driver) => (
-                      <SelectItem key={driver.id} value={driver.id}>
-                        {driver.name} - {driver.phone}
-                        {driver.assignedCarId && " (Already paired)"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field>
-                <FieldLabel>Select Car</FieldLabel>
-                <Select
-                  value={pairData.carId}
-                  onValueChange={(value) => setPairData({ ...pairData, carId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a car" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {cars.map((car) => {
-                      const category = getCarCategory(car.categoryId)
-                      return (
-                        <SelectItem key={car.id} value={car.id}>
-                          {car.registrationNumber} - {car.make} {car.model}
-                          {category && ` (${category.name})`}
-                          {car.assignedDriverId && " (Already paired)"}
+        {!isB2BUser && (
+          <Dialog open={isPairDialogOpen} onOpenChange={setIsPairDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Pair Driver & Car</DialogTitle>
+                <DialogDescription>
+                  Manually pair a driver with a car when they haven&apos;t logged in through the app
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <Field>
+                  <FieldLabel>Select Driver</FieldLabel>
+                  <Select
+                    value={pairData.driverId}
+                    onValueChange={(value) => setPairData({ ...pairData, driverId: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a driver" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeDrivers.map((driver) => (
+                        <SelectItem key={driver.id} value={driver.id}>
+                          {driver.name} - {driver.phone}
+                          {driver.assignedCarId && " (Already paired)"}
                         </SelectItem>
-                      )
-                    })}
-                  </SelectContent>
-                </Select>
-              </Field>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsPairDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handlePairDriverCar}>
-                <Link2 className="mr-2 h-4 w-4" />
-                Pair
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field>
+                  <FieldLabel>Select Car</FieldLabel>
+                  <Select
+                    value={pairData.carId}
+                    onValueChange={(value) => setPairData({ ...pairData, carId: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a car" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {cars.map((car) => {
+                        const category = getCarCategory(car.categoryId)
+                        return (
+                          <SelectItem key={car.id} value={car.id}>
+                            {car.registrationNumber} - {car.make} {car.model}
+                            {category && ` (${category.name})`}
+                            {car.assignedDriverId && " (Already paired)"}
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsPairDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handlePairDriverCar}>
+                  <Link2 className="mr-2 h-4 w-4" />
+                  Pair
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
 
         {/* Pickup Dialog */}
         <Dialog open={isPickupDialogOpen} onOpenChange={setIsPickupDialogOpen}>
@@ -3451,6 +3668,187 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
               <Button onClick={handleUpdateClosedDuty}>
                 Update Duty Details
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Create Ticket Dialog */}
+        <Dialog open={isTicketDialogOpen} onOpenChange={setIsTicketDialogOpen}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Raise Support Ticket</DialogTitle>
+              <DialogDescription>
+                Create a ticket for booking {ticketBooking?.bookingNumber}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <Field>
+                <FieldLabel>Subject</FieldLabel>
+                <Input 
+                  placeholder="Briefly describe the issue" 
+                  value={ticketData.subject}
+                  onChange={(e) => setTicketData({...ticketData, subject: e.target.value})}
+                />
+              </Field>
+              <div className="grid grid-cols-2 gap-4">
+                <Field>
+                  <FieldLabel>Type</FieldLabel>
+                  <Select value={ticketData.type} onValueChange={(v) => setTicketData({...ticketData, type: v})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Complaint">Complaint</SelectItem>
+                      <SelectItem value="Billing">Billing</SelectItem>
+                      <SelectItem value="Technical">Technical</SelectItem>
+                      <SelectItem value="General Inquiry">General Inquiry</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field>
+                  <FieldLabel>Priority</FieldLabel>
+                  <Select value={ticketData.priority} onValueChange={(v) => setTicketData({...ticketData, priority: v})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+              <Field>
+                <FieldLabel>Description</FieldLabel>
+                <Textarea 
+                  placeholder="Provide a detailed description of the issue..." 
+                  rows={4} 
+                  value={ticketData.description}
+                  onChange={(e) => setTicketData({...ticketData, description: e.target.value})}
+                />
+              </Field>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsTicketDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleCreateTicket}>Submit Ticket</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Review Edit Dialog */}
+        <Dialog open={isReviewEditDialogOpen} onOpenChange={setIsReviewEditDialogOpen}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Review Booking Edit - {reviewingBooking?.bookingNumber}</DialogTitle>
+              <DialogDescription>
+                A corporate user has requested changes to this booking. Review the changes below and approve or reject them.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="my-4 max-h-[50vh] overflow-y-auto">
+              {reviewingBooking && reviewingBooking.pendingEdits ? (
+                (() => {
+                  const original = reviewingBooking;
+                  const changes = reviewingBooking.pendingEdits;
+                  const fieldsToShow: (keyof Booking)[] = [
+                      'customerName', 'customerPhone', 'pickupLocation', 'dropLocation', 
+                      'pickupDate', 'pickupTime', 'remarks', 'b2bEmployeeId'
+                  ];
+                  
+                  const fieldLabels: Record<string, string> = {
+                    customerName: 'Customer Name',
+                    customerPhone: 'Customer Phone',
+                    pickupLocation: 'Pickup Location',
+                    dropLocation: 'Drop Location',
+                    pickupDate: 'Pickup Date',
+                    pickupTime: 'Pickup Time',
+                    remarks: 'Remarks',
+                    b2bEmployeeId: 'Employee'
+                  };
+
+                  const changedFields = fieldsToShow.filter(key => 
+                      original[key] !== changes[key] && changes[key] !== undefined
+                  );
+
+                  if (changedFields.length === 0) {
+                      return <p className="text-muted-foreground p-4 text-center">No changes to display.</p>;
+                  }
+
+                  return (
+                      <Table>
+                          <TableHeader>
+                              <TableRow>
+                                  <TableHead>Field</TableHead>
+                                  <TableHead>Original Value</TableHead>
+                                  <TableHead>New Value</TableHead>
+                              </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                              {changedFields.map(key => (
+                                  <TableRow key={key}>
+                                      <TableCell className="font-medium capitalize">
+                                        {fieldLabels[key as keyof typeof fieldLabels] || key.replace(/([A-Z])/g, ' $1')}
+                                      </TableCell>
+                                      <TableCell>
+                                        <span className="bg-red-100 text-red-800 px-2 py-1 rounded-md line-through dark:bg-red-900/50 dark:text-red-200">
+                                            {key === 'b2bEmployeeId' ? getB2BEmployee(original[key] as string)?.name : String(original[key] || 'N/A')}
+                                        </span>
+                                      </TableCell>
+                                      <TableCell>
+                                        <span className="bg-green-100 text-green-800 px-2 py-1 rounded-md font-semibold dark:bg-green-900/50 dark:text-green-200">
+                                            {key === 'b2bEmployeeId' ? getB2BEmployee(changes[key] as string)?.name : String(changes[key] || 'N/A')}
+                                        </span>
+                                      </TableCell>                                  </TableRow>
+                              ))}
+                          </TableBody>
+                      </Table>
+                  );
+                })()
+              ) : (
+                <p>No pending changes to display.</p>
+              )}
+            </div>
+            <DialogFooter>
+              {isRejectingEdit ? (
+                <div className="w-full flex flex-col gap-3 mt-4 border-t pt-4">
+                  <Input 
+                    placeholder="Please provide a reason for rejection..." 
+                    value={editRejectionReason}
+                    onChange={(e) => setEditRejectionReason(e.target.value)}
+                    autoFocus
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setIsRejectingEdit(false)}>Cancel</Button>
+                    <Button variant="destructive" onClick={() => {
+                        if (reviewingBooking && editRejectionReason.trim()) {
+                            rejectBookingEdit(reviewingBooking.id, editRejectionReason.trim());
+                            setIsReviewEditDialogOpen(false);
+                            setIsRejectingEdit(false);
+                            setEditRejectionReason("");
+                        } else {
+                            toast.error("Reason is required to reject changes.");
+                        }
+                    }}>
+                        Confirm Reject
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <Button variant="outline" onClick={() => setIsReviewEditDialogOpen(false)}>Close</Button>
+                  <Button variant="destructive" onClick={() => setIsRejectingEdit(true)}>
+                      <XCircle className="mr-2 h-4 w-4" />
+                      Reject Changes
+                  </Button>
+                  <Button onClick={() => {
+                      if (reviewingBooking) approveBookingEdit(reviewingBooking.id);
+                      setIsReviewEditDialogOpen(false);
+                  }} className="bg-purple-600 hover:bg-purple-700">
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Approve Changes
+                  </Button>
+                </>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useAdmin } from "@/lib/admin-context"
-import { AdminUser } from "@/lib/types"
+import { AdminUser, AdminRole } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -27,11 +27,13 @@ const initialFormData: UserFormData = {
 }
 
 export default function AdminUsersPage() {
+  const adminContext = useAdmin()
   const { 
     adminUsers, adminRoles,
-    addAdminUser, updateAdminUser, deleteAdminUser,
-    getAdminRole
-  } = useAdmin()
+    addAdminUser, updateAdminUser, deleteAdminUser
+  } = adminContext
+  
+  const getAdminRole = (id: string) => adminRoles.find((r: AdminRole) => r.id === id)
   
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
@@ -344,7 +346,7 @@ export default function AdminUsersPage() {
                     <SelectValue placeholder="Select a role" />
                   </SelectTrigger>
                   <SelectContent>
-                    {adminRoles.filter(r => r.isActive).map((role) => (
+                    {adminRoles.map((role) => (
                       <SelectItem key={role.id} value={role.id}>
                         {role.name}
                       </SelectItem>
@@ -383,3 +385,4 @@ export default function AdminUsersPage() {
     </div>
   )
 }
+
