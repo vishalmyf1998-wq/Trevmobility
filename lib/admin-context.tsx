@@ -63,6 +63,15 @@ export interface TicketComment {
   timestamp: string
 }
 
+export interface SupportTicketLog {
+  id: string
+  action: string
+  performedBy: string
+  performedByRole: UserType | 'system'
+  performedAt: string
+  details: string
+}
+
 export interface SupportTicket {
   id: string
   ticketNumber: string
@@ -75,6 +84,7 @@ export interface SupportTicket {
   createdAt: string
   updatedAt: string
   comments?: TicketComment[]
+  activityLog?: SupportTicketLog[]
 }
 
 // Default peak hour and night charge configs
@@ -303,8 +313,8 @@ const initialCancellationPolicies: CancellationPolicy[] = [
 ]
 
 const initialSupportTickets: SupportTicket[] = [
-  { id: 'demo-ticket-1', ticketNumber: 'TK-TEST-001', subject: 'Invoice copy needed', customerName: 'Priya Mehta', type: 'billing', priority: 'medium', status: 'open', description: 'Customer needs invoice copy for airport drop booking.', createdAt: demoNow, updatedAt: demoNow, comments: [{ id: 'demo-comment-1', text: 'Shared with accounts team for verification.', senderName: 'Support Admin', isAdmin: true, timestamp: demoNow }] },
-  { id: 'demo-ticket-2', ticketNumber: 'TK-TEST-002', subject: 'Driver reached late', customerName: 'Nitin Rao', type: 'service', priority: 'high', status: 'in_progress', description: 'Corporate employee reported driver delay for morning ride.', createdAt: demoNow, updatedAt: demoNow, comments: [] },
+  { id: 'demo-ticket-1', ticketNumber: 'TK-TEST-001', subject: 'Invoice copy needed', customerName: 'Priya Mehta', type: 'billing', priority: 'medium', status: 'open', description: 'Customer needs invoice copy for airport drop booking.', createdAt: demoNow, updatedAt: demoNow, comments: [{ id: 'demo-comment-1', text: 'Shared with accounts team for verification.', senderName: 'Support Admin', isAdmin: true, timestamp: demoNow }], activityLog: [{ id: 'demo-ticket-log-1', action: 'created', performedBy: 'Support Admin', performedByRole: 'system', performedAt: demoNow, details: 'Ticket created for testing' }, { id: 'demo-ticket-log-2', action: 'comment_added', performedBy: 'Support Admin', performedByRole: 'trev-admin', performedAt: demoNow, details: 'Comment added' }] },
+  { id: 'demo-ticket-2', ticketNumber: 'TK-TEST-002', subject: 'Driver reached late', customerName: 'Nitin Rao', type: 'service', priority: 'high', status: 'in_progress', description: 'Corporate employee reported driver delay for morning ride.', createdAt: demoNow, updatedAt: demoNow, comments: [], activityLog: [{ id: 'demo-ticket-log-3', action: 'created', performedBy: 'Nitin Rao', performedByRole: 'corporate-employee', performedAt: demoNow, details: 'Ticket created for testing' }, { id: 'demo-ticket-log-4', action: 'status_changed', performedBy: 'Trev Admin', performedByRole: 'trev-admin', performedAt: demoNow, details: 'Status changed from open to in_progress' }] },
 ]
 
 const loadState = <T,>(key: string, fallback: T): T => {
@@ -674,6 +684,16 @@ const handleDbError = (error: any, contextMsg: string) => {
   } else {
     toast.error(`Database Error: ${error.message}`)
   }
+}
+
+const removeSupportActivityLog = (payload: Partial<SupportTicket>) => {
+  const { activityLog, ...rest } = payload
+  return rest
+}
+
+const isMissingSupportActivityLogColumn = (error: any) => {
+  const message = error?.message?.toLowerCase() || ''
+  return message.includes('activitylog') || message.includes('activity_log')
 }
 
 export function AdminProvider({ children }: { children: React.ReactNode }) {
@@ -1818,28 +1838,110 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
 
   // Support Ticket actions
   const addSupportTicket = useCallback(async (ticket: Omit<SupportTicket, 'id' | 'ticketNumber' | 'createdAt' | 'updatedAt'>) => {
+    const now = new Date().toISOString()
+    const actor = currentUser?.email || ticket.customerName || 'System'
     const newTicket = { 
       ...ticket, 
       id: generateId(), 
       ticketNumber: `TK${Date.now().toString().slice(-6)}`,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: now,
+      updatedAt: now,
+      activityLog: [
+        ...(ticket.activityLog || []),
+        {
+          id: generateId(),
+          action: 'created',
+          performedBy: actor,
+          performedByRole: userType || 'system',
+          performedAt: now,
+          details: `Ticket created with ${ticket.priority} priority and ${ticket.status} status`
+        }
+      ]
     }
     setSupportTickets(prev => [...prev, newTicket as SupportTicket])
 
     const payload = sanitizeForSupabase(newTicket)
     const { error } = await supabase.from('support_tickets').insert([payload])
-    if (error) handleDbError(error, 'Error adding support ticket to Supabase:')
-  }, [])
+    if (error) {
+      if (isMissingSupportActivityLogColumn(error)) {
+        const fallbackPayload = sanitizeForSupabase(removeSupportActivityLog(newTicket))
+        const { error: fallbackError } = await supabase.from('support_tickets').insert([fallbackPayload])
+        if (fallbackError) handleDbError(fallbackError, 'Error adding support ticket to Supabase:')
+      } else {
+        handleDbError(error, 'Error adding support ticket to Supabase:')
+      }
+    }
+  }, [currentUser, userType])
   
   const updateSupportTicket = useCallback(async (id: string, ticket: Partial<SupportTicket>) => {
-    const updated = { ...ticket, updatedAt: new Date().toISOString() }
-    setSupportTickets(prev => prev.map(t => t.id === id ? { ...t, ...updated } as SupportTicket : t))
+    const now = new Date().toISOString()
+    let updatedTicketForDb: SupportTicket | undefined
 
-    const payload = sanitizeForSupabase(updated)
+    const getUpdateDetails = (previous: SupportTicket, updates: Partial<SupportTicket>) => {
+      const details: string[] = []
+
+      if (updates.status && updates.status !== previous.status) {
+        details.push(`Status changed from ${previous.status} to ${updates.status}`)
+      }
+      if (updates.priority && updates.priority !== previous.priority) {
+        details.push(`Priority changed from ${previous.priority} to ${updates.priority}`)
+      }
+      if (updates.type && updates.type !== previous.type) {
+        details.push(`Type changed from ${previous.type} to ${updates.type}`)
+      }
+      if (updates.subject && updates.subject !== previous.subject) {
+        details.push('Subject updated')
+      }
+      if (updates.description && updates.description !== previous.description) {
+        details.push('Description updated')
+      }
+      if (updates.comments && updates.comments.length !== (previous.comments || []).length) {
+        details.push('Comment added')
+      }
+
+      return details
+    }
+
+    setSupportTickets(prev => prev.map(t => {
+      if (t.id !== id) return t
+
+      const details = getUpdateDetails(t, ticket)
+      const shouldAppendLog = details.length > 0 && !ticket.activityLog
+      const updated = {
+        ...t,
+        ...ticket,
+        updatedAt: now,
+        activityLog: shouldAppendLog
+          ? [
+              ...(t.activityLog || []),
+              {
+                id: generateId(),
+                action: details.some(detail => detail.startsWith('Status changed')) ? 'status_changed' : details.includes('Comment added') ? 'comment_added' : 'updated',
+                performedBy: currentUser?.email || 'Admin',
+                performedByRole: userType || 'system',
+                performedAt: now,
+                details: details.join('; ')
+              }
+            ]
+          : ticket.activityLog || t.activityLog
+      } as SupportTicket
+
+      updatedTicketForDb = updated
+      return updated
+    }))
+
+    const payload = sanitizeForSupabase(updatedTicketForDb || { ...ticket, updatedAt: now })
     const { error } = await supabase.from('support_tickets').update(payload).eq('id', id)
-    if (error) handleDbError(error, 'Error updating support ticket in Supabase:')
-  }, [])
+    if (error) {
+      if (isMissingSupportActivityLogColumn(error)) {
+        const fallbackPayload = sanitizeForSupabase(removeSupportActivityLog(payload))
+        const { error: fallbackError } = await supabase.from('support_tickets').update(fallbackPayload).eq('id', id)
+        if (fallbackError) handleDbError(fallbackError, 'Error updating support ticket in Supabase:')
+      } else {
+        handleDbError(error, 'Error updating support ticket in Supabase:')
+      }
+    }
+  }, [currentUser, supportTickets, userType])
   
   const deleteSupportTicket = useCallback(async (id: string) => {
     setSupportTickets(prev => prev.filter(t => t.id !== id))

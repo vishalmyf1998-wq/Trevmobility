@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Search, Headset, MessageSquare, AlertCircle, CheckCircle2, Clock, Plus, Send, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { Search, AlertCircle, CheckCircle2, Clock, Plus, Send, ArrowUpDown, ArrowUp, ArrowDown, History } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useAdmin, SupportTicket } from "@/lib/admin-context"
 
@@ -60,6 +60,14 @@ function SupportTicketsContent() {
       setStatusFilter(urlStatus)
     }
   }, [urlStatus])
+
+  useEffect(() => {
+    if (!selectedTicket) return
+    const freshTicket = supportTickets.find(ticket => ticket.id === selectedTicket.id)
+    if (freshTicket) {
+      setSelectedTicket(freshTicket)
+    }
+  }, [selectedTicket?.id, supportTickets])
 
   const filteredTickets = supportTickets.filter(ticket => {
     const matchesSearch = 
@@ -175,6 +183,13 @@ function SupportTicketsContent() {
     setSelectedTicket({ ...selectedTicket, comments: updatedComments });
     setNewComment("");
   };
+
+  const handleTicketFieldChange = (field: "status" | "priority", value: string) => {
+    if (!selectedTicket || selectedTicket[field] === value) return
+
+    updateSupportTicket(selectedTicket.id, { [field]: value })
+    toast.success(`Ticket ${field} updated`)
+  }
 
   const openTicketsCount = supportTickets.filter(t => t.status === 'open').length
   const inProgressCount = supportTickets.filter(t => t.status === 'in_progress').length
@@ -456,8 +471,42 @@ function SupportTicketsContent() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4 flex-1 min-h-0">
             {/* Left Col: Info */}
             <div className="space-y-4">
-              <div className="flex justify-between items-center"><span className="text-sm text-muted-foreground">Status</span>{selectedTicket && getStatusBadge(selectedTicket.status)}</div>
-              <div className="flex justify-between items-center"><span className="text-sm text-muted-foreground">Priority</span><div className="flex items-center gap-2 capitalize">{selectedTicket && getPriorityIcon(selectedTicket.priority)}<span className="text-sm font-medium">{selectedTicket?.priority}</span></div></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Status</Label>
+                  <Select
+                    value={selectedTicket?.status || "open"}
+                    onValueChange={(value) => handleTicketFieldChange("status", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="open">Open</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="resolved">Resolved</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Priority</Label>
+                  <Select
+                    value={selectedTicket?.priority || "medium"}
+                    onValueChange={(value) => handleTicketFieldChange("priority", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex justify-between items-center"><span className="text-sm text-muted-foreground">Current Status</span>{selectedTicket && getStatusBadge(selectedTicket.status)}</div>
+              <div className="flex justify-between items-center"><span className="text-sm text-muted-foreground">Current Priority</span><div className="flex items-center gap-2 capitalize">{selectedTicket && getPriorityIcon(selectedTicket.priority)}<span className="text-sm font-medium">{selectedTicket?.priority}</span></div></div>
               <div className="flex justify-between items-center"><span className="text-sm text-muted-foreground">Customer</span><span className="text-sm font-medium">{selectedTicket?.customerName}</span></div>
               <div className="flex justify-between items-center"><span className="text-sm text-muted-foreground">Type</span><Badge variant="outline">{selectedTicket?.type}</Badge></div>
               {selectedTicket?.description && (
@@ -467,6 +516,32 @@ function SupportTicketsContent() {
                 </div>
               )}
               <div className="flex justify-between items-center"><span className="text-sm text-muted-foreground">Created At</span><span className="text-sm text-muted-foreground">{selectedTicket && new Date(selectedTicket.createdAt).toLocaleString()}</span></div>
+              <div className="rounded-md border">
+                <div className="flex items-center gap-2 border-b bg-muted/50 px-3 py-2 text-sm font-medium">
+                  <History className="h-4 w-4" />
+                  Update Log
+                </div>
+                <ScrollArea className="h-[180px] p-3">
+                  <div className="space-y-3">
+                    {selectedTicket?.activityLog?.length ? (
+                      [...selectedTicket.activityLog]
+                        .sort((a, b) => new Date(b.performedAt).getTime() - new Date(a.performedAt).getTime())
+                        .map((log) => (
+                          <div key={log.id} className="border-l-2 border-primary/40 pl-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-medium">{log.performedBy}</span>
+                              <Badge variant="outline" className="text-[10px] capitalize">{log.performedByRole}</Badge>
+                            </div>
+                            <p className="mt-1 text-sm text-muted-foreground">{log.details}</p>
+                            <p className="mt-1 text-xs text-muted-foreground">{new Date(log.performedAt).toLocaleString()}</p>
+                          </div>
+                        ))
+                    ) : (
+                      <p className="py-6 text-center text-sm text-muted-foreground">No update log available.</p>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
             </div>
             
             {/* Right Col: Chat Interface */}

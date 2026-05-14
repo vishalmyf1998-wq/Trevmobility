@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS support_tickets (
   resolution_notes text,
   customer_reply text[],
   admin_notes text[],
+  activity_log jsonb DEFAULT '[]'::jsonb,
   related_booking_id uuid REFERENCES bookings(id) ON DELETE SET NULL,
   screenshots text[], -- image URLs
   created_at timestamp DEFAULT now(),
@@ -28,6 +29,9 @@ CREATE INDEX support_tickets_category_idx ON support_tickets(category);
 CREATE INDEX support_tickets_assigned_idx ON support_tickets(assigned_to);
 CREATE INDEX support_tickets_priority_idx ON support_tickets(priority);
 CREATE INDEX support_tickets_ticket_number_idx ON support_tickets(ticket_number);
+
+ALTER TABLE support_tickets
+  ADD COLUMN IF NOT EXISTS activity_log jsonb DEFAULT '[]'::jsonb;
 
 -- Trigger updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_support()
