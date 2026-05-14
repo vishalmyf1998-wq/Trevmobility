@@ -95,21 +95,107 @@ export const defaultNightCharge: NightChargeConfig = {
 }
 
 // Initial sample data
+const demoNow = new Date().toISOString()
+const demoToday = new Date().toISOString().split('T')[0]
+const demoTomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+const demoNextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+const demoNextMonth = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
 const initialCarCategories: CarCategory[] = [
+  { id: 'demo-cat-sedan', name: 'Sedan', description: 'Comfortable 4-seater for city and airport rides', supportedModels: 'Dzire, Amaze, Etios', icon: 'Car', isActive: true },
+  { id: 'demo-cat-suv', name: 'SUV', description: 'Spacious 6-seater for family and corporate travel', supportedModels: 'Ertiga, Innova, Carens', icon: 'CarFront', isActive: true },
+  { id: 'demo-cat-premium', name: 'Premium', description: 'Executive cars for VIP movement', supportedModels: 'City, Verna, Camry', icon: 'Gem', isActive: true },
 ]
 
 const initialCities: City[] = [
+  { id: 'demo-city-mumbai', name: 'Mumbai', state: 'Maharashtra', isActive: true, boundaryType: 'latlong', coverageArea: 95, latitude: 19.076, longitude: 72.8777, createdAt: demoNow },
+  { id: 'demo-city-delhi', name: 'Delhi NCR', state: 'Delhi', isActive: true, boundaryType: 'latlong', coverageArea: 120, latitude: 28.6139, longitude: 77.209, createdAt: demoNow },
+  { id: 'demo-city-bengaluru', name: 'Bengaluru', state: 'Karnataka', isActive: true, boundaryType: 'polygon', coverageArea: 110, latitude: 12.9716, longitude: 77.5946, createdAt: demoNow },
 ]
 
-const initialAirports: Airport[] = []
+const initialAirports: Airport[] = [
+  {
+    id: 'demo-airport-bom',
+    cityId: 'demo-city-mumbai',
+    name: 'Chhatrapati Shivaji Maharaj International Airport',
+    code: 'BOM',
+    address: 'Terminal 2, Sahar, Mumbai',
+    isActive: true,
+    createdAt: demoNow,
+    terminals: [
+      { id: 'demo-terminal-bom-t1', airportId: 'demo-airport-bom', name: 'Terminal 1', code: 'T1', isActive: true, createdAt: demoNow },
+      { id: 'demo-terminal-bom-t2', airportId: 'demo-airport-bom', name: 'Terminal 2', code: 'T2', isActive: true, createdAt: demoNow },
+    ],
+  },
+  {
+    id: 'demo-airport-del',
+    cityId: 'demo-city-delhi',
+    name: 'Indira Gandhi International Airport',
+    code: 'DEL',
+    address: 'Terminal 3, New Delhi',
+    isActive: true,
+    createdAt: demoNow,
+    terminals: [
+      { id: 'demo-terminal-del-t2', airportId: 'demo-airport-del', name: 'Terminal 2', code: 'T2', isActive: true, createdAt: demoNow },
+      { id: 'demo-terminal-del-t3', airportId: 'demo-airport-del', name: 'Terminal 3', code: 'T3', isActive: true, createdAt: demoNow },
+    ],
+  },
+]
 
-const initialDrivers: Driver[] = []
+const initialDrivers: Driver[] = [
+  { id: 'demo-driver-1', driverId: 'DRV-001', name: 'Ramesh Yadav', phone: '9000000001', email: 'ramesh@trev.test', licenseNumber: 'MH12-2024-1001', licenseExpiry: demoNextMonth, address: 'Andheri East, Mumbai', status: 'active', assignedCarId: 'demo-car-1', hubId: 'demo-hub-mumbai-airport', joiningDate: demoToday, monthlySalary: 28500, password: 'test123', createdAt: demoNow },
+  { id: 'demo-driver-2', driverId: 'DRV-002', name: 'Suresh Patil', phone: '9000000002', email: 'suresh@trev.test', licenseNumber: 'DL09-2023-2202', licenseExpiry: demoNextMonth, address: 'Dwarka, Delhi', status: 'active', assignedCarId: 'demo-car-2', hubId: 'demo-hub-delhi-ncr', joiningDate: demoToday, monthlySalary: 31000, password: 'test123', createdAt: demoNow },
+  { id: 'demo-driver-3', driverId: 'DRV-003', name: 'Imran Shaikh', phone: '9000000003', email: 'imran@trev.test', licenseNumber: 'KA05-2022-3303', licenseExpiry: demoNextMonth, address: 'Hebbal, Bengaluru', status: 'inactive', assignedCarId: '', hubId: 'demo-hub-bengaluru', joiningDate: demoToday, monthlySalary: 29500, password: 'test123', createdAt: demoNow },
+]
 
-const initialCars: Car[] = []
+const initialCars: Car[] = [
+  { id: 'demo-car-1', registrationNumber: 'MH 01 AB 1234', categoryId: 'demo-cat-sedan', make: 'Maruti Suzuki', model: 'Dzire', year: 2023, color: 'White', fuelType: 'cng', seatingCapacity: 4, status: 'on_trip', assignedDriverId: 'demo-driver-1', hubId: 'demo-hub-mumbai-airport', createdAt: demoNow },
+  { id: 'demo-car-2', registrationNumber: 'DL 02 CD 5678', categoryId: 'demo-cat-suv', make: 'Toyota', model: 'Innova Crysta', year: 2022, color: 'Silver', fuelType: 'diesel', seatingCapacity: 6, status: 'available', assignedDriverId: 'demo-driver-2', hubId: 'demo-hub-delhi-ncr', createdAt: demoNow },
+  { id: 'demo-car-3', registrationNumber: 'KA 03 EF 9012', categoryId: 'demo-cat-premium', make: 'Honda', model: 'City', year: 2024, color: 'Black', fuelType: 'petrol', seatingCapacity: 4, status: 'maintenance', assignedDriverId: '', hubId: 'demo-hub-bengaluru', createdAt: demoNow },
+]
 
-const initialFareGroups: FareGroup[] = []
+const initialFareGroups: FareGroup[] = [
+  {
+    id: 'demo-fare-b2c',
+    name: 'Default B2C Fare',
+    description: 'Testing fare group for direct customers',
+    type: 'B2C',
+    isDefault: true,
+    airportFares: [
+      { id: 'demo-airfare-1', cityId: 'demo-city-mumbai', airportId: 'demo-airport-bom', airportTerminalIds: ['demo-terminal-bom-t1', 'demo-terminal-bom-t2'], carCategoryId: 'demo-cat-sedan', type: 'both', calculationType: 'fixed', fixedFare: 999, peakHour: defaultPeakHour, nightCharge: defaultNightCharge, waitingChargePerMin: 3, freeWaitingMinutes: 20, baseFare: 250, minimumFare: 350 },
+    ],
+    rentalFares: [
+      { id: 'demo-rental-1', cityId: 'demo-city-mumbai', carCategoryId: 'demo-cat-sedan', rentalType: 'with_capping', packageHours: 8, packageKm: 80, packageFare: 2400, extraKmRate: 18, extraHourRate: 250, freeWaitingMinutes: 15, kmCapping: 80, peakHour: defaultPeakHour, nightCharge: defaultNightCharge },
+    ],
+    cityRideFares: [
+      { id: 'demo-cityfare-1', cityId: 'demo-city-mumbai', carCategoryId: 'demo-cat-sedan', calculationType: 'per_km', perKmRate: 18, peakHour: defaultPeakHour, nightCharge: defaultNightCharge, baseFare: 199, minimumFare: 299, perMinuteRate: 2, freeWaitingMinutes: 10 },
+    ],
+    outstationFares: [
+      { id: 'demo-outstation-1', cityId: 'demo-city-mumbai', carCategoryId: 'demo-cat-sedan', outstationType: 'one_way', calculationType: 'per_km', baseFare: 1200, oneWayPerKmRate: 22, roundTripPerKmRate: 18, driverAllowancePerDay: 500, nightHaltCharge: 800, peakHour: defaultPeakHour, nightCharge: defaultNightCharge, minimumKmPerDay: 250, freeWaitingMinutes: 15 },
+    ],
+    createdAt: demoNow,
+  },
+  {
+    id: 'demo-fare-b2b',
+    name: 'Corporate Standard Fare',
+    description: 'Testing fare group for corporate clients',
+    type: 'B2B',
+    isDefault: true,
+    airportFares: [],
+    rentalFares: [],
+    cityRideFares: [
+      { id: 'demo-cityfare-2', cityId: 'demo-city-delhi', carCategoryId: 'demo-cat-suv', calculationType: 'per_km', perKmRate: 24, peakHour: defaultPeakHour, nightCharge: defaultNightCharge, baseFare: 299, minimumFare: 499, perMinuteRate: 3, freeWaitingMinutes: 10 },
+    ],
+    outstationFares: [],
+    createdAt: demoNow,
+  },
+]
 
-const initialHubs: Hub[] = []
+const initialHubs: Hub[] = [
+  { id: 'demo-hub-mumbai-airport', name: 'Mumbai Airport Hub', address: 'Near T2 Parking, Andheri East', cityId: 'demo-city-mumbai', latitude: 19.0896, longitude: 72.8656, contactPerson: 'Neha Sharma', contactPhone: '9100000001', isActive: true, createdAt: demoNow },
+  { id: 'demo-hub-delhi-ncr', name: 'Delhi NCR Dispatch Hub', address: 'Aerocity, New Delhi', cityId: 'demo-city-delhi', latitude: 28.5562, longitude: 77.1, contactPerson: 'Vikram Singh', contactPhone: '9100000002', isActive: true, createdAt: demoNow },
+  { id: 'demo-hub-bengaluru', name: 'Bengaluru North Hub', address: 'Hebbal Service Road, Bengaluru', cityId: 'demo-city-bengaluru', latitude: 13.0358, longitude: 77.597, contactPerson: 'Anita Rao', contactPhone: '9100000003', isActive: true, createdAt: demoNow },
+]
 
 const initialBookingTags: BookingTag[] = [
   { id: '1', name: 'VIP', color: '#FFD700', description: 'VIP Customer' },
@@ -139,37 +225,87 @@ const initialGstConfig: GSTConfig = {
   isActive: true
 }
 
-const initialDriverPayouts: DriverPayout[] = []
+const initialDriverPayouts: DriverPayout[] = [
+  { id: 'demo-payout-1', payoutNumber: 'PYT-2026-0001', driverId: 'demo-driver-1', hub: 'Mumbai Airport Hub', doj: demoToday, monthYear: 'May 2026', monthDays: 31, workedDays: 24, totalLeaves: 2, shiftPay: 24000, extraHoursPay: 1800, daPay: 1200, carWashing: 500, attendanceBonus: 1000, customerRatingBonus: 750, onTimeReportingBonus: 500, overSpeeding: 0, lateLoginEarlyCheckout: 250, carNotClean: 0, amenitiesMissing: 0, customerComplaints: 0, emergencyLeave: 0, rideMissed: 0, minorDents: 0, majorAccident: 0, cameraTyreDamage: 0, challan: 0, totalPenalty: 250, totalIncentive: 2250, advanceMinus: 2000, cashInHand: 500, arrear: 0, healthInsurance: 400, specialAllowance: 1000, finalPayout: 28350, status: 'pending', remarks: 'Demo payout for testing', createdAt: demoNow },
+  { id: 'demo-payout-2', payoutNumber: 'PYT-2026-0002', driverId: 'demo-driver-2', hub: 'Delhi NCR Dispatch Hub', doj: demoToday, monthYear: 'May 2026', monthDays: 31, workedDays: 26, totalLeaves: 1, shiftPay: 26000, extraHoursPay: 2200, daPay: 1500, carWashing: 500, attendanceBonus: 1200, customerRatingBonus: 900, onTimeReportingBonus: 600, overSpeeding: 300, lateLoginEarlyCheckout: 0, carNotClean: 0, amenitiesMissing: 100, customerComplaints: 0, emergencyLeave: 0, rideMissed: 0, minorDents: 0, majorAccident: 0, cameraTyreDamage: 0, challan: 500, totalPenalty: 900, totalIncentive: 2700, advanceMinus: 1000, cashInHand: 0, arrear: 500, healthInsurance: 400, specialAllowance: 1200, finalPayout: 32300, status: 'paid', remarks: 'Paid demo payout', createdAt: demoNow },
+]
 
-const initialB2CCustomers: B2CCustomer[] = []
+const initialB2CCustomers: B2CCustomer[] = [
+  { id: 'demo-b2c-1', customerCode: 'CUS-001', name: 'Priya Mehta', phone: '9800000001', email: 'priya@example.com', address: 'Bandra West, Mumbai', status: 'active', walletBalance: 1250, createdAt: demoNow, updatedAt: demoNow },
+  { id: 'demo-b2c-2', customerCode: 'CUS-002', name: 'Arjun Kapoor', phone: '9800000002', email: 'arjun@example.com', address: 'Saket, Delhi', status: 'active', walletBalance: 300, createdAt: demoNow, updatedAt: demoNow },
+  { id: 'demo-b2c-3', customerCode: 'CUS-003', name: 'Sneha Iyer', phone: '9800000003', email: 'sneha@example.com', address: 'Indiranagar, Bengaluru', status: 'blocked', walletBalance: 0, createdAt: demoNow, updatedAt: demoNow },
+]
 
-const initialB2BClients: B2BClient[] = []
+const initialB2BClients: B2BClient[] = [
+  { id: 'demo-b2b-acme', companyName: 'Acme Technologies Pvt Ltd', contactPerson: 'Karan Malhotra', email: 'travel@acmetech.test', phone: '9700000001', gstNumber: '27ABCDE1234F1Z5', billingAddress: 'BKC, Mumbai', fareGroupId: 'demo-fare-b2b', creditLimit: 500000, creditDays: 30, currentBalance: 82450, status: 'active', isGSTEnabled: true, billingType: 'point_to_point', paymentTerms: '30', paymentModel: 'bill_to_company', entities: [{ id: 'demo-entity-acme-hq', b2bClientId: 'demo-b2b-acme', name: 'Acme Mumbai HQ', code: 'ACME-MUM', contactPerson: 'Karan Malhotra', email: 'hq@acmetech.test', phone: '9700000002', address: 'BKC, Mumbai', isActive: true, createdAt: demoNow }], createdAt: demoNow, industry: 'Technology' },
+  { id: 'demo-b2b-zen', companyName: 'Zen Healthcare Ltd', contactPerson: 'Meera Nair', email: 'admin@zenhealth.test', phone: '9700000011', gstNumber: '07ABCDE9876F1Z8', billingAddress: 'Connaught Place, Delhi', fareGroupId: 'demo-fare-b2b', creditLimit: 300000, creditDays: 15, currentBalance: 36000, status: 'active', isGSTEnabled: true, billingType: 'garage_to_garage', paymentTerms: '15', paymentModel: 'partial_advance', advancePercentage: 20, entities: [], createdAt: demoNow, industry: 'Healthcare' },
+]
 
-const initialB2BEmployees: B2BEmployee[] = []
-const initialB2BApprovalRules: B2BApprovalRule[] = []
+const initialB2BEmployees: B2BEmployee[] = [
+  { id: 'demo-emp-1', b2bClientId: 'demo-b2b-acme', name: 'Nitin Rao', phone: '9600000001', officeEmail: 'nitin.rao@acmetech.test', employeeId: 'ACME-101', approverEmail: 'travel@acmetech.test', costCentre: 'Sales', entity: 'Acme Mumbai HQ', status: 'approved', approvedBy: 'Karan Malhotra', approvedAt: demoNow, canLogin: true, createdAt: demoNow, address: 'Powai, Mumbai' },
+  { id: 'demo-emp-2', b2bClientId: 'demo-b2b-acme', name: 'Asha Gupta', phone: '9600000002', officeEmail: 'asha.gupta@acmetech.test', employeeId: 'ACME-102', approverEmail: 'nitin.rao@acmetech.test', costCentre: 'Engineering', entity: 'Acme Mumbai HQ', status: 'pending_approval', canLogin: false, createdAt: demoNow, address: 'Thane, Mumbai' },
+  { id: 'demo-emp-3', b2bClientId: 'demo-b2b-zen', name: 'Rohit Bansal', phone: '9600000003', officeEmail: 'rohit@zenhealth.test', employeeId: 'ZEN-201', approverEmail: 'admin@zenhealth.test', costCentre: 'Operations', entity: 'Delhi Office', status: 'approved', canLogin: true, createdAt: demoNow, address: 'Noida' },
+]
+const initialB2BApprovalRules: B2BApprovalRule[] = [
+  { id: 'demo-approval-1', clientId: 'demo-b2b-acme', approverEmployeeId: 'demo-emp-1', maxApprovalAmount: 10000, name: 'Acme manager approval under 10K', isActive: true, createdAt: demoNow },
+  { id: 'demo-approval-2', clientId: 'demo-b2b-zen', approverEmployeeId: 'demo-emp-3', maxApprovalAmount: 7500, name: 'Zen operations approval', isActive: true, createdAt: demoNow },
+]
 
-const initialBookings: Booking[] = []
-const initialWalletTransactions: WalletTransaction[] = []
+const initialBookings: Booking[] = [
+  { id: 'demo-booking-1', bookingNumber: 'BK-TEST-001', b2cCustomerId: 'demo-b2c-1', customerName: 'Priya Mehta', customerPhone: '9800000001', customerEmail: 'priya@example.com', customerAddress: 'Bandra West, Mumbai', driverId: 'demo-driver-1', carId: 'demo-car-1', cityId: 'demo-city-mumbai', carCategoryId: 'demo-cat-sedan', tripType: 'airport_drop', airportId: 'demo-airport-bom', airportTerminalId: 'demo-terminal-bom-t2', pickupLocation: 'Bandra West', dropLocation: 'BOM Terminal 2', pickupDate: demoToday, pickupTime: '09:30', estimatedKm: 18, estimatedFare: 999, actualKm: 19, actualFare: 1040, extraCharges: 0, peakHourCharge: 50, nightCharge: 0, waitingCharge: 30, tollCharges: 85, parkingCharges: 0, miscCharges: 0, totalFare: 1205, gstAmount: 60, grandTotal: 1265, advancePaid: 500, promoCodeId: 'demo-promo-1', promoDiscount: 100, status: 'dispatched', paymentStatus: 'partial', remarks: 'Demo airport booking', tags: ['3'], eventLog: [], createdBy: 'Admin', createdAt: demoNow },
+  { id: 'demo-booking-2', bookingNumber: 'BK-TEST-002', b2bClientId: 'demo-b2b-acme', b2bEmployeeId: 'demo-emp-1', customerName: 'Nitin Rao', customerPhone: '9600000001', customerEmail: 'nitin.rao@acmetech.test', customerAddress: 'Powai, Mumbai', cityId: 'demo-city-mumbai', carCategoryId: 'demo-cat-premium', tripType: 'city_ride', pickupLocation: 'Acme Mumbai HQ', dropLocation: 'Nariman Point', pickupDate: demoTomorrow, pickupTime: '14:00', estimatedKm: 24, estimatedFare: 1450, actualKm: 0, actualFare: 0, extraCharges: 0, peakHourCharge: 0, nightCharge: 0, waitingCharge: 0, tollCharges: 0, parkingCharges: 0, miscCharges: 0, totalFare: 1450, gstAmount: 72.5, grandTotal: 1522.5, advancePaid: 0, promoDiscount: 0, status: 'pending_edit_approval', paymentStatus: 'pending', remarks: 'Demo corporate edit approval', tags: ['2'], eventLog: [], pendingEdits: { pickupTime: '15:00' }, originalStatus: 'confirmed', createdBy: 'Corporate Admin', createdAt: demoNow, approvalStatus: 'pending' },
+  { id: 'demo-booking-3', bookingNumber: 'BK-TEST-003', b2bClientId: 'demo-b2b-zen', b2bEmployeeId: 'demo-emp-3', customerName: 'Rohit Bansal', customerPhone: '9600000003', customerEmail: 'rohit@zenhealth.test', cityId: 'demo-city-delhi', carCategoryId: 'demo-cat-suv', tripType: 'rental', pickupLocation: 'Connaught Place', dropLocation: 'Delhi NCR Visits', pickupDate: demoNextWeek, pickupTime: '10:00', estimatedKm: 80, estimatedFare: 3200, actualKm: 82, actualFare: 3300, extraCharges: 100, peakHourCharge: 0, nightCharge: 0, waitingCharge: 100, tollCharges: 0, parkingCharges: 150, miscCharges: 0, totalFare: 3650, gstAmount: 182.5, grandTotal: 3832.5, advancePaid: 1000, promoDiscount: 0, status: 'closed', paymentStatus: 'paid', remarks: 'Closed rental demo booking', tags: ['2'], eventLog: [], createdBy: 'Corporate Employee', createdAt: demoNow, approvalStatus: 'approved' },
+]
+const initialWalletTransactions: WalletTransaction[] = [
+  { id: 'demo-wallet-1', customerId: 'demo-b2c-1', amount: 1500, type: 'credit', description: 'Demo wallet top-up', referenceType: 'manual', createdAt: demoNow },
+  { id: 'demo-wallet-2', customerId: 'demo-b2c-1', amount: 250, type: 'debit', description: 'Demo ride adjustment', referenceId: 'demo-booking-1', referenceType: 'booking', createdAt: demoNow },
+  { id: 'demo-wallet-3', customerId: 'demo-b2c-2', amount: 300, type: 'credit', description: 'Referral bonus test credit', referenceType: 'referral', createdAt: demoNow },
+]
 
-const initialDutySlips: DutySlip[] = []
+const initialDutySlips: DutySlip[] = [
+  { id: 'demo-duty-1', dutySlipNumber: 'DS-TEST-001', bookingId: 'demo-booking-1', driverId: 'demo-driver-1', carId: 'demo-car-1', startTime: `${demoToday}T09:20`, startKm: 45210, remarks: 'Active airport dispatch demo', status: 'active', createdAt: demoNow },
+  { id: 'demo-duty-2', dutySlipNumber: 'DS-TEST-002', bookingId: 'demo-booking-3', driverId: 'demo-driver-2', carId: 'demo-car-2', startTime: `${demoToday}T10:00`, endTime: `${demoToday}T18:30`, startKm: 78200, endKm: 78282, totalKm: 82, totalHours: 8.5, remarks: 'Completed demo rental slip', status: 'completed', createdAt: demoNow },
+]
 
-const initialInvoices: Invoice[] = []
+const initialInvoices: Invoice[] = [
+  { id: 'demo-invoice-1', invoiceNumber: 'INV-2026-0001', bookingId: 'demo-booking-3', dutySlipId: 'demo-duty-2', b2bClientId: 'demo-b2b-zen', clientType: 'b2b', customerName: 'Zen Healthcare Ltd', customerPhone: '9700000011', customerEmail: 'admin@zenhealth.test', customerAddress: 'Connaught Place, Delhi', customerGst: '07ABCDE9876F1Z8', invoiceDate: demoToday, dueDate: demoNextWeek, subtotal: 3650, gstRate: 5, gstAmount: 182.5, cgst: 91.25, sgst: 91.25, totalAmount: 3832.5, status: 'pending', paidAmount: 0, balanceAmount: 3832.5, createdAt: demoNow },
+  { id: 'demo-invoice-2', invoiceNumber: 'INV-2026-0002', bookingId: 'demo-booking-1', dutySlipId: 'demo-duty-1', clientType: 'b2c', customerName: 'Priya Mehta', customerPhone: '9800000001', customerEmail: 'priya@example.com', customerAddress: 'Bandra West, Mumbai', invoiceDate: demoToday, dueDate: demoToday, subtotal: 1205, gstRate: 5, gstAmount: 60, cgst: 30, sgst: 30, totalAmount: 1265, status: 'paid', paidAmount: 1265, balanceAmount: 0, createdAt: demoNow },
+]
 
-const initialPromoCodes: PromoCode[] = []
+const initialPromoCodes: PromoCode[] = [
+  { id: 'demo-promo-1', code: 'TEST100', description: 'Flat testing discount for B2C rides', discountType: 'flat', discountValue: 100, maxDiscount: 100, minOrderValue: 500, usageLimit: 100, usedCount: 7, validFrom: demoToday, validTo: demoNextMonth, applicableTripTypes: ['airport_drop', 'airport_pickup', 'city_ride'], applicableCities: ['demo-city-mumbai', 'demo-city-delhi'], isActive: true, createdAt: demoNow },
+  { id: 'demo-promo-2', code: 'CORP10', description: '10% test promo for corporate rentals', discountType: 'percentage', discountValue: 10, maxDiscount: 500, minOrderValue: 1500, usageLimit: 50, usedCount: 12, validFrom: demoToday, validTo: demoNextMonth, applicableTripTypes: ['rental', 'outstation'], applicableCities: ['demo-city-mumbai', 'demo-city-delhi', 'demo-city-bengaluru'], isActive: true, createdAt: demoNow },
+]
 
-const initialCityPolygons: CityPolygon[] = []
+const initialCityPolygons: CityPolygon[] = [
+  { id: 'demo-poly-mumbai-core', cityId: 'demo-city-mumbai', name: 'Mumbai Core Zone', color: '#39FF14', isActive: true, createdAt: demoNow, coordinates: [{ lat: 19.05, lng: 72.82 }, { lat: 19.12, lng: 72.84 }, { lat: 19.11, lng: 72.92 }, { lat: 19.04, lng: 72.9 }] },
+  { id: 'demo-poly-blr-north', cityId: 'demo-city-bengaluru', name: 'Bengaluru North Zone', color: '#3B82F6', isActive: true, createdAt: demoNow, coordinates: [{ lat: 13.02, lng: 77.55 }, { lat: 13.08, lng: 77.58 }, { lat: 13.06, lng: 77.65 }, { lat: 13.0, lng: 77.62 }] },
+]
 
-const initialCarLocations: CarLocation[] = []
+const initialCarLocations: CarLocation[] = [
+  { carId: 'demo-car-1', latitude: 19.088, longitude: 72.868, heading: 120, speed: 34, lastUpdated: demoNow },
+  { carId: 'demo-car-2', latitude: 28.556, longitude: 77.1, heading: 270, speed: 0, lastUpdated: demoNow },
+  { carId: 'demo-car-3', latitude: 13.0358, longitude: 77.597, heading: 45, speed: 0, lastUpdated: demoNow },
+]
 
-const initialCommunicationTemplates: CommunicationTemplate[] = []
+const initialCommunicationTemplates: CommunicationTemplate[] = [
+  { id: 'demo-template-1', name: 'Booking Confirmed SMS', type: 'sms', targetAudience: 'customer', event: 'booking_confirmed', content: 'Hi {{customerName}}, your Trev booking {{bookingNumber}} is confirmed for {{pickupDate}} {{pickupTime}}.', variables: ['customerName', 'bookingNumber', 'pickupDate', 'pickupTime'], isActive: true, createdAt: demoNow },
+  { id: 'demo-template-2', name: 'Driver Assigned Email', type: 'email', targetAudience: 'customer', event: 'driver_assigned', subject: 'Your driver is assigned', content: 'Driver {{driverName}} and car {{carNumber}} have been assigned to booking {{bookingNumber}}.', variables: ['driverName', 'carNumber', 'bookingNumber'], isActive: true, createdAt: demoNow },
+]
 
 const initialAdminUsers: AdminUser[] = [
   { id: 'e5555555-5555-4555-e555-555555555555', name: 'Trev Admin', email: 'vishal@trevcabs.com', roleId: 'a1111111-1111-4111-a111-111111111111', status: 'active', lastLogin: new Date().toISOString(), createdAt: new Date().toISOString() }
 ]
 
-const initialCancellationPolicies: CancellationPolicy[] = []
+const initialCancellationPolicies: CancellationPolicy[] = [
+  { id: 'demo-cancel-1', name: 'Standard B2C Cancellation', description: 'Default cancellation test policy', tripType: 'all', isActive: true, createdAt: demoNow, rules: [{ id: 'demo-cancel-rule-1', beforeMinutes: 120, refundPercentage: 100, cancellationFee: 0 }, { id: 'demo-cancel-rule-2', beforeMinutes: 30, refundPercentage: 50, cancellationFee: 100 }, { id: 'demo-cancel-rule-3', beforeMinutes: 0, refundPercentage: 0, cancellationFee: 250 }] },
+  { id: 'demo-cancel-2', name: 'Airport Transfer Policy', description: 'Airport-specific testing policy', tripType: 'airport_drop', isActive: true, createdAt: demoNow, rules: [{ id: 'demo-cancel-rule-4', beforeMinutes: 180, refundPercentage: 100, cancellationFee: 0 }, { id: 'demo-cancel-rule-5', beforeMinutes: 60, refundPercentage: 70, cancellationFee: 150 }] },
+]
 
-const initialSupportTickets: SupportTicket[] = []
+const initialSupportTickets: SupportTicket[] = [
+  { id: 'demo-ticket-1', ticketNumber: 'TK-TEST-001', subject: 'Invoice copy needed', customerName: 'Priya Mehta', type: 'billing', priority: 'medium', status: 'open', description: 'Customer needs invoice copy for airport drop booking.', createdAt: demoNow, updatedAt: demoNow, comments: [{ id: 'demo-comment-1', text: 'Shared with accounts team for verification.', senderName: 'Support Admin', isAdmin: true, timestamp: demoNow }] },
+  { id: 'demo-ticket-2', ticketNumber: 'TK-TEST-002', subject: 'Driver reached late', customerName: 'Nitin Rao', type: 'service', priority: 'high', status: 'in_progress', description: 'Corporate employee reported driver delay for morning ride.', createdAt: demoNow, updatedAt: demoNow, comments: [] },
+]
 
 const loadState = <T,>(key: string, fallback: T): T => {
   if (typeof window !== 'undefined') {
@@ -662,6 +798,49 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { localStorage.setItem('driverPayouts', JSON.stringify(driverPayouts)) }, [driverPayouts])
   useEffect(() => { localStorage.setItem('supportTickets', JSON.stringify(supportTickets)) }, [supportTickets])
   useEffect(() => { localStorage.setItem('b2cCustomers', JSON.stringify(b2cCustomers)) }, [b2cCustomers])
+
+  // One-time testing seed for every sidebar module. This also upgrades browsers
+  // that already have older empty localStorage arrays.
+  useEffect(() => {
+    const seedFlag = localStorage.getItem('dummy_sidebar_data_v1')
+    if (seedFlag) return
+
+    const mergeById = <T extends { id: string }>(current: T[], seed: T[]) => {
+      const existingIds = new Set(current.map((item) => item.id))
+      return [...current, ...seed.filter((item) => !existingIds.has(item.id))]
+    }
+
+    setCarCategories((prev) => mergeById(prev, initialCarCategories))
+    setCities((prev) => mergeById(prev, initialCities))
+    setAirports((prev) => mergeById(prev, initialAirports))
+    setDrivers((prev) => mergeById(prev, initialDrivers))
+    setCars((prev) => mergeById(prev, initialCars))
+    setFareGroups((prev) => mergeById(prev, initialFareGroups))
+    setHubs((prev) => mergeById(prev, initialHubs))
+    setDriverPayouts((prev) => mergeById(prev, initialDriverPayouts))
+    setB2CCustomers((prev) => mergeById(prev, initialB2CCustomers))
+    setB2BClients((prev) => mergeById(prev, initialB2BClients))
+    setB2BEmployees((prev) => mergeById(prev, initialB2BEmployees))
+    setB2BApprovalRules((prev) => mergeById(prev, initialB2BApprovalRules))
+    setBookings((prev) => mergeById(prev, initialBookings))
+    setWalletTransactions((prev) => mergeById(prev, initialWalletTransactions))
+    setDutySlips((prev) => mergeById(prev, initialDutySlips))
+    setInvoices((prev) => mergeById(prev, initialInvoices))
+    setPromoCodes((prev) => mergeById(prev, initialPromoCodes))
+    setCityPolygons((prev) => mergeById(prev, initialCityPolygons))
+    setCarLocations((prev) => {
+      const existingCarIds = new Set(prev.map((item) => item.carId))
+      return [...prev, ...initialCarLocations.filter((item) => !existingCarIds.has(item.carId))]
+    })
+    setCommunicationTemplates((prev) => mergeById(prev, initialCommunicationTemplates))
+    setAdminRoles((prev) => mergeById(prev, initialAdminRoles))
+    setAdminUsers((prev) => mergeById(prev, initialAdminUsers))
+    setBookingTags((prev) => mergeById(prev, initialBookingTags))
+    setCancellationPolicies((prev) => mergeById(prev, initialCancellationPolicies))
+    setSupportTickets((prev) => mergeById(prev, initialSupportTickets))
+
+    localStorage.setItem('dummy_sidebar_data_v1', 'true')
+  }, [])
 
   // Inject Dummy Bookings
   useEffect(() => {
