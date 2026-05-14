@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   description: 'Trev Mobility Fleet Management System',
   generator: 'v0.app',
   icons: {
-    icon: 'https://play-lh.googleusercontent.com/m2cWyG1zroDi0XxEK-WeMDuLKKJrwzPPEiPh7M_xzTm-ToRj9KDAOjBU4HzneWjMpsI=w240-h480-rw',
+    icon: 'https://play-lh.googleusercontent.com/m2cWyG1zroDi0XxEK-WeMDuLKKJrwzPPEiPh7M_xzTm-ToRj9KDAOjBU4HzneWjMpsI',
   },
 }
 

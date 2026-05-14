@@ -49,7 +49,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Separator } from '@/components/ui/separator'
-import { ArrowLeft, Plus, Pencil, Trash2, Plane, Car, MapPin, Navigation, X } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, Plane, Car, MapPin, Navigation, X, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import Link from 'next/link'
@@ -63,6 +63,66 @@ const defaultPreBookingCharges: PreBookingCharges = {
   miscEnabled: false,
   miscDescription: '',
   miscAmount: 0,
+}
+
+const defaultShortNoticeCharge = {
+  enabled: false,
+  withinHours: 2,
+  chargeType: 'flat' as ChargeType,
+  chargeValue: 0
+}
+
+function FareGroupSettingsTab({ fareGroup, cities, onUpdate }: { fareGroup: any, cities: any[], onUpdate: (data: any) => void }) {
+  const [cityHours, setCityHours] = useState<Record<string, number>>(fareGroup.cityAdvanceHours || {})
+  const [globalHours, setGlobalHours] = useState<number | ''>(fareGroup.minAdvanceBookingHours ?? '')
+
+  const handleSave = () => {
+    onUpdate({ cityAdvanceHours: cityHours, minAdvanceBookingHours: globalHours === '' ? 0 : globalHours })
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+         <CardTitle>Advance Booking Rules</CardTitle>
+         <CardDescription>Set global or city-wise minimum advance booking hours for this fare group. Specific fare configurations can override these.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+         <FieldGroup>
+           <Field>
+             <FieldLabel>Default Global Advance Booking (Hours)</FieldLabel>
+             <Input type="number" placeholder="e.g. 2" value={globalHours} onChange={e => setGlobalHours(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)} className="w-64" />
+           </Field>
+         </FieldGroup>
+         
+         <div>
+           <h3 className="text-sm font-medium mb-3">City-wise Overrides</h3>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+             {cities.map(city => (
+               <div key={city.id} className="flex items-center gap-3 bg-muted/50 p-3 rounded-lg border">
+                 <span className="flex-1 text-sm font-medium">{city.name}</span>
+                 <Input 
+                   type="number" 
+                   className="w-24 h-8" 
+                   placeholder="Default"
+                   value={cityHours[city.id] !== undefined ? cityHours[city.id] : ''} 
+                   onChange={e => setCityHours(prev => { 
+                     const val = e.target.value; 
+                     const next = { ...prev };
+                     if (val === '') delete next[city.id];
+                     else next[city.id] = parseFloat(val) || 0;
+                     return next;
+                   })} 
+                 />
+                 <span className="text-xs text-muted-foreground">hrs</span>
+               </div>
+             ))}
+           </div>
+         </div>
+         
+         <Button onClick={handleSave}>Save Settings</Button>
+      </CardContent>
+    </Card>
+  )
 }
 
 export default function FareConfigPage({ params }: { params: Promise<{ id: string }> }) {
@@ -185,7 +245,7 @@ export default function FareConfigPage({ params }: { params: Promise<{ id: strin
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4 max-w-2xl">
+        <TabsList className="grid w-full grid-cols-5 max-w-3xl">
           <TabsTrigger value="airport" className="flex items-center gap-2">
             <Plane className="h-4 w-4" />
             Airport
@@ -201,6 +261,10 @@ export default function FareConfigPage({ params }: { params: Promise<{ id: strin
           <TabsTrigger value="outstation" className="flex items-center gap-2">
             <Navigation className="h-4 w-4" />
             Outstation
+          </TabsTrigger>
+          <TabsTrigger value="settings" className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            Settings
           </TabsTrigger>
         </TabsList>
 
@@ -256,6 +320,10 @@ export default function FareConfigPage({ params }: { params: Promise<{ id: strin
             onEdit={(fare) => handleEditFare(fare, 'outstation')}
             onDelete={(id) => handleDeleteFare(id, 'outstation')}
           />
+        </TabsContent>
+
+        <TabsContent value="settings" className="mt-6">
+          <FareGroupSettingsTab fareGroup={fareGroup} cities={activeCities} onUpdate={(updates) => updateFareGroup(fareGroup.id, updates)} />
         </TabsContent>
       </Tabs>
 
@@ -383,6 +451,9 @@ function AirportFaresTab({
                       )}
                       {fare.nightCharge.enabled && (
                         <span className="text-xs">Night: {fare.nightCharge.chargeValue}{fare.nightCharge.chargeType === 'percentage' ? '%' : ' Rs.'}</span>
+                      )}
+                      {(fare as any).shortNoticeCharge?.enabled && (
+                        <span className="text-xs">Urgent: {(fare as any).shortNoticeCharge.chargeValue}{(fare as any).shortNoticeCharge.chargeType === 'percentage' ? '%' : ' Rs.'}</span>
                       )}
                       {!fare.peakHour.enabled && !fare.nightCharge.enabled && (
                         <span className="text-muted-foreground text-xs">Off</span>
@@ -703,7 +774,7 @@ function OutstationFaresTab({
                     <Badge variant="outline">{fare.outstationType.replace('_', ' ')}</Badge>
                   </TableCell>
                   <TableCell>
-                    {fare.outstationType === 'one_way' && `Rs. ${fare.oneWayPerKmRate}/km`}
+                    {fare.outstationType === 'one_way' && `${fare.slabs?.length || 0} slabs`}
                     {fare.outstationType === 'round_trip' && `Rs. ${fare.roundTripPerKmRate}/km`}
                     {fare.outstationType === 'route_wise' && `${fare.routes?.length || 0} routes`}
                   </TableCell>
@@ -780,15 +851,17 @@ function FareConfigDialog({
     freeWaitingMinutes: 0,
     peakHour: { ...defaultPeakHour },
     nightCharge: { ...defaultNightCharge },
+    shortNoticeCharge: { ...defaultShortNoticeCharge },
     slabs: [],
     preBookingCharges: { ...defaultPreBookingCharges },
+    minAdvanceBookingHours: undefined as number | undefined,
   })
   const airportOptions = airports.filter(airport => airport.cityId === airportForm.cityId)
   const selectedAirport = airports.find(airport => airport.id === airportForm.airportId)
   const terminalOptions = selectedAirport?.terminals.filter(terminal => terminal.isActive) || []
 
   // Rental fare state
-  const [rentalForm, setRentalForm] = useState<Partial<RentalFareConfig>>({
+  const [rentalForm, setRentalForm] = useState<Partial<RentalFareConfig> & { minAdvanceBookingHours?: number }>({
     cityId: '',
     carCategoryId: '',
     rentalType: 'without_capping',
@@ -801,11 +874,13 @@ function FareConfigDialog({
     kmCapping: 100,
     peakHour: { ...defaultPeakHour },
     nightCharge: { ...defaultNightCharge },
+    shortNoticeCharge: { ...defaultShortNoticeCharge },
     preBookingCharges: { ...defaultPreBookingCharges },
+    minAdvanceBookingHours: undefined,
   })
 
   // City ride fare state
-  const [cityForm, setCityForm] = useState<Partial<CityRideFareConfig>>({
+  const [cityForm, setCityForm] = useState<Partial<CityRideFareConfig> & { minAdvanceBookingHours?: number }>({
     cityId: '',
     carCategoryId: '',
     calculationType: 'per_km',
@@ -817,12 +892,14 @@ function FareConfigDialog({
     freeWaitingMinutes: 0,
     peakHour: { ...defaultPeakHour },
     nightCharge: { ...defaultNightCharge },
+    shortNoticeCharge: { ...defaultShortNoticeCharge },
     slabs: [],
     preBookingCharges: { ...defaultPreBookingCharges },
+    minAdvanceBookingHours: undefined,
   })
 
   // Outstation fare state
-  const [outstationForm, setOutstationForm] = useState<Partial<OutstationFareConfig>>({
+  const [outstationForm, setOutstationForm] = useState<Partial<OutstationFareConfig> & { minAdvanceBookingHours?: number }>({
     cityId: '',
     carCategoryId: '',
     outstationType: 'one_way',
@@ -834,8 +911,11 @@ function FareConfigDialog({
     freeWaitingMinutes: 0,
     peakHour: { ...defaultPeakHour },
     nightCharge: { ...defaultNightCharge },
+    shortNoticeCharge: { ...defaultShortNoticeCharge },
     routes: [],
+    slabs: [],
     preBookingCharges: { ...defaultPreBookingCharges },
+    minAdvanceBookingHours: undefined,
   })
 
   // Reset forms when dialog opens with editing data
@@ -851,6 +931,8 @@ function FareConfigDialog({
                 ((editingFare as AirportFareConfig).airportTerminalId ? [(editingFare as AirportFareConfig).airportTerminalId!] : []),
               freeWaitingMinutes: (editingFare as AirportFareConfig).freeWaitingMinutes || 0,
               preBookingCharges: (editingFare as AirportFareConfig).preBookingCharges || { ...defaultPreBookingCharges },
+              shortNoticeCharge: (editingFare as any).shortNoticeCharge || { ...defaultShortNoticeCharge },
+              minAdvanceBookingHours: (editingFare as any).minAdvanceBookingHours,
             })
             break
           case 'rental':
@@ -859,6 +941,8 @@ function FareConfigDialog({
               packageKm: (editingFare as RentalFareConfig).rentalType === 'with_capping' ? (editingFare as RentalFareConfig).packageKm : undefined,
               freeWaitingMinutes: (editingFare as RentalFareConfig).freeWaitingMinutes || 0,
               preBookingCharges: (editingFare as RentalFareConfig).preBookingCharges || { ...defaultPreBookingCharges },
+              shortNoticeCharge: (editingFare as any).shortNoticeCharge || { ...defaultShortNoticeCharge },
+              minAdvanceBookingHours: (editingFare as any).minAdvanceBookingHours,
             })
             break
           case 'city':
@@ -866,6 +950,8 @@ function FareConfigDialog({
               ...(editingFare as CityRideFareConfig),
               freeWaitingMinutes: (editingFare as CityRideFareConfig).freeWaitingMinutes || 0,
               preBookingCharges: (editingFare as CityRideFareConfig).preBookingCharges || { ...defaultPreBookingCharges },
+              shortNoticeCharge: (editingFare as any).shortNoticeCharge || { ...defaultShortNoticeCharge },
+              minAdvanceBookingHours: (editingFare as any).minAdvanceBookingHours,
             })
             break
           case 'outstation':
@@ -873,6 +959,9 @@ function FareConfigDialog({
               ...(editingFare as OutstationFareConfig),
               freeWaitingMinutes: (editingFare as OutstationFareConfig).freeWaitingMinutes || 0,
               preBookingCharges: (editingFare as OutstationFareConfig).preBookingCharges || { ...defaultPreBookingCharges },
+              slabs: (editingFare as OutstationFareConfig).slabs || [],
+              shortNoticeCharge: (editingFare as any).shortNoticeCharge || { ...defaultShortNoticeCharge },
+              minAdvanceBookingHours: (editingFare as any).minAdvanceBookingHours,
             })
             break
         }
@@ -894,8 +983,10 @@ function FareConfigDialog({
           freeWaitingMinutes: 0,
           peakHour: { ...defaultPeakHour },
           nightCharge: { ...defaultNightCharge },
+          shortNoticeCharge: { ...defaultShortNoticeCharge },
           slabs: [],
           preBookingCharges: { ...defaultPreBookingCharges },
+          minAdvanceBookingHours: undefined,
         })
         setRentalForm({
           cityId: '',
@@ -910,7 +1001,9 @@ function FareConfigDialog({
           kmCapping: 100,
           peakHour: { ...defaultPeakHour },
           nightCharge: { ...defaultNightCharge },
+          shortNoticeCharge: { ...defaultShortNoticeCharge },
           preBookingCharges: { ...defaultPreBookingCharges },
+          minAdvanceBookingHours: undefined,
         })
         setCityForm({
           cityId: '',
@@ -924,8 +1017,10 @@ function FareConfigDialog({
           freeWaitingMinutes: 0,
           peakHour: { ...defaultPeakHour },
           nightCharge: { ...defaultNightCharge },
+          shortNoticeCharge: { ...defaultShortNoticeCharge },
           slabs: [],
           preBookingCharges: { ...defaultPreBookingCharges },
+          minAdvanceBookingHours: undefined,
         })
         setOutstationForm({
           cityId: '',
@@ -939,8 +1034,11 @@ function FareConfigDialog({
           freeWaitingMinutes: 0,
           peakHour: { ...defaultPeakHour },
           nightCharge: { ...defaultNightCharge },
+          shortNoticeCharge: { ...defaultShortNoticeCharge },
           routes: [],
+          slabs: [],
           preBookingCharges: { ...defaultPreBookingCharges },
+          minAdvanceBookingHours: undefined,
         })
       }
     }
@@ -1394,6 +1492,63 @@ function FareConfigDialog({
     </div>
   )
 
+  const renderShortNoticeChargeConfig = (
+    config: any,
+    onChange: (config: any) => void
+  ) => (
+    <div className="rounded-lg border p-4">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className="font-medium text-sm">Urgent / Short-Notice Booking Charges</p>
+          <p className="text-xs text-muted-foreground">Extra charges for last-minute bookings</p>
+        </div>
+        <Switch
+          checked={config?.enabled || false}
+          onCheckedChange={(checked) => onChange({ ...(config || defaultShortNoticeCharge), enabled: checked })}
+        />
+      </div>
+      {config?.enabled && (
+        <div className="grid gap-4">
+          <FieldGroup className="grid grid-cols-2 gap-4">
+            <Field>
+              <FieldLabel>Within Time (Hours)</FieldLabel>
+              <Input
+                type="number"
+                value={config.withinHours || 2}
+                onChange={(e) => onChange({ ...config, withinHours: parseFloat(e.target.value) || 0 })}
+              />
+            </Field>
+            <Field>
+              <FieldLabel>Charge Type</FieldLabel>
+              <Select
+                value={config.chargeType || 'flat'}
+                onValueChange={(value: ChargeType) => onChange({ ...config, chargeType: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="flat">Flat Amount</SelectItem>
+                  <SelectItem value="percentage">Percentage</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+          </FieldGroup>
+          <FieldGroup className="grid grid-cols-2 gap-4">
+            <Field>
+              <FieldLabel>Charge Value</FieldLabel>
+              <Input
+                type="number"
+                value={config.chargeValue || 0}
+                onChange={(e) => onChange({ ...config, chargeValue: parseFloat(e.target.value) || 0 })}
+              />
+            </Field>
+          </FieldGroup>
+        </div>
+      )}
+    </div>
+  )
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -1608,7 +1763,7 @@ function FareConfigDialog({
                   renderSlabConfig(airportForm.slabs || [], (slabs) => setAirportForm(f => ({ ...f, slabs })))
                 )}
 
-                <FieldGroup className="grid grid-cols-2 gap-4">
+                <FieldGroup className="grid grid-cols-3 gap-4">
                   <Field>
                     <FieldLabel>Free Waiting Time (min)</FieldLabel>
                     <Input
@@ -1625,11 +1780,21 @@ function FareConfigDialog({
                       onChange={(e) => setAirportForm(f => ({ ...f, waitingChargePerMin: parseFloat(e.target.value) || 0 }))}
                     />
                   </Field>
+                  <Field>
+                    <FieldLabel>Min Advance Booking (Hrs)</FieldLabel>
+                    <Input
+                      type="number"
+                      placeholder="Inherit"
+                      value={(airportForm as any).minAdvanceBookingHours ?? ''}
+                      onChange={(e) => setAirportForm(f => ({ ...f, minAdvanceBookingHours: e.target.value === '' ? undefined : parseFloat(e.target.value) }))}
+                    />
+                  </Field>
                 </FieldGroup>
 
                 {renderPreBookingCharges(airportForm.preBookingCharges!, (charges) => setAirportForm(f => ({ ...f, preBookingCharges: charges })))}
                 {renderPeakHourConfig(airportForm.peakHour!, (config) => setAirportForm(f => ({ ...f, peakHour: config })))}
                 {renderNightChargeConfig(airportForm.nightCharge!, (config) => setAirportForm(f => ({ ...f, nightCharge: config })))}
+                {renderShortNoticeChargeConfig(airportForm.shortNoticeCharge, (config) => setAirportForm(f => ({ ...f, shortNoticeCharge: config })))}
               </>
             )}
 
@@ -1680,14 +1845,25 @@ function FareConfigDialog({
                   </Field>
                 </FieldGroup>
 
-                <Field>
-                  <FieldLabel>Free Waiting Time (min)</FieldLabel>
-                  <Input
-                    type="number"
-                    value={rentalForm.freeWaitingMinutes}
-                    onChange={(e) => setRentalForm(f => ({ ...f, freeWaitingMinutes: parseInt(e.target.value) || 0 }))}
-                  />
-                </Field>
+                <FieldGroup className="grid grid-cols-2 gap-4">
+                  <Field>
+                    <FieldLabel>Free Waiting Time (min)</FieldLabel>
+                    <Input
+                      type="number"
+                      value={rentalForm.freeWaitingMinutes}
+                      onChange={(e) => setRentalForm(f => ({ ...f, freeWaitingMinutes: parseInt(e.target.value) || 0 }))}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Min Advance Booking (Hrs)</FieldLabel>
+                    <Input
+                      type="number"
+                      placeholder="Inherit"
+                      value={(rentalForm as any).minAdvanceBookingHours ?? ''}
+                      onChange={(e) => setRentalForm(f => ({ ...f, minAdvanceBookingHours: e.target.value === '' ? undefined : parseFloat(e.target.value) }))}
+                    />
+                  </Field>
+                </FieldGroup>
 
                 <FieldGroup className="grid grid-cols-2 gap-4">
                   <Field>
@@ -1723,6 +1899,7 @@ function FareConfigDialog({
                 {renderPreBookingCharges(rentalForm.preBookingCharges!, (charges) => setRentalForm(f => ({ ...f, preBookingCharges: charges })))}
                 {renderPeakHourConfig(rentalForm.peakHour!, (config) => setRentalForm(f => ({ ...f, peakHour: config })))}
                 {renderNightChargeConfig(rentalForm.nightCharge!, (config) => setRentalForm(f => ({ ...f, nightCharge: config })))}
+                {renderShortNoticeChargeConfig(rentalForm.shortNoticeCharge, (config) => setRentalForm(f => ({ ...f, shortNoticeCharge: config })))}
               </>
             )}
 
@@ -1789,28 +1966,39 @@ function FareConfigDialog({
                   renderSlabConfig(cityForm.slabs || [], (slabs) => setCityForm(f => ({ ...f, slabs })))
                 )}
 
-                <Field>
-                  <FieldLabel>Per Minute Rate (Rs.)</FieldLabel>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    value={cityForm.perMinuteRate}
-                    onChange={(e) => setCityForm(f => ({ ...f, perMinuteRate: parseFloat(e.target.value) }))}
-                  />
-                </Field>
-
-                <Field>
-                  <FieldLabel>Free Waiting Time (min)</FieldLabel>
-                  <Input
-                    type="number"
-                    value={cityForm.freeWaitingMinutes}
-                    onChange={(e) => setCityForm(f => ({ ...f, freeWaitingMinutes: parseInt(e.target.value) || 0 }))}
-                  />
-                </Field>
+                <FieldGroup className="grid grid-cols-3 gap-4">
+                  <Field>
+                    <FieldLabel>Per Minute Rate (Rs.)</FieldLabel>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={cityForm.perMinuteRate}
+                      onChange={(e) => setCityForm(f => ({ ...f, perMinuteRate: parseFloat(e.target.value) }))}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Free Waiting Time (min)</FieldLabel>
+                    <Input
+                      type="number"
+                      value={cityForm.freeWaitingMinutes}
+                      onChange={(e) => setCityForm(f => ({ ...f, freeWaitingMinutes: parseInt(e.target.value) || 0 }))}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Min Advance Booking (Hrs)</FieldLabel>
+                    <Input
+                      type="number"
+                      placeholder="Inherit"
+                      value={(cityForm as any).minAdvanceBookingHours ?? ''}
+                      onChange={(e) => setCityForm(f => ({ ...f, minAdvanceBookingHours: e.target.value === '' ? undefined : parseFloat(e.target.value) }))}
+                    />
+                  </Field>
+                </FieldGroup>
 
                 {renderPreBookingCharges(cityForm.preBookingCharges!, (charges) => setCityForm(f => ({ ...f, preBookingCharges: charges })))}
                 {renderPeakHourConfig(cityForm.peakHour!, (config) => setCityForm(f => ({ ...f, peakHour: config })))}
                 {renderNightChargeConfig(cityForm.nightCharge!, (config) => setCityForm(f => ({ ...f, nightCharge: config })))}
+                {renderShortNoticeChargeConfig(cityForm.shortNoticeCharge, (config) => setCityForm(f => ({ ...f, shortNoticeCharge: config })))}
               </>
             )}
 
@@ -1834,14 +2022,7 @@ function FareConfigDialog({
                 </Field>
 
                 {outstationForm.outstationType === 'one_way' && (
-                  <Field>
-                    <FieldLabel>One Way Rate (Rs./km)</FieldLabel>
-                    <Input
-                      type="number"
-                      value={outstationForm.oneWayPerKmRate}
-                      onChange={(e) => setOutstationForm(f => ({ ...f, oneWayPerKmRate: parseFloat(e.target.value) }))}
-                    />
-                  </Field>
+                  renderSlabConfig(outstationForm.slabs || [], (slabs) => setOutstationForm(f => ({ ...f, slabs })))
                 )}
 
                 {outstationForm.outstationType === 'round_trip' && (
@@ -1896,18 +2077,30 @@ function FareConfigDialog({
                   </Field>
                 </FieldGroup>
 
-                <Field>
-                  <FieldLabel>Free Waiting Time (min)</FieldLabel>
-                  <Input
-                    type="number"
-                    value={outstationForm.freeWaitingMinutes}
-                    onChange={(e) => setOutstationForm(f => ({ ...f, freeWaitingMinutes: parseInt(e.target.value) || 0 }))}
-                  />
-                </Field>
+                <FieldGroup className="grid grid-cols-2 gap-4">
+                  <Field>
+                    <FieldLabel>Free Waiting Time (min)</FieldLabel>
+                    <Input
+                      type="number"
+                      value={outstationForm.freeWaitingMinutes}
+                      onChange={(e) => setOutstationForm(f => ({ ...f, freeWaitingMinutes: parseInt(e.target.value) || 0 }))}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Min Advance Booking (Hrs)</FieldLabel>
+                    <Input
+                      type="number"
+                      placeholder="Inherit"
+                      value={(outstationForm as any).minAdvanceBookingHours ?? ''}
+                      onChange={(e) => setOutstationForm(f => ({ ...f, minAdvanceBookingHours: e.target.value === '' ? undefined : parseFloat(e.target.value) }))}
+                    />
+                  </Field>
+                </FieldGroup>
 
                 {renderPreBookingCharges(outstationForm.preBookingCharges!, (charges) => setOutstationForm(f => ({ ...f, preBookingCharges: charges })))}
                 {renderPeakHourConfig(outstationForm.peakHour!, (config) => setOutstationForm(f => ({ ...f, peakHour: config })))}
                 {renderNightChargeConfig(outstationForm.nightCharge!, (config) => setOutstationForm(f => ({ ...f, nightCharge: config })))}
+                {renderShortNoticeChargeConfig(outstationForm.shortNoticeCharge, (config) => setOutstationForm(f => ({ ...f, shortNoticeCharge: config })))}
               </>
             )}
           </div>

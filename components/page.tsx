@@ -1,4 +1,5 @@
   "use client"
+'use client'
 
   import { useState, useEffect, useCallback, useRef } from "react"
   import { useAdmin } from "@/lib/admin-context"
@@ -96,10 +97,64 @@
   import { PhoneInput } from "@/components/ui/phone-input"
   import { PrintableDutySlip } from "@/components/DutySlipPrint"
   import { PrintableVoucher } from "@/components/VoucherPrint"
+import { useState, useMemo } from 'react'
+import { useAdmin } from '@/lib/admin-context'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import { Plus, Pencil, Trash2, User, Car, Clock, Search } from 'lucide-react'
+import { toast } from 'sonner'
+import { Field, FieldLabel, FieldGroup } from '@/components/ui/field'
 
-  type BookingFormData = Omit<Booking, "id" | "createdAt" | "bookingNumber" | "eventLog">
+  type BookingFormData = Omit<Booking, "id" | "createdAt" | "bookingNumber" | "eventLog"> & { shortNoticeCharge?: number }
+type ShiftStatus = 'upcoming' | 'active' | 'completed' | 'cancelled'
 
   const ADMIN_USER = "Admin" // In real app, get from auth context
+interface DriverShift {
+  id: string
+  driverId: string
+  carId: string
+  startTime: string
+  endTime: string
+  status: ShiftStatus
+  notes: string
+}
 
   const initialFormData: BookingFormData = {
     b2cCustomerId: undefined,
@@ -132,6 +187,7 @@
     tollCharges: 0,
     parkingCharges: 0,
     miscCharges: 0,
+    shortNoticeCharge: 0,
     totalFare: 0,
     gstAmount: 0,
     grandTotal: 0,
@@ -141,12 +197,24 @@
     paymentStatus: "pending",
     remarks: "",
   }
+const initialFormData: Partial<DriverShift> = {
+  driverId: '',
+  carId: '',
+  startTime: '',
+  endTime: '',
+  status: 'upcoming',
+  notes: ''
+}
 
   interface EventConfirmData {
     title: string
     description: string
     onConfirm: () => void
   }
+export default function DriverShiftsPage() {
+  const { drivers, cars } = useAdmin()
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
 
   // Status flow for forward/backward navigation
   const STATUS_FLOW: Booking["status"][] = [
@@ -159,6 +227,19 @@
     "dropped",
     "closed",
   ]
+  // Using local state to handle shifts on this page. 
+  // In production, this can be moved to the global context or fetched via API.
+  const [shifts, setShifts] = useState<DriverShift[]>([
+    {
+      id: 'shift-1',
+      driverId: drivers[0]?.id || '',
+      carId: cars[0]?.id || '',
+      startTime: new Date().toISOString().slice(0, 16),
+      endTime: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 16),
+      status: 'active',
+      notes: 'Standard morning shift'
+    }
+  ])
 
   export default function BookingsPage() {
     const {
@@ -199,14 +280,28 @@
       userType,
       currentUser
     } = useAdmin()
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingShift, setEditingShift] = useState<DriverShift | null>(null)
+  const [formData, setFormData] = useState<Partial<DriverShift>>(initialFormData)
 
     const isEmployee = userType === 'corporate-employee'
     const isCorpAdmin = userType === 'corporate-admin'
     const isB2BUser = isEmployee || isCorpAdmin
+  const activeDrivers = drivers.filter(d => d.status === 'active')
+  const activeCars = cars.filter(c => c.status === 'available' || c.status === 'on_trip')
 
     const currentCorpClientId = isCorpAdmin 
       ? (b2bEmployees.find(e => e.officeEmail === currentUser?.email)?.b2bClientId || b2bClients[0]?.id || 'demo-client')
       : null
+  const filteredShifts = useMemo(() => {
+    return shifts.filter(shift => {
+      const driver = drivers.find(d => d.id === shift.driverId)
+      const matchesSearch = driver?.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                            driver?.phone.includes(searchQuery)
+      const matchesStatus = statusFilter === 'all' || shift.status === statusFilter
+      return matchesSearch && matchesStatus
+    }).sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
+  }, [shifts, searchQuery, statusFilter, drivers])
 
     const currentEmployee = isEmployee 
       ? b2bEmployees.find(e => e.officeEmail === currentUser?.email) || (b2bEmployees.length > 0 ? b2bEmployees[0] : {
@@ -220,6 +315,11 @@
           canLogin: true
         } as any)
       : null
+  const handleAdd = () => {
+    setEditingShift(null)
+    setFormData(initialFormData)
+    setIsDialogOpen(true)
+  }
 
     const [searchQuery, setSearchQuery] = useState("")
     const [statusFilter, setStatusFilter] = useState<string>("all")
@@ -272,6 +372,11 @@
       remarks: "",
     })
     const fileInputRef = useRef<HTMLInputElement>(null)
+  const handleEdit = (shift: DriverShift) => {
+    setEditingShift(shift)
+    setFormData({ ...shift })
+    setIsDialogOpen(true)
+  }
 
     const activeDrivers = drivers.filter((d) => d.status === "active")
     const availableCars = cars.filter((c) => c.status === "available" || c.status === "on_trip")
@@ -279,6 +384,10 @@
     const cityAirports = airports.filter((airport) => airport.cityId === formData.cityId && airport.isActive)
     const selectedAirport = formData.airportId ? getAirport(formData.airportId) : undefined
     const airportTerminals = selectedAirport?.terminals.filter((terminal) => terminal.isActive) || []
+  const handleDelete = (id: string) => {
+    setShifts(prev => prev.filter(s => s.id !== id))
+    toast.success('Shift deleted successfully')
+  }
 
     const formatAirportLocation = useCallback((airportId?: string, terminalId?: string) => {
       if (!airportId || !terminalId) return ""
@@ -346,6 +455,12 @@
         customerAddress: customer.address || "",
       }))
       toast.success(`Customer details loaded (${customer.customerCode})`)
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!formData.driverId || !formData.carId || !formData.startTime || !formData.endTime) {
+      toast.error('Please fill in all required fields')
+      return
     }
 
     const generateBookingNumber = () => {
@@ -355,6 +470,9 @@
       const day = date.getDate().toString().padStart(2, "0")
       const randomPart = Math.floor(Math.random() * 10000).toString().padStart(4, "0")
       return `BK${year}${month}${day}${randomPart}`
+    if (new Date(formData.endTime) <= new Date(formData.startTime)) {
+      toast.error('End time must be after start time')
+      return
     }
 
     const createEventLog = (
@@ -389,6 +507,19 @@
         ) || fareGroups.find(fg => clientType === "b2b" ? fg.type === "B2B" : fg.type === "B2C") || fareGroups[0]
       }
 
+      const getAdvanceHrs = (specificFare: any) => {
+        if (specificFare && specificFare.minAdvanceBookingHours !== undefined && specificFare.minAdvanceBookingHours !== null) {
+          return Number(specificFare.minAdvanceBookingHours);
+        }
+        if ((fareGroup as any)?.cityAdvanceHours?.[cityId] !== undefined) {
+          return Number((fareGroup as any).cityAdvanceHours[cityId]);
+        }
+        if ((fareGroup as any)?.minAdvanceBookingHours !== undefined) {
+          return Number((fareGroup as any).minAdvanceBookingHours);
+        }
+        return 0;
+      };
+
       if (!fareGroup || !cityId || !carCategoryId) {
         return { baseFare: 0, perKmRate: 0, calculationType: "fixed" as const }
       }
@@ -418,6 +549,8 @@
               fixedFare: airportFare.fixedFare,
               minimumFare: airportFare.minimumFare,
               preBookingCharges: airportFare.preBookingCharges,
+              shortNoticeCharge: (airportFare as any).shortNoticeCharge,
+              minAdvanceBookingHours: getAdvanceHrs(airportFare),
             }
           }
           break
@@ -435,6 +568,8 @@
               fixedFare: cityFare.fixedFare,
               minimumFare: cityFare.minimumFare,
               preBookingCharges: cityFare.preBookingCharges,
+              shortNoticeCharge: (cityFare as any).shortNoticeCharge,
+              minAdvanceBookingHours: getAdvanceHrs(cityFare),
             }
           }
           break
@@ -452,6 +587,8 @@
               packageKm: rentalFare.packageKm,
               extraHourRate: rentalFare.extraHourRate,
               preBookingCharges: rentalFare.preBookingCharges,
+              shortNoticeCharge: (rentalFare as any).shortNoticeCharge,
+              minAdvanceBookingHours: getAdvanceHrs(rentalFare),
             }
           }
           break
@@ -470,6 +607,9 @@
               driverAllowancePerDay: outstationFare.driverAllowancePerDay,
               minimumKmPerDay: outstationFare.minimumKmPerDay,
               preBookingCharges: outstationFare.preBookingCharges,
+              slabs: outstationFare.slabs,
+              shortNoticeCharge: (outstationFare as any).shortNoticeCharge,
+              minAdvanceBookingHours: getAdvanceHrs(outstationFare),
             }
           }
           break
@@ -494,6 +634,7 @@
         let estimatedFare = 0
         let preBookingToll = 0
         let preBookingParking = 0
+        let urgentChargeAmount = 0
         
         if (fareConfig.preBookingCharges) {
           if (fareConfig.preBookingCharges.tollEnabled) {
@@ -504,6 +645,18 @@
           }
         }
         
+        if (fareConfig.shortNoticeCharge?.enabled && formData.pickupDate && formData.pickupTime) {
+          const pickupDateTime = new Date(`${formData.pickupDate}T${formData.pickupTime}`)
+          const now = new Date()
+          const hoursDiff = (pickupDateTime.getTime() - now.getTime()) / (1000 * 60 * 60)
+          
+          if (hoursDiff > 0 && hoursDiff <= (fareConfig.shortNoticeCharge.withinHours || 2)) {
+            if (fareConfig.shortNoticeCharge.chargeType === 'flat') {
+              urgentChargeAmount = fareConfig.shortNoticeCharge.chargeValue || 0
+            }
+          }
+        }
+
         const estKm = formData.estimatedKm || 0
         let days = 1
         if (formData.pickupDate && formData.returnDate) {
@@ -526,14 +679,34 @@
         } else if (formData.tripType === "outstation") {
           const minKm = (fareConfig.minimumKmPerDay || 250) * days
           const billableKm = Math.max(estKm, minKm)
-          const rate = fareConfig.roundTripPerKmRate || fareConfig.perKmRate || 0
-          const driverAllowance = (fareConfig.driverAllowancePerDay || 0) * days
-          estimatedFare = (billableKm * rate) + driverAllowance
+          
+          if (fareConfig.calculationType === "one_way" && fareConfig.slabs && fareConfig.slabs.length > 0) {
+            const applicableSlab = fareConfig.slabs.find(s => billableKm >= s.fromKm && billableKm <= s.toKm)
+            const rate = applicableSlab ? applicableSlab.farePerKm : (fareConfig.perKmRate || 0)
+            const driverAllowance = (fareConfig.driverAllowancePerDay || 0) * days
+            estimatedFare = (billableKm * rate) + driverAllowance
+          } else {
+            const rate = fareConfig.roundTripPerKmRate || fareConfig.perKmRate || 0
+            const driverAllowance = (fareConfig.driverAllowancePerDay || 0) * days
+            estimatedFare = (billableKm * rate) + driverAllowance
+          }
         } else {
           estimatedFare = fareConfig.baseFare || fareConfig.minimumFare || 0
         }
         
-        const totalFare = estimatedFare + preBookingToll + preBookingParking
+        if (fareConfig.shortNoticeCharge?.enabled && formData.pickupDate && formData.pickupTime) {
+          const pickupDateTime = new Date(`${formData.pickupDate}T${formData.pickupTime}`)
+          const now = new Date()
+          const hoursDiff = (pickupDateTime.getTime() - now.getTime()) / (1000 * 60 * 60)
+          
+          if (hoursDiff > 0 && hoursDiff <= (fareConfig.shortNoticeCharge.withinHours || 2)) {
+            if (fareConfig.shortNoticeCharge.chargeType === 'percentage') {
+              urgentChargeAmount = (estimatedFare * (fareConfig.shortNoticeCharge.chargeValue || 0)) / 100
+            }
+          }
+        }
+
+        const totalFare = estimatedFare + preBookingToll + preBookingParking + urgentChargeAmount
         const selectedPromo = promoCodes.find((promo) => promo.id === formData.promoCodeId)
         const promoDiscount =
           selectedPromo && !getPromoEligibilityError(selectedPromo, totalFare, formData.cityId, formData.tripType)
@@ -558,6 +731,7 @@
           estimatedFare,
           tollCharges: preBookingToll,
           parkingCharges: preBookingParking,
+          shortNoticeCharge: urgentChargeAmount,
           totalFare,
           promoDiscount,
           gstAmount,
@@ -650,6 +824,29 @@
         }
       }
 
+      if (!editingBooking && formData.pickupDate && formData.pickupTime) {
+        const fareConfig = calculateFareFromConfig(
+          formData.cityId,
+          formData.carCategoryId,
+          formData.tripType,
+          customerType,
+          formData.b2bClientId,
+          formData.airportId,
+          formData.airportTerminalId
+        )
+
+        if (fareConfig.minAdvanceBookingHours > 0) {
+          const pickupDateTime = new Date(`${formData.pickupDate}T${formData.pickupTime}`)
+          const now = new Date()
+          const hoursDiff = (pickupDateTime.getTime() - now.getTime()) / (1000 * 60 * 60)
+          
+          if (hoursDiff < fareConfig.minAdvanceBookingHours) {
+            toast.error(`Bookings for this service must be made at least ${fareConfig.minAdvanceBookingHours} hours in advance.`)
+            return
+          }
+        }
+      }
+
   let finalData = { ...formData }
     if (customerType === "b2c") {
     const customer = await upsertB2CCustomer({
@@ -670,11 +867,20 @@
     pickupLocation: formData.tripType === "airport_pickup" ? airportLocation : formData.pickupLocation,
     dropLocation: formData.tripType === "airport_drop" ? airportLocation : formData.dropLocation,
     }
+    if (editingShift) {
+      setShifts(prev => prev.map(s => s.id === editingShift.id ? { ...s, ...formData } as DriverShift : s))
+      toast.success('Shift updated successfully')
     } else {
     finalData = {
     ...finalData,
     airportId: undefined,
     airportTerminalId: undefined,
+      const newShift: DriverShift = {
+        id: `shift-${Date.now()}`,
+        ...formData
+      } as DriverShift
+      setShifts(prev => [newShift, ...prev])
+      toast.success('New shift created successfully')
     }
     }
     if (customerType === "b2b" && formData.b2bClientId && formData.b2bEmployeeId) {
@@ -690,6 +896,10 @@
     }
     }
     }
+    
+    setIsDialogOpen(false)
+    setFormData(initialFormData)
+  }
 
       if (editingBooking) {
         const eventLog = createEventLog("confirmed", editingBooking.status, editingBooking.status, "Booking updated")
@@ -712,7 +922,15 @@
         toast.success("Booking created successfully")
       }
       handleCloseDialog()
+  const getStatusBadge = (status: ShiftStatus) => {
+    const styles = {
+      upcoming: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+      active: 'bg-green-500/10 text-green-600 border-green-500/20',
+      completed: 'bg-slate-500/10 text-slate-600 border-slate-500/20',
+      cancelled: 'bg-red-500/10 text-red-600 border-red-500/20'
     }
+    return <Badge variant="outline" className={styles[status]}>{status.charAt(0).toUpperCase() + status.slice(1)}</Badge>
+  }
 
     const handleAssignDriver = async () => {
       if (!assigningBooking) return
@@ -944,9 +1162,31 @@
         if (applicableSlab) {
           actualFare = actualKm * applicableSlab.farePerKm
         }
+      } else if (closingBooking.tripType === "outstation") {
+        let days = 1
+        if (closingBooking.pickupDate) {
+          const pDate = new Date(closingBooking.pickupDate)
+          const rDate = closeData.endTime ? new Date(closeData.endTime) : new Date()
+          if (!isNaN(pDate.getTime()) && !isNaN(rDate.getTime())) {
+            days = Math.max(1, Math.ceil(Math.abs(rDate.getTime() - pDate.getTime()) / (1000 * 60 * 60 * 24)))
+          }
+        }
+        const minKm = (fareConfig.minimumKmPerDay || 250) * days
+        const billableKm = Math.max(actualKm, minKm)
+
+        if (fareConfig.calculationType === "one_way" && fareConfig.slabs && fareConfig.slabs.length > 0) {
+          const applicableSlab = fareConfig.slabs.find(s => billableKm >= s.fromKm && billableKm <= s.toKm)
+          const rate = applicableSlab ? applicableSlab.farePerKm : (fareConfig.perKmRate || 0)
+          const driverAllowance = (fareConfig.driverAllowancePerDay || 0) * days
+          actualFare = (billableKm * rate) + driverAllowance
+        } else {
+          const rate = fareConfig.roundTripPerKmRate || fareConfig.perKmRate || 0
+          const driverAllowance = (fareConfig.driverAllowancePerDay || 0) * days
+          actualFare = (billableKm * rate) + driverAllowance
+        }
       }
 
-      const extraCharges = closeData.tollCharges + closeData.parkingCharges + closeData.miscCharges + closeData.waitingCharge
+      const extraCharges = closeData.tollCharges + closeData.parkingCharges + closeData.miscCharges + closeData.waitingCharge + ((closingBooking as any).shortNoticeCharge || 0)
       const totalFare = actualFare + extraCharges
       
       let isGSTEnabled = true
@@ -971,6 +1211,7 @@
           parkingCharges: closeData.parkingCharges,
           miscCharges: closeData.miscCharges,
           waitingCharge: closeData.waitingCharge,
+          shortNoticeCharge: (closingBooking as any).shortNoticeCharge || 0,
           totalFare,
           gstAmount,
           grandTotal,
@@ -1064,12 +1305,35 @@
         if (applicableSlab) {
           actualFare = actualKm * applicableSlab.farePerKm
         }
+      } else if (editingClosedDutyBooking.tripType === "outstation") {
+        let days = 1
+        if (editClosedDutyData.startTime && editClosedDutyData.endTime) {
+          const pDate = new Date(editClosedDutyData.startTime)
+          const rDate = new Date(editClosedDutyData.endTime)
+          if (!isNaN(pDate.getTime()) && !isNaN(rDate.getTime())) {
+            days = Math.max(1, Math.ceil(Math.abs(rDate.getTime() - pDate.getTime()) / (1000 * 60 * 60 * 24)))
+          }
+        }
+        const minKm = (fareConfig.minimumKmPerDay || 250) * days
+        const billableKm = Math.max(actualKm, minKm)
+
+        if (fareConfig.calculationType === "one_way" && fareConfig.slabs && fareConfig.slabs.length > 0) {
+          const applicableSlab = fareConfig.slabs.find(s => billableKm >= s.fromKm && billableKm <= s.toKm)
+          const rate = applicableSlab ? applicableSlab.farePerKm : (fareConfig.perKmRate || 0)
+          const driverAllowance = (fareConfig.driverAllowancePerDay || 0) * days
+          actualFare = (billableKm * rate) + driverAllowance
+        } else {
+          const rate = fareConfig.roundTripPerKmRate || fareConfig.perKmRate || 0
+          const driverAllowance = (fareConfig.driverAllowancePerDay || 0) * days
+          actualFare = (billableKm * rate) + driverAllowance
+        }
       }
 
       const extraCharges = (editingClosedDutyBooking.tollCharges || 0) + 
                            (editingClosedDutyBooking.parkingCharges || 0) + 
                            (editingClosedDutyBooking.miscCharges || 0) + 
-                           (editingClosedDutyBooking.waitingCharge || 0)
+                           (editingClosedDutyBooking.waitingCharge || 0) +
+                           ((editingClosedDutyBooking as any).shortNoticeCharge || 0)
                            
       const totalFare = actualFare + extraCharges
       const taxableFare = Math.max(totalFare - (editingClosedDutyBooking.promoDiscount || 0), 0)
@@ -1179,6 +1443,7 @@
         tollCharges: booking.tollCharges,
         parkingCharges: booking.parkingCharges,
         miscCharges: booking.miscCharges,
+        shortNoticeCharge: (booking as any).shortNoticeCharge || 0,
         totalFare: booking.totalFare,
         gstAmount: booking.gstAmount,
         grandTotal: booking.grandTotal,
@@ -1341,6 +1606,7 @@
             waitingCharge: 0,
             tollCharges: preBookingToll,
             parkingCharges: preBookingParking,
+            shortNoticeCharge: 0,
             miscCharges: 0,
             totalFare,
             gstAmount,
@@ -1504,7 +1770,18 @@
               New Booking
             </Button>
           </div>
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Driver Shifts / Roster</h1>
+          <p className="text-muted-foreground">Manage driver schedules and vehicle assignments</p>
         </div>
+        <Button onClick={handleAdd}>
+          <Plus className="mr-2 h-4 w-4" />
+          Schedule Shift
+        </Button>
+      </div>
 
         {/* Filters */}
         <Card>
@@ -1583,6 +1860,17 @@
                   <ArrowUpDown className="h-4 w-4" />
                 </Button>
               </div>
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search by driver name or phone..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
             </div>
             {(searchQuery || statusFilter !== "all" || dateFrom || dateTo) && (
               <div className="mt-4 flex justify-end">
@@ -1602,6 +1890,21 @@
             )}
           </CardContent>
         </Card>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="upcoming">Upcoming</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
 
         {/* Bookings Table */}
         <Card>
@@ -1614,6 +1917,20 @@
           <CardContent>
             <Table>
               <TableHeader>
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Driver</TableHead>
+                <TableHead>Vehicle</TableHead>
+                <TableHead>Schedule</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredShifts.length === 0 ? (
                 <TableRow>
                   <TableHead>Booking #</TableHead>
                   <TableHead>B2B Client</TableHead>
@@ -1627,6 +1944,9 @@
                   <TableHead>Status</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    No shifts found. Create a new shift to get started.
+                  </TableCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1657,6 +1977,10 @@
                       status: 'active' as const,
                       createdAt: booking.createdAt
                     }
+              ) : (
+                filteredShifts.map((shift) => {
+                  const driver = drivers.find(d => d.id === shift.driverId)
+                  const car = cars.find(c => c.id === shift.carId)
 
                     return (
                       <TableRow key={booking.id}>
@@ -1695,6 +2019,14 @@
                                 })}
                               </div>
                             )}
+                  return (
+                    <TableRow key={shift.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="font-medium text-sm">{driver?.name || 'Unknown Driver'}</p>
+                            <p className="text-xs text-muted-foreground">{driver?.phone}</p>
                           </div>
                         </TableCell>
                         <TableCell className="align-top">
@@ -1748,6 +2080,14 @@
                               <MapPin className="h-3 w-3 shrink-0 text-destructive" />
                               <span className="truncate cursor-help" title={booking.dropLocation}>{booking.dropLocation}</span>
                             </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Car className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="font-medium text-sm">{car?.registrationNumber || 'Unknown Car'}</p>
+                            <p className="text-xs text-muted-foreground">{car?.make} {car?.model}</p>
                           </div>
                         </TableCell>
                         <TableCell className="align-top">
@@ -2475,12 +2815,27 @@
                           <div className="flex justify-between items-center">
                             <span className="text-muted-foreground">Toll (Pre-booked):</span>
                             <span>Rs. {formData.tollCharges.toFixed(2)}</span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1 text-sm">
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span>{new Date(shift.startTime).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</span>
                           </div>
                         )}
                         {formData.parkingCharges > 0 && (
                           <div className="flex justify-between items-center">
                             <span className="text-muted-foreground">Parking (Pre-booked):</span>
                             <span>Rs. {formData.parkingCharges.toFixed(2)}</span>
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <span className="ml-1.5 px-2 border-l-2">To</span>
+                            <span>{new Date(shift.endTime).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                          </div>
+                        )}
+                        {(formData.shortNoticeCharge || 0) > 0 && (
+                          <div className="flex justify-between items-center text-orange-600">
+                            <span>Urgent Booking Charge:</span>
+                            <span>Rs. {(formData.shortNoticeCharge || 0).toFixed(2)}</span>
                           </div>
                         )}
                         <div className="flex justify-between items-center border-t pt-2 mt-2">
@@ -2501,6 +2856,44 @@
                           <span>Grand Total:</span>
                           <span>Rs. {formData.grandTotal.toFixed(2)}</span>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {getStatusBadge(shift.status)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(shift)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Shift</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this shift? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDelete(shift.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
                         <div className="pt-4 mt-4 border-t border-border flex items-center justify-between gap-4">
                            <Label className="font-medium whitespace-nowrap">Advance Paid (Rs):</Label>
@@ -2523,6 +2916,38 @@
                   </Card>
                 )}
               </div>
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingShift ? 'Edit Shift' : 'Schedule New Shift'}</DialogTitle>
+            <DialogDescription>Assign a driver to a vehicle for a specific time period.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+            <Field>
+              <FieldLabel>Driver *</FieldLabel>
+              <Select
+                value={formData.driverId}
+                onValueChange={(value) => {
+                  const driver = activeDrivers.find(d => d.id === value)
+                  setFormData({ 
+                    ...formData, 
+                    driverId: value,
+                    carId: driver?.assignedCarId || formData.carId 
+                  })
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a driver" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeDrivers.map(driver => (
+                    <SelectItem key={driver.id} value={driver.id}>
+                      {driver.name} ({driver.phone})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
 
               <DialogFooter className="mt-6">
                 <Button type="button" variant="outline" onClick={handleCloseDialog}>
@@ -2535,6 +2960,24 @@
             </form>
           </DialogContent>
         </Dialog>
+            <Field>
+              <FieldLabel>Vehicle *</FieldLabel>
+              <Select
+                value={formData.carId}
+                onValueChange={(value) => setFormData({ ...formData, carId: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a vehicle" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeCars.map(car => (
+                    <SelectItem key={car.id} value={car.id}>
+                      {car.registrationNumber} - {car.make} {car.model}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
 
         {/* Assign Driver Dialog */}
         <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
@@ -2546,6 +2989,7 @@
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
+            <FieldGroup className="grid grid-cols-2 gap-4">
               <Field>
                 <FieldLabel>Select Driver</FieldLabel>
                 <Select
@@ -2743,6 +3187,11 @@
                   onChange={(e) => setReassignData({ ...reassignData, reason: e.target.value })}
                   placeholder="Enter reason for reassignment..."
                   rows={2}
+                <FieldLabel>Start Time *</FieldLabel>
+                <Input
+                  type="datetime-local"
+                  value={formData.startTime}
+                  onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
                 />
               </Field>
             </div>
@@ -2835,11 +3284,15 @@
             <div className="grid gap-4 py-4">
               <Field>
                 <FieldLabel>Start KM</FieldLabel>
+                <FieldLabel>End Time *</FieldLabel>
                 <Input
                   type="number"
                   value={pickupData.startKm || ""}
                   onChange={(e) => setPickupData({ ...pickupData, startKm: parseInt(e.target.value) || 0 })}
                   placeholder="Enter start KM"
+                  type="datetime-local"
+                  value={formData.endTime}
+                  onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
                 />
               </Field>
               <Field>
@@ -2875,6 +3328,7 @@
             </DialogFooter>
           </DialogContent>
         </Dialog>
+            </FieldGroup>
 
         {/* Close Trip Dialog */}
         <Dialog open={isCloseDialogOpen} onOpenChange={setIsCloseDialogOpen}>
@@ -2915,7 +3369,23 @@
                 }
                 placeholder="Enter end KM"
               />
+              <FieldLabel>Status</FieldLabel>
+              <Select
+                value={formData.status}
+                onValueChange={(value: ShiftStatus) => setFormData({ ...formData, status: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="upcoming">Upcoming</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
             </Field>
+
             <Field>
               <FieldLabel>End Time</FieldLabel>
               <div className="flex gap-2">
@@ -2936,6 +3406,13 @@
                   Now
                 </Button>
               </div>
+              <FieldLabel>Notes</FieldLabel>
+              <Textarea
+                placeholder="Optional shift notes or instructions"
+                value={formData.notes || ''}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                rows={2}
+              />
             </Field>
           </FieldGroup>
 
@@ -3003,10 +3480,16 @@
 
               <Card className="bg-muted/50">
                 <CardContent className="pt-4">
+                  {((closingBooking as any)?.shortNoticeCharge || 0) > 0 && (
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-muted-foreground">Urgent Booking Charge:</span>
+                      <span className="text-orange-600">Rs. {((closingBooking as any)?.shortNoticeCharge || 0).toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Total Additional Charges:</span>
                     <span className="font-semibold">
-                      Rs. {(closeData.tollCharges + closeData.parkingCharges + closeData.waitingCharge + closeData.miscCharges).toFixed(2)}
+                      Rs. {(closeData.tollCharges + closeData.parkingCharges + closeData.waitingCharge + closeData.miscCharges + ((closingBooking as any)?.shortNoticeCharge || 0)).toFixed(2)}
                     </span>
                   </div>
                 </CardContent>
@@ -3020,6 +3503,8 @@
                 <CheckCircle2 className="mr-2 h-4 w-4" />
                 Close Trip
               </Button>
+              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+              <Button type="submit">{editingShift ? 'Update Shift' : 'Schedule Shift'}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -3338,3 +3823,9 @@
       </>
     )
   }
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}

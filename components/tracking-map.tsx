@@ -124,6 +124,17 @@ export default function TrackingMap({
             statusText = 'Maintenance'
           }
 
+          let delayText = null;
+          if (trip && ['confirmed', 'assigned', 'dispatched'].includes(trip.status) && trip.pickupDate && trip.pickupTime) {
+            const pickupDateTime = new Date(`${trip.pickupDate}T${trip.pickupTime}`);
+            if (!isNaN(pickupDateTime.getTime())) {
+              const diffInMins = Math.floor((new Date().getTime() - pickupDateTime.getTime()) / 60000);
+              if (diffInMins > 0) {
+                delayText = `Delayed by ${diffInMins} mins`;
+              }
+            }
+          }
+
           const path = carPaths[location.carId] || []
 
           return (
@@ -147,6 +158,7 @@ export default function TrackingMap({
                     <div className="font-semibold">{driver?.name || 'No Driver'}</div>
                     <div className="text-xs">{car.registrationNumber}</div>
                     {!trip && <div className="text-[10px] text-gray-500 mt-0.5 tracking-wider uppercase">{statusText}</div>}
+                    {delayText && <div className="text-[10px] text-red-500 font-bold mt-0.5">{delayText}</div>}
                   </div>
                 </Tooltip>
 
@@ -161,6 +173,7 @@ export default function TrackingMap({
                           <p><span className="text-gray-500">Driver:</span> {driver?.name || 'N/A'}</p>
                           <p><span className="text-gray-500">Vehicle:</span> {car.registrationNumber}</p>
                           <p><span className="text-gray-500">Status:</span> <span className="capitalize">{statusText}</span></p>
+                          {delayText && <p><span className="text-red-500 font-bold">{delayText}</span></p>}
                           <p><span className="text-gray-500">Speed:</span> {location.speed.toFixed(0)} km/h</p>
                         </div>
                       </>

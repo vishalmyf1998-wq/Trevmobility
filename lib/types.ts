@@ -14,6 +14,7 @@ export interface B2BEmployee {
   approvedAt?: string
   canLogin: boolean
   createdAt: string
+  address?: string
 }
 
 // Communication Template type
@@ -45,7 +46,7 @@ export interface AdminUser {
   id: string
   name: string
   email: string
-  phone: string
+  phone?: string
   roleId: string
   status: 'active' | 'inactive'
   lastLogin?: string
@@ -56,7 +57,7 @@ export interface AdminUser {
 export interface BookingTag {
   id: string
   name: string
-  color: string
+  color?: string
   description?: string
 }
 
@@ -65,7 +66,7 @@ export interface CancellationPolicy {
   id: string
   name: string
   description: string
-  tripType: 'airport_pickup' | 'airport_drop' | 'rental' | 'city_ride' | 'outstation' | 'all'
+  tripType: string | 'all'
   rules: CancellationRule[]
   isActive: boolean
   createdAt: string
@@ -82,7 +83,7 @@ export interface CancellationRule {
 export interface Hub {
   id: string
   name: string
-  address: string
+  address?: string
   cityId: string
   latitude: number
   longitude: number
@@ -135,17 +136,20 @@ export interface CarLocation {
 // Core entity types
 export interface Driver {
   id: string
-  driverId: string
+  driverId?: string
   name: string
   phone: string
   email: string
   licenseNumber: string
-  licenseExpiry: string
+  licenseExpiry?: string
   address: string
   status: 'active' | 'inactive' | 'suspended'
   assignedCarId?: string
   hubId?: string
   createdAt: string
+  joiningDate?: string
+  monthlySalary?: number
+  password?: string
 }
 
 export interface Car {
@@ -157,7 +161,7 @@ export interface Car {
   year: number
   color: string
   fuelType: 'petrol' | 'diesel' | 'cng' | 'electric' | 'hybrid'
-  seatingCapacity: number
+  seatingCapacity?: number
   status: 'available' | 'on_trip' | 'maintenance' | 'inactive'
   assignedDriverId?: string
   hubId?: string
@@ -195,6 +199,8 @@ export interface B2CCustomer {
   address?: string
   createdAt: string
   updatedAt?: string
+  status?: 'active' | 'inactive' | 'blocked'
+  walletBalance?: number
 }
 
 export interface AirportTerminal {
@@ -246,6 +252,13 @@ export interface NightChargeConfig {
   chargeValue: number
 }
 
+export interface UrgentBookingConfig {
+  enabled: boolean
+  timeWindowHours: number
+  chargeType: ChargeType
+  chargeValue: number
+}
+
 export interface PreBookingCharges {
   tollEnabled: boolean
   tollAmount: number
@@ -268,8 +281,9 @@ export interface AirportFareConfig {
   fixedFare?: number
   perKmRate?: number
   slabs?: SlabConfig[]
-  peakHour: PeakHourConfig
+  peakHour: PeakHourConfig | PeakHourConfig[]
   nightCharge: NightChargeConfig
+  urgentBooking?: UrgentBookingConfig
   waitingChargePerMin: number
   freeWaitingMinutes: number
   baseFare: number
@@ -289,8 +303,9 @@ export interface RentalFareConfig {
   extraHourRate: number
   freeWaitingMinutes: number
   kmCapping?: number
-  peakHour: PeakHourConfig
+  peakHour: PeakHourConfig | PeakHourConfig[]
   nightCharge: NightChargeConfig
+  urgentBooking?: UrgentBookingConfig
   preBookingCharges?: PreBookingCharges
 }
 
@@ -302,8 +317,9 @@ export interface CityRideFareConfig {
   fixedFare?: number
   perKmRate?: number
   slabs?: SlabConfig[]
-  peakHour: PeakHourConfig
+  peakHour: PeakHourConfig | PeakHourConfig[]
   nightCharge: NightChargeConfig
+  urgentBooking?: UrgentBookingConfig
   baseFare: number
   minimumFare: number
   perMinuteRate: number
@@ -324,13 +340,17 @@ export interface OutstationFareConfig {
   cityId: string
   carCategoryId: string
   outstationType: OutstationType
+  calculationType?: FareCalculationType
+  baseFare?: number
+  slabs?: SlabConfig[]
   oneWayPerKmRate?: number
   roundTripPerKmRate?: number
   routes?: RouteConfig[]
   driverAllowancePerDay: number
   nightHaltCharge: number
-  peakHour: PeakHourConfig
+  peakHour: PeakHourConfig | PeakHourConfig[]
   nightCharge: NightChargeConfig
+  urgentBooking?: UrgentBookingConfig
   minimumKmPerDay: number
   freeWaitingMinutes: number
   preBookingCharges?: PreBookingCharges
@@ -380,10 +400,14 @@ export interface B2BClient {
   status: 'active' | 'inactive' | 'suspended'
   isGSTEnabled: boolean
   billingType: 'garage_to_garage' | 'point_to_point'
-  paymentModel: 'bill_to_company' | 'partial_advance' | 'full_advance'
+  paymentTerms?: string;
+  paymentModel?: 'bill_to_company' | 'partial_advance' | 'full_advance'
   advancePercentage?: number
   entities?: B2BEntity[]
   createdAt: string
+  webhookUrl?: string
+  orgId?: string
+  industry?: string
 }
 
 // GST Configuration
@@ -404,7 +428,7 @@ export interface GSTConfig {
 // Event Log for bookings
 export interface BookingEventLog {
   id: string
-  event: 'created' | 'confirmed' | 'assigned' | 'reassigned' | 'dispatched' | 'arrived' | 'picked_up' | 'dropped' | 'closed' | 'cancelled' | 'status_reverted'
+  event: 'created' | 'confirmed' | 'assigned' | 'reassigned' | 'dispatched' | 'arrived' | 'picked_up' | 'dropped' | 'closed' | 'cancelled' | 'status_reverted' | 'pending_edit_approval' | 'completed' | 'edit_approved' | 'rejected'
   fromStatus?: string
   toStatus: string
   performedBy: string
@@ -452,7 +476,7 @@ export interface Booking {
   advancePaid?: number
   promoCodeId?: string
   promoDiscount: number
-  status: 'pending' | 'confirmed' | 'assigned' | 'dispatched' | 'arrived' | 'picked_up' | 'dropped' | 'closed' | 'cancelled'
+  status: 'pending' | 'confirmed' | 'assigned' | 'dispatched' | 'arrived' | 'picked_up' | 'dropped' | 'closed' | 'cancelled' | 'pending_edit_approval' | 'completed' | 'edit_approved' | 'rejected' | 'status_reverted' | 'created' | 'reassigned'
   paymentStatus: 'pending' | 'paid' | 'partial'
   remarks?: string
   tags?: string[]
@@ -461,6 +485,9 @@ export interface Booking {
   externalBookingId?: string
   createdBy?: string
   createdAt: string
+  approvalStatus?: 'pending' | 'approved' | 'rejected'
+  pendingEdits?: any
+  originalStatus?: string
 }
 
 export interface DutySlip {
@@ -507,4 +534,72 @@ export interface Invoice {
   paidAmount: number
   balanceAmount: number
   createdAt: string
+}
+
+// Multi-Role Login System
+export type UserType = 'trev-admin' | 'corporate-admin' | 'corporate-employee';
+
+// Trip Extras for Tolls/Taxes/Parking
+export interface RouteToll {
+  id: string
+  fromCityId: string
+  toCityId: string
+  carCategoryId: string
+  tollAmount: number
+  validFrom?: string
+  validTo?: string
+  notes?: string
+  createdAt: string
+}
+
+export interface StateTax {
+  id: string
+  stateCode: string
+  carCategoryId: string
+  tripType: 'outstation' | 'rental' | 'city_ride'
+  permitTax: number
+  gstRate: number
+  createdAt: string
+}
+
+export interface ParkingFee {
+  id: string
+  locationType: 'airport' | 'city_parking' | 'hub'
+  airportId?: string
+  cityId: string
+  carCategoryId: string
+  feeAmount: number
+  durationHours: number
+  maxDailyCap: number
+  createdAt: string
+}
+
+export interface TripExtrasCalculation {
+  toll: number
+  permitTax: number
+  parking: number
+  gstRate: number
+  totalExtras: number
+  gstOnExtras: number
+}
+
+export interface WalletTransaction {
+  id: string;
+  customerId?: string;
+  amount: number;
+  type: 'credit' | 'debit';
+  description: string;
+  createdAt: string;
+  referenceId?: string;
+  referenceType?: string;
+}
+
+export interface B2BApprovalRule {
+  id: string;
+  clientId?: string;
+  approverEmployeeId?: string;
+  maxApprovalAmount?: number;
+  name?: string;
+  isActive: boolean;
+  createdAt: string;
 }

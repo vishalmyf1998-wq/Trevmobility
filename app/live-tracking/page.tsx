@@ -203,7 +203,18 @@ export default function LiveTrackingPage() {
     return status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
   }
 
+  const getDelayInfo = (trip: any) => {
+    if (!['confirmed', 'assigned', 'dispatched'].includes(trip.status)) return null;
+    if (!trip.pickupDate || !trip.pickupTime) return null;
+    const pickupDateTime = new Date(`${trip.pickupDate}T${trip.pickupTime}`);
+    if (isNaN(pickupDateTime.getTime())) return null;
+    const now = new Date();
+    const diffInMins = Math.floor((now.getTime() - pickupDateTime.getTime()) / 60000);
+    return diffInMins > 0 ? diffInMins : null;
+  }
+
   const selectedTripData = selectedBooking ? bookings.find(b => b.id === selectedBooking) : null
+  const delayMins = selectedTripData ? getDelayInfo(selectedTripData) : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -313,9 +324,16 @@ export default function LiveTrackingPage() {
             {selectedTripData ? (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <Badge variant="outline" className={getStatusBadge(selectedTripData.status)}>
-                    {formatStatus(selectedTripData.status)}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className={getStatusBadge(selectedTripData.status)}>
+                      {formatStatus(selectedTripData.status)}
+                    </Badge>
+                    {delayMins && (
+                      <Badge variant="destructive" className="bg-red-500 hover:bg-red-600">
+                        Delayed by {delayMins} mins
+                      </Badge>
+                    )}
+                  </div>
                   <span className="text-sm text-muted-foreground">
                     {selectedTripData.tripType.split('_').join(' ').toUpperCase()}
                   </span>
