@@ -260,6 +260,13 @@ export interface UrgentBookingConfig {
   chargeValue: number
 }
 
+export interface ShortNoticeChargeConfig {
+  enabled: boolean
+  withinHours: number
+  chargeType: ChargeType
+  chargeValue: number
+}
+
 export interface PreBookingCharges {
   tollEnabled: boolean
   tollAmount: number
@@ -282,9 +289,11 @@ export interface AirportFareConfig {
   fixedFare?: number
   perKmRate?: number
   slabs?: SlabConfig[]
-  peakHour: PeakHourConfig | PeakHourConfig[]
+  peakHour: PeakHourConfig
   nightCharge: NightChargeConfig
   urgentBooking?: UrgentBookingConfig
+  shortNoticeCharge?: ShortNoticeChargeConfig
+  minAdvanceBookingHours?: number
   waitingChargePerMin: number
   freeWaitingMinutes: number
   baseFare: number
@@ -304,9 +313,11 @@ export interface RentalFareConfig {
   extraHourRate: number
   freeWaitingMinutes: number
   kmCapping?: number
-  peakHour: PeakHourConfig | PeakHourConfig[]
+  peakHour: PeakHourConfig
   nightCharge: NightChargeConfig
   urgentBooking?: UrgentBookingConfig
+  shortNoticeCharge?: ShortNoticeChargeConfig
+  minAdvanceBookingHours?: number
   preBookingCharges?: PreBookingCharges
 }
 
@@ -318,9 +329,11 @@ export interface CityRideFareConfig {
   fixedFare?: number
   perKmRate?: number
   slabs?: SlabConfig[]
-  peakHour: PeakHourConfig | PeakHourConfig[]
+  peakHour: PeakHourConfig
   nightCharge: NightChargeConfig
   urgentBooking?: UrgentBookingConfig
+  shortNoticeCharge?: ShortNoticeChargeConfig
+  minAdvanceBookingHours?: number
   baseFare: number
   minimumFare: number
   perMinuteRate: number
@@ -349,9 +362,11 @@ export interface OutstationFareConfig {
   routes?: RouteConfig[]
   driverAllowancePerDay: number
   nightHaltCharge: number
-  peakHour: PeakHourConfig | PeakHourConfig[]
+  peakHour: PeakHourConfig
   nightCharge: NightChargeConfig
   urgentBooking?: UrgentBookingConfig
+  shortNoticeCharge?: ShortNoticeChargeConfig
+  minAdvanceBookingHours?: number
   minimumKmPerDay: number
   freeWaitingMinutes: number
   preBookingCharges?: PreBookingCharges

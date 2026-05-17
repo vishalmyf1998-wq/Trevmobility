@@ -157,6 +157,7 @@ import { PhoneInput } from "@/components/ui/phone-input"
     status: "pending",
     paymentStatus: "pending",
     remarks: "",
+    stops: [],
   }
 
   interface EventConfirmData {
@@ -169,13 +170,22 @@ import { PhoneInput } from "@/components/ui/phone-input"
   const STATUS_FLOW: Booking["status"][] = [
     "pending",
     "pending_edit_approval",
-    "confirmed", 
+    "confirmed",
     "assigned",
     "dispatched",
     "arrived",
     "picked_up",
     "dropped",
     "closed",
+  ]
+
+  const defaultCancellationReasons = [
+    { id: "1", reason: "Driver denied duty" },
+    { id: "2", reason: "Vehicle broke down" },
+    { id: "3", reason: "Change of plans" },
+    { id: "4", reason: "Booked by mistake" },
+    { id: "5", reason: "Delay in pickup" },
+    { id: "6", reason: "Operational issue" },
   ]
 
   export default function BookingsPage() {
@@ -232,9 +242,9 @@ import { PhoneInput } from "@/components/ui/phone-input"
     const isCorpEmployee = userType === 'corporate-employee'
     const isCorpAdmin = userType === 'corporate-admin'
     const isB2BUser = isCorpEmployee || isCorpAdmin
-    const currentB2BUser = isB2BUser 
-      ? b2bEmployees.find(e => e.officeEmail === currentUser?.email) || 
-        b2bEmployees.find(e => e.id === (isCorpAdmin ? 'dummy-corp-admin' : 'dummy-corp-emp')) || 
+    const currentB2BUser = isB2BUser
+      ? b2bEmployees.find(e => e.officeEmail === currentUser?.email) ||
+        b2bEmployees.find(e => e.id === (isCorpAdmin ? 'dummy-corp-admin' : 'dummy-corp-emp')) ||
         (b2bEmployees.length > 0 ? b2bEmployees[0] : {
           id: 'demo',
           name: 'Demo Employee',
@@ -271,6 +281,10 @@ import { PhoneInput } from "@/components/ui/phone-input"
     const [ticketBooking, setTicketBooking] = useState<Booking | null>(null)
     const [ticketData, setTicketData] = useState({ subject: "", type: "Complaint", priority: "medium", description: "" })
     const [b2cSearchOpen, setB2cSearchOpen] = useState(false)
+    const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false)
+    const [cancellingBooking, setCancellingBooking] = useState<Booking | null>(null)
+    const [cancelReason, setCancelReason] = useState("")
+    const [cancelRemarks, setCancelRemarks] = useState("")
     const [b2cSearchQuery, setB2cSearchQuery] = useState("")
     const [editingBooking, setEditingBooking] = useState<Booking | null>(null)
     const [assigningBooking, setAssigningBooking] = useState<Booking | null>(null)
@@ -409,7 +423,7 @@ const [newCustomerData, setNewCustomerData] = useState({ name: "", phone: "", em
         address: newCustomerData.address,
       })
       toast.success(`New customer "${customer.name}" created successfully.`)
-      
+
       // Select the new customer in the booking form
       setFormData(prev => ({
         ...prev,
@@ -421,7 +435,7 @@ const [newCustomerData, setNewCustomerData] = useState({ name: "", phone: "", em
       }))
       setB2cSearchQuery(customer.name)
       setB2cSearchOpen(false)
-  
+
       setIsAddCustomerDialogOpen(false)
 setNewCustomerData({ name: "", phone: "", email: "", address: "" })
     }
@@ -453,14 +467,14 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
     // Calculate fare from fare configuration
     const calculateFareFromConfig = useCallback((cityId: string, carCategoryId: string, tripType: string, clientType: "b2c" | "b2b", b2bClientId?: string, airportId?: string, airportTerminalId?: string) => {
       let fareGroup = null
-      
+
       if (clientType === "b2b" && b2bClientId) {
         const client = b2bClients.find(c => c.id === b2bClientId)
         if (client?.fareGroupId) {
           fareGroup = fareGroups.find(fg => fg.id === client.fareGroupId)
         }
       }
-      
+
       if (!fareGroup) {
         fareGroup = fareGroups.find(
           (fg) => (clientType === "b2b" ? fg.type === "B2B" : fg.type === "B2C") && fg.isDefault
@@ -608,11 +622,11 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
           formData.airportId,
           formData.airportTerminalId
         )
-        
+
         let estimatedFare = 0
         let preBookingToll = 0
         let preBookingParking = 0
-        
+
         if (fareConfig.preBookingCharges) {
           if (fareConfig.preBookingCharges.tollEnabled) {
             preBookingToll = fareConfig.preBookingCharges.tollAmount
@@ -621,7 +635,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
             preBookingParking = fareConfig.preBookingCharges.parkingAmount
           }
         }
-        
+
         const estKm = formData.estimatedKm || 0
         let days = 1
         if (formData.pickupDate && formData.returnDate) {
@@ -650,7 +664,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
         } else {
           estimatedFare = fareConfig.baseFare || fareConfig.minimumFare || 0
         }
-        
+
         let urgentCharge = 0
         if (fareConfig.urgentBooking?.enabled && formData.pickupDate && formData.pickupTime) {
           const pickupDateTime = new Date(`${formData.pickupDate}T${formData.pickupTime}`)
@@ -674,7 +688,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
             ? calculatePromoDiscount(selectedPromo, totalFare)
             : 0
         const taxableFare = Math.max(totalFare - promoDiscount, 0)
-        
+
         let isGSTEnabled = true
         if (customerType === 'b2b' && formData.b2bClientId) {
           const client = b2bClients.find(c => c.id === formData.b2bClientId)
@@ -686,7 +700,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
         const gstRate = isGSTEnabled ? gstConfig.cgstRate + gstConfig.sgstRate : 0
         const gstAmount = (taxableFare * gstRate) / 100
         const grandTotal = taxableFare + gstAmount
-        
+
         setFormData(prev => ({
           ...prev,
           estimatedFare,
@@ -714,23 +728,32 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
         const calculateDistance = () => {
           // In a real application, replace this with Google Maps Distance Matrix API call
           // Example: const response = await fetch(`/api/distance?origin=${actualPickup}&destination=${actualDrop}`);
-          
+
           // Deterministic mock distance calculation for simulation
           const base = actualPickup.length + actualDrop.length
           let estKm = (base * 3) % 60 + 12 // 12 to 72 km for local rides
-          
+
           if (formData.tripType === "outstation") {
             estKm = (base * 12) % 600 + 150 // 150 to 750 km for outstation rides
           }
-          
-          setFormData(prev => prev.estimatedKm === estKm ? prev : { ...prev, estimatedKm: estKm })
+
+          // Add extra KM for stops
+          let extraStopsKm = 0;
+          if (formData.stops && formData.stops.length > 0) {
+              extraStopsKm = formData.stops.filter(s => s.location && s.location.length > 3).reduce((acc, stop) => {
+                  return acc + ((stop.location.length * 2) % 15 + 5); // 5 to 20 km per stop
+              }, 0);
+          }
+
+          const totalEstKm = estKm + extraStopsKm;
+          setFormData(prev => prev.estimatedKm === totalEstKm ? prev : { ...prev, estimatedKm: totalEstKm })
         }
 
         // Debounce the calculation to avoid running on every single keystroke
         const timeoutId = setTimeout(calculateDistance, 800)
         return () => clearTimeout(timeoutId)
       }
-    }, [formData.pickupLocation, formData.dropLocation, formData.tripType, formData.airportId, formData.airportTerminalId, formatAirportLocation])
+    }, [formData.pickupLocation, formData.dropLocation, formData.tripType, formData.airportId, formData.airportTerminalId, formatAirportLocation, JSON.stringify(formData.stops)])
 
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault()
@@ -969,9 +992,9 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
       setPickingUpBooking(booking)
       const now = new Date()
       now.setMinutes(now.getMinutes() - now.getTimezoneOffset())
-      
+
       const dutySlip = dutySlips.find(ds => ds.bookingId === booking.id && ds.status === "active")
-      
+
       setPickupData({
         startKm: dutySlip?.startKm || 0,
         startTime: now.toISOString().slice(0, 16)
@@ -981,13 +1004,13 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
 
     const handlePickupSubmit = async () => {
       if (!pickingUpBooking) return
-      
+
       const actualKm = pickupData.startKm
       const startTimeIso = new Date(pickupData.startTime).toISOString()
 
       try {
         await updateStatusWithLog(pickingUpBooking, "picked_up", "picked_up", `Customer picked up at ${actualKm} KM`)
-        
+
         const dutySlip = dutySlips.find(ds => ds.bookingId === pickingUpBooking.id && ds.status === "active")
         if (dutySlip) {
           updateDutySlip(dutySlip.id, {
@@ -1013,7 +1036,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
     const handleRevertStatus = async (booking: Booking, targetStatus: Booking["status"]) => {
       const currentIndex = STATUS_FLOW.indexOf(booking.status)
       const targetIndex = STATUS_FLOW.indexOf(targetStatus)
-      
+
       if (targetIndex >= currentIndex) {
         toast.error("Can only revert to a previous status")
         return
@@ -1021,9 +1044,9 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
 
       try {
         const eventLog = createEventLog(
-          targetStatus as BookingEventLog["event"], 
-          targetStatus, 
-          booking.status, 
+          targetStatus as BookingEventLog["event"],
+          targetStatus,
+          booking.status,
           `Status reverted from ${booking.status} to ${targetStatus} by admin`
         )
         updateBooking(booking.id, {
@@ -1083,7 +1106,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
 
       const extraCharges = closeData.tollCharges + closeData.parkingCharges + closeData.miscCharges + closeData.waitingCharge
       const totalFare = actualFare + extraCharges
-      
+
       let isGSTEnabled = true
       if (closingBooking.b2bClientId) {
         const client = b2bClients.find(c => c.id === closingBooking.b2bClientId)
@@ -1140,7 +1163,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
     const handleOpenEditClosedDutyDialog = (booking: Booking) => {
       setEditingClosedDutyBooking(booking)
       const dutySlip = getDutySlipForBooking(booking.id)
-      
+
       const formatTime = (iso?: string) => {
         if (!iso) return ""
         try {
@@ -1201,11 +1224,11 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
         }
       }
 
-      const extraCharges = (editingClosedDutyBooking.tollCharges || 0) + 
-                           (editingClosedDutyBooking.parkingCharges || 0) + 
-                           (editingClosedDutyBooking.miscCharges || 0) + 
+      const extraCharges = (editingClosedDutyBooking.tollCharges || 0) +
+                           (editingClosedDutyBooking.parkingCharges || 0) +
+                           (editingClosedDutyBooking.miscCharges || 0) +
                            (editingClosedDutyBooking.waitingCharge || 0)
-                           
+
       const totalFare = actualFare + extraCharges
       const taxableFare = Math.max(totalFare - (editingClosedDutyBooking.promoDiscount || 0), 0)
 
@@ -1221,7 +1244,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
 
       try {
         const eventLog = createEventLog("closed", "closed", "closed", `Duty details manually updated by admin. Final KM: ${actualKm}, Total Fare: Rs. ${grandTotal.toFixed(2)}`)
-        
+
         updateBooking(editingClosedDutyBooking.id, {
           driverId: editClosedDutyData.driverId,
           actualKm,
@@ -1252,9 +1275,28 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
       }
     }
 
-    const handleCancelBooking = async (booking: Booking) => {
-      await updateStatusWithLog(booking, "cancelled", "cancelled", "Booking cancelled by admin")
+    const handleOpenCancelDialog = (booking: Booking) => {
+      setCancellingBooking(booking)
+      setCancelReason("")
+      setCancelRemarks("")
+      setIsCancelDialogOpen(true)
+    }
+
+    const handleCancelBooking = async () => {
+      if (!cancellingBooking) return
+      if (!cancelReason) {
+        toast.error("Please select a cancellation reason")
+        return
+      }
+
+      const fullNotes = cancelRemarks
+        ? `Cancelled: ${cancelReason} - ${cancelRemarks}`
+        : `Cancelled: ${cancelReason}`
+
+      await updateStatusWithLog(cancellingBooking, "cancelled", "cancelled", fullNotes)
       toast.success("Booking cancelled")
+      setIsCancelDialogOpen(false)
+      setCancellingBooking(null)
     }
 
     const handleReactivateBooking = async (booking: Booking) => {
@@ -1270,7 +1312,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
       const newTags = currentTags.includes(tagId)
         ? currentTags.filter(t => t !== tagId)
         : [...currentTags, tagId]
-      
+
       updateBooking(bookingId, { tags: newTags })
       toast.success(currentTags.includes(tagId) ? 'Tag removed' : 'Tag added')
     }
@@ -1298,6 +1340,8 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
       if (!ticketBooking) return
 
       addSupportTicket({
+        bookingId: ticketBooking.id,
+        bookingNumber: ticketBooking.bookingNumber,
         subject: ticketData.subject,
         customerName: ticketBooking.customerName || "Unknown",
         type: ticketData.type,
@@ -1356,6 +1400,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
         promoDiscount: booking.promoDiscount || 0,
         status: booking.status,
         paymentStatus: booking.paymentStatus,
+        stops: booking.stops || [],
         remarks: booking.remarks,
       })
       setIsDialogOpen(true)
@@ -1364,7 +1409,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
     const handleCloseDialog = () => {
       setIsDialogOpen(false)
       setEditingBooking(null)
-      setFormData(initialFormData)
+      setFormData({...initialFormData, stops: []})
       setCustomerType("b2c")
       setB2cSearchQuery("")
       setB2cSearchOpen(false)
@@ -1453,7 +1498,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
 
           const city = cities.find(c => c.name.toLowerCase() === rowData['cityname']?.toLowerCase())
           const category = carCategories.find(c => c.name.toLowerCase() === rowData['carcategory']?.toLowerCase())
-          
+
           if (!city || !category || !rowData['customername'] || !rowData['customerphone'] || !rowData['pickupdate']) {
             errorCount++
             continue
@@ -1474,20 +1519,20 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
           } else if (fareConfig.calculationType === "package" && fareConfig.baseFare) {
             estimatedFare = fareConfig.baseFare
           }
-          
+
           let preBookingToll = 0
           let preBookingParking = 0
           if (fareConfig.preBookingCharges) {
             if (fareConfig.preBookingCharges.tollEnabled) preBookingToll = fareConfig.preBookingCharges.tollAmount
             if (fareConfig.preBookingCharges.parkingEnabled) preBookingParking = fareConfig.preBookingCharges.parkingAmount
           }
-          
+
           const totalFare = estimatedFare + preBookingToll + preBookingParking
           const gstRate = gstConfig.cgstRate + gstConfig.sgstRate
           const gstAmount = (totalFare * gstRate) / 100
           const grandTotal = totalFare + gstAmount
           const eventLog = createEventLog("created", "pending", undefined, "Bulk uploaded via CSV")
-          
+
           addBooking({
             bookingNumber: generateBookingNumber(),
             b2cCustomerId: customer.id,
@@ -1665,12 +1710,12 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                 <Download className="mr-2 h-4 w-4" />
                 Template
               </Button>
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                accept=".csv" 
-                className="hidden" 
-                onChange={handleFileUpload} 
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept=".csv"
+                className="hidden"
+                onChange={handleFileUpload}
               />
               <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
                 <Upload className="mr-2 h-4 w-4" />
@@ -1838,7 +1883,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                     const nextAction = getNextAction(booking)
                     const previousStatuses = getPreviousStatuses(booking)
                     const futureStatuses = STATUS_FLOW.slice(STATUS_FLOW.indexOf(booking.status) + 1)
-                    
+
                     const displayDutySlip = dutySlip || {
                       id: 'temp-' + booking.id,
                       dutySlipNumber: 'DS-TBD',
@@ -1876,8 +1921,8 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                                     <span
                                       key={tagId}
                                       className="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap"
-                                      style={{ 
-                                        backgroundColor: `${tag.color}20`, 
+                                      style={{
+                                        backgroundColor: `${tag.color}20`,
                                         color: tag.color,
                                         border: `1px solid ${tag.color}40`
                                       }}
@@ -1999,9 +2044,9 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                         <TableCell className="text-right align-top">
                           {booking.status === 'pending_edit_approval' && !isB2BUser ? (
                             <div className="flex items-center justify-end gap-2">
-                              <Button 
-                                size="sm" 
-                                className="bg-green-100 text-green-700 hover:bg-green-200 border border-green-200 shadow-sm" 
+                              <Button
+                                size="sm"
+                                className="bg-green-100 text-green-700 hover:bg-green-200 border border-green-200 shadow-sm"
                                 onClick={() => {
                                   setReviewingBooking(booking);
                                   setIsRejectingEdit(false);
@@ -2011,9 +2056,9 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                                 <CheckCircle className="mr-1 h-4 w-4" />
                                 Accept
                               </Button>
-                              <Button 
-                                size="sm" 
-                                className="bg-red-100 text-red-700 hover:bg-red-200 border border-red-200 shadow-sm" 
+                              <Button
+                                size="sm"
+                                className="bg-red-100 text-red-700 hover:bg-red-200 border border-red-200 shadow-sm"
                                 onClick={() => {
                                   setReviewingBooking(booking);
                                   setIsRejectingEdit(true);
@@ -2032,8 +2077,8 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem 
-                                  onClick={() => handleEdit(booking)} 
+                                <DropdownMenuItem
+                                  onClick={() => handleEdit(booking)}
                                   disabled={booking.status === 'pending_edit_approval'}
                                 >
                                   <Pencil className="mr-2 h-4 w-4" />
@@ -2085,7 +2130,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                                     )}
                                   </DropdownMenuSubContent>
                                 </DropdownMenuSub>
-                                
+
                                 <DropdownMenuSeparator />
 
                                 {/* Driver Events (Next Action) */}
@@ -2226,7 +2271,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                                 {/* Cancel / Reactivate */}
                                 {!["closed", "cancelled"].includes(booking.status) && (
                                   <DropdownMenuItem
-                                    onClick={() => handleConfirmEvent("Cancel Booking", "Are you sure you want to cancel this booking?", () => handleCancelBooking(booking))}
+                                    onClick={() => handleOpenCancelDialog(booking)}
                                     className="text-destructive"
                                   >
                                     <XCircle className="mr-2 h-4 w-4" />
@@ -2306,10 +2351,10 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                   <Field>
                     <div className="flex items-center justify-between mb-1">
                       <FieldLabel>Search Customer</FieldLabel>
-                      <Button 
-                        type="button" 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
                         className="h-7 text-xs text-primary"
                         onClick={() => setIsAddCustomerDialogOpen(true)}
                       >
@@ -2344,19 +2389,19 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                         </Button>
                       )}
                     </div>
-                    
+
                     {/* Search Results Dropdown */}
                     {b2cSearchOpen && (
                       <div className="border rounded-md mt-1 max-h-48 overflow-y-auto bg-popover shadow-md z-50 relative">
-                        {b2cCustomers.filter(c => 
-                          !b2cSearchQuery || 
+                        {b2cCustomers.filter(c =>
+                          !b2cSearchQuery ||
                           c.name.toLowerCase().includes(b2cSearchQuery.toLowerCase()) ||
                           c.phone.includes(b2cSearchQuery) ||
                           (c.email && c.email.toLowerCase().includes(b2cSearchQuery.toLowerCase()))
                         ).length === 0 ? (
                           <div className="p-3 text-sm text-muted-foreground text-center">
-                            No customer found. 
-                            <button 
+                            No customer found.
+                            <button
                               type="button"
                               className="text-primary underline ml-1"
                               onClick={() => {
@@ -2369,8 +2414,8 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                           </div>
                         ) : (
                           b2cCustomers
-                            .filter(c => 
-                              !b2cSearchQuery || 
+                            .filter(c =>
+                              !b2cSearchQuery ||
                               c.name.toLowerCase().includes(b2cSearchQuery.toLowerCase()) ||
                               c.phone.includes(b2cSearchQuery) ||
                               (c.email && c.email.toLowerCase().includes(b2cSearchQuery.toLowerCase()))
@@ -2443,10 +2488,10 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                           </div>
                         )}
                       </div>
-                      <Button 
-                        type="button" 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
                         className="h-7 text-xs w-full mt-1"
                         onClick={() => {
                           setFormData(prev => ({
@@ -2490,7 +2535,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                       </SelectContent>
                     </Select>
                   </Field>
-                  
+
   {formData.b2bClientId && (
                     <Field>
                       <FieldLabel>Select Employee {isCorpEmployee && "(Auto-selected)"}</FieldLabel>
@@ -2705,6 +2750,49 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                   </Field>
                 </FieldGroup>
 
+                {/* Multi-stop section */}
+                <Field>
+                  <div className="flex items-center justify-between mb-2">
+                    <FieldLabel>Multi-Stops</FieldLabel>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          stops: [...(prev.stops || []), { id: `stop_${Date.now()}`, location: '' }]
+                        }))
+                      }}
+                    >
+                      <Plus className="mr-1 h-3 w-3" /> Add Stop
+                    </Button>
+                  </div>
+                  {(formData.stops || []).length > 0 && (
+                    <div className="space-y-2 rounded-lg border bg-slate-50/50 p-3">
+                      {(formData.stops || []).map((stop, index) => (
+                        <div key={stop.id} className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-muted-foreground w-14">Stop {index + 1}:</span>
+                          <Input
+                            value={stop.location}
+                            onChange={(e) => {
+                              const newStops = [...(formData.stops || [])];
+                              newStops[index].location = e.target.value;
+                              setFormData(prev => ({ ...prev, stops: newStops }));
+                            }}
+                            placeholder={`Enter stop location ${index + 1}`}
+                          />
+                          <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => {
+                              setFormData(prev => ({ ...prev, stops: (prev.stops || []).filter((_, i) => i !== index) }))
+                            }}
+                          ><Trash2 className="h-4 w-4" /></Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Field>
+
                 <FieldGroup className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <Field>
                     <FieldLabel>Pickup Date *</FieldLabel>
@@ -2747,6 +2835,17 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                       className="bg-muted font-medium cursor-not-allowed"
                       placeholder="Auto-calculating..."
                     />
+                    {(() => {
+                        let extra = 0;
+                        if (formData.stops && formData.stops.length > 0) {
+                            extra = formData.stops.filter(s => s.location && s.location.length > 3).reduce((acc, stop) => {
+                                return acc + ((stop.location.length * 2) % 15 + 5);
+                            }, 0);
+                        }
+                        return extra > 0 ? (
+                            <p className="text-[10px] text-muted-foreground mt-1">Includes ~{extra} extra KM for stops</p>
+                        ) : null;
+                    })()}
                   </Field>
                 </FieldGroup>
 
@@ -2827,7 +2926,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                         <div className="flex justify-between items-center">
                           <span className="text-muted-foreground">
                             {formData.tripType === 'outstation' ? 'Outstation Base (Inc. Min KM & Driver)' :
-                             formData.tripType === 'rental' ? 'Rental Package Base' : 
+                             formData.tripType === 'rental' ? 'Rental Package Base' :
                              formData.tripType.includes('airport') ? 'Airport Transfer Base' : 'Estimated Base Fare'}:
                           </span>
                           <span className="font-medium">Rs. {formData.estimatedFare.toFixed(2)}</span>
@@ -2865,9 +2964,9 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
 
                         <div className="pt-4 mt-4 border-t border-border flex items-center justify-between gap-4">
                            <Label className="font-medium whitespace-nowrap">Advance Paid (Rs):</Label>
-                           <Input 
-                             type="number" 
-                             className="w-32 text-right" 
+                           <Input
+                             type="number"
+                             className="w-32 text-right"
                              value={formData.advancePaid || ""}
                              onChange={(e) => setFormData({...formData, advancePaid: parseFloat(e.target.value) || 0})}
                              placeholder="0"
@@ -2966,8 +3065,8 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                     const driver = drivers.find(d => d.id === value)
                     // Auto-select the driver's assigned car if available
                     const assignedCar = driver?.assignedCarId ? cars.find(c => c.id === driver.assignedCarId) : null
-                    setAssignData({ 
-                      ...assignData, 
+                    setAssignData({
+                      ...assignData,
                       driverId: value,
                       carId: assignedCar && (assignedCar.status === 'available' || assignedCar.status === 'on_trip') ? assignedCar.id : assignData.carId
                     })
@@ -2980,8 +3079,8 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                     {activeDrivers.map((driver) => {
                       const assignedCar = driver.assignedCarId ? cars.find(c => c.id === driver.assignedCarId) : null
                       const category = assignedCar ? getCarCategory(assignedCar.categoryId) : null
-                      const hasActiveBooking = bookings.some(b => 
-                        b.driverId === driver.id && 
+                      const hasActiveBooking = bookings.some(b =>
+                        b.driverId === driver.id &&
                         ['dispatched', 'arrived', 'picked_up'].includes(b.status)
                       )
                       return (
@@ -3005,11 +3104,11 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                 const selectedDriver = getDriver(assignData.driverId)
                 const assignedCar = selectedDriver?.assignedCarId ? getCar(selectedDriver.assignedCarId) : null
                 const category = assignedCar ? getCarCategory(assignedCar.categoryId) : null
-                const hasActiveBooking = bookings.find(b => 
-                  b.driverId === selectedDriver?.id && 
+                const hasActiveBooking = bookings.find(b =>
+                  b.driverId === selectedDriver?.id &&
                   ['dispatched', 'arrived', 'picked_up'].includes(b.status)
                 )
-                
+
                 return (
                   <div className="bg-muted/50 rounded-lg p-3 space-y-2">
                     <p className="text-sm font-medium">Selected Driver Details:</p>
@@ -3264,9 +3363,9 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                     value={pickupData.startTime}
                     onChange={(e) => setPickupData({ ...pickupData, startTime: e.target.value })}
                   />
-                  <Button 
-                    type="button" 
-                    variant="outline" 
+                  <Button
+                    type="button"
+                    variant="outline"
                     onClick={() => {
                       const now = new Date()
                       now.setMinutes(now.getMinutes() - now.getTimezoneOffset())
@@ -3338,9 +3437,9 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                   value={closeData.endTime}
                   onChange={(e) => setCloseData({ ...closeData, endTime: e.target.value })}
                 />
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={() => {
                     const now = new Date()
                     now.setMinutes(now.getMinutes() - now.getTimezoneOffset())
@@ -3527,7 +3626,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                 return (
                   <div className="flex justify-center pb-8">
                     <div className="shadow-lg rounded-xl overflow-hidden bg-white print:shadow-none print:rounded-none">
-                      <PrintableVoucher 
+                      <PrintableVoucher
                         booking={viewingVoucherBooking}
                         city={city}
                         carCategory={carCategory}
@@ -3584,15 +3683,15 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                   status: 'active' as const,
                   createdAt: viewingDutySlipBooking.createdAt
                 }
-                
+
                 const driver = getDriver(dutySlip.driverId)
                 const car = getCar(dutySlip.carId)
                 const city = getCity(viewingDutySlipBooking.cityId)
-                
+
                 return (
                   <div className="flex justify-center pb-8">
                     <div className="shadow-lg rounded-xl overflow-hidden bg-white print:shadow-none print:rounded-none">
-                      <PrintableDutySlip 
+                      <PrintableDutySlip
                         booking={viewingDutySlipBooking}
                         dutySlip={dutySlip}
                         driver={driver}
@@ -3706,8 +3805,8 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
             <div className="grid gap-4 py-4">
               <Field>
                 <FieldLabel>Subject</FieldLabel>
-                <Input 
-                  placeholder="Briefly describe the issue" 
+                <Input
+                  placeholder="Briefly describe the issue"
                   value={ticketData.subject}
                   onChange={(e) => setTicketData({...ticketData, subject: e.target.value})}
                 />
@@ -3743,9 +3842,9 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
               </div>
               <Field>
                 <FieldLabel>Description</FieldLabel>
-                <Textarea 
-                  placeholder="Provide a detailed description of the issue..." 
-                  rows={4} 
+                <Textarea
+                  placeholder="Provide a detailed description of the issue..."
+                  rows={4}
                   value={ticketData.description}
                   onChange={(e) => setTicketData({...ticketData, description: e.target.value})}
                 />
@@ -3773,10 +3872,10 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                   const original = reviewingBooking;
                   const changes = reviewingBooking.pendingEdits;
                   const fieldsToShow: (keyof Booking)[] = [
-                      'customerName', 'customerPhone', 'pickupLocation', 'dropLocation', 
+                      'customerName', 'customerPhone', 'pickupLocation', 'dropLocation',
                       'pickupDate', 'pickupTime', 'remarks', 'b2bEmployeeId'
                   ];
-                  
+
                   const fieldLabels: Record<string, string> = {
                     customerName: 'Customer Name',
                     customerPhone: 'Customer Phone',
@@ -3788,7 +3887,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                     b2bEmployeeId: 'Employee'
                   };
 
-                  const changedFields = fieldsToShow.filter(key => 
+                  const changedFields = fieldsToShow.filter(key =>
                       original[key] !== changes[key] && changes[key] !== undefined
                   );
 
@@ -3833,8 +3932,8 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
             <DialogFooter>
               {isRejectingEdit ? (
                 <div className="w-full flex flex-col gap-3 mt-4 border-t pt-4">
-                  <Input 
-                    placeholder="Please provide a reason for rejection..." 
+                  <Input
+                    placeholder="Please provide a reason for rejection..."
                     value={editRejectionReason}
                     onChange={(e) => setEditRejectionReason(e.target.value)}
                     autoFocus
@@ -3896,6 +3995,47 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
           </AlertDialogContent>
         </AlertDialog>
 
+          {/* Cancel Booking Dialog */}
+          <Dialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Cancel Booking - {cancellingBooking?.bookingNumber}</DialogTitle>
+                <DialogDescription>
+                  Please select a reason for cancelling this booking.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <Field>
+                  <FieldLabel>Cancellation Reason *</FieldLabel>
+                  <Select value={cancelReason} onValueChange={setCancelReason}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a reason" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {defaultCancellationReasons.map((r) => (
+                        <SelectItem key={r.id} value={r.reason}>{r.reason}</SelectItem>
+                      ))}
+                      <SelectItem value="Other">Other (Specify below)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field>
+                  <FieldLabel>Additional Remarks</FieldLabel>
+                  <Textarea
+                    placeholder="Add any extra details here..."
+                    value={cancelRemarks}
+                    onChange={(e) => setCancelRemarks(e.target.value)}
+                    rows={3}
+                  />
+                </Field>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsCancelDialogOpen(false)}>Back</Button>
+                <Button variant="destructive" onClick={handleCancelBooking}>Confirm Cancellation</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
       </div>
 
       {/* Hidden Print Area */}
@@ -3903,7 +4043,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
         const bk = getBooking(printingSlip.bookingId)!;
         return (
           <div className="hidden print:block print:fixed print:inset-0 print:bg-white print:z-[9999] print:m-0 print:p-0">
-            <PrintableDutySlip 
+            <PrintableDutySlip
               booking={bk}
               dutySlip={printingSlip}
               driver={getDriver(printingSlip.driverId)}
@@ -3922,7 +4062,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
         const carCategory = getCarCategory(printingVoucher.carCategoryId)
         return (
           <div className="hidden print:block print:fixed print:inset-0 print:bg-white print:z-[9999] print:m-0 print:p-0">
-            <PrintableVoucher 
+            <PrintableVoucher
               booking={printingVoucher}
               city={city}
               carCategory={carCategory}

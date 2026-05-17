@@ -1,670 +1,329 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useMemo } from "react"
 import { useAdmin } from "@/lib/admin-context"
-import { Invoice } from "@/lib/types"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, FileText, Download, Eye, Building2, User, Printer, Search, CalendarCheck, Receipt } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { Search, FileText, Printer, CheckCircle, Clock } from "lucide-react"
 import { toast } from "sonner"
-import { Field, FieldLabel, FieldGroup } from "@/components/ui/field"
-import Link from "next/link"
-import { PrintableInvoice } from "@/components/InvoicePrint"
 
 export default function InvoicesPage() {
-  const {
-    bookings,
-    dutySlips,
-    invoices,
-    b2bClients,
-    gstConfig,
-    addInvoice,
-    updateInvoice,
-    getBooking,
-    getDriver,
-    getCar,
-    getCity,
-    getCarCategory,
-  } = useAdmin()
-
+  const { bookings, getB2BClient, updateBooking } = useAdmin()
   const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [viewInvoice, setViewInvoice] = useState<Invoice | null>(null)
-  const [printingInvoice, setPrintingInvoice] = useState<Invoice | null>(null)
-  const [formData, setFormData] = useState({
-    bookingId: "",
-    clientType: "b2c" as "b2c" | "b2b",
-    b2bClientId: "",
-    customerName: "",
-    customerPhone: "",
-    customerEmail: "",
-    customerAddress: "",
-  })
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [viewingInvoice, setViewingInvoice] = useState<any>(null)
 
-  // Get completed bookings that don't have invoices yet
-  const completedBookings = bookings.filter(
-    (b) => b.status === "closed" && !invoices.some((inv) => inv.bookingId === b.id)
-  )
+  // Generate invoices dynamically from closed bookings
+  const invoices = useMemo(() => {
+    return bookings
+      .filter(b => b.status === "closed")
+      .map(b => {
+        const client = b.b2bClientId ? getB2BClient(b.b2bClientId) : null;
+        const invoiceDate = new Date((b as { updatedAt?: string }).updatedAt || b.createdAt);
+        const dueDate = new Date(invoiceDate.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days later
 
-  const activeB2BClients = b2bClients.filter((c) => c.status === "active")
+        // Calculate Subtotal & Tax based on your existing structure
+        const gstAmount = b.gstAmount || 0;
+        const subTotal = (b.grandTotal || 0) - gstAmount;
 
-  const handleCreate = () => {
-    if (!formData.bookingId) {
-      toast.error("Please select a booking")
-      return
-    }
-
-    const booking = getBooking(formData.bookingId)
-    if (!booking) {
-      toast.error("Booking not found")
-      return
-    }
-
-    if (formData.clientType === "b2b" && !formData.b2bClientId) {
-      toast.error("Please select a B2B client")
-      return
-    }
-
-    // Get customer details
-    let customerData = {
-      customerName: booking.customerName,
-      customerPhone: booking.customerPhone,
-      customerEmail: booking.customerEmail,
-      customerAddress: booking.customerAddress,
-      customerGst: undefined as string | undefined,
-    }
-    let isGSTEnabled = true
-
-    if (formData.clientType === "b2b" && formData.b2bClientId) {
-      const client = b2bClients.find((c) => c.id === formData.b2bClientId)
-      if (client) {
-        customerData = {
-          customerName: client.companyName,
-          customerPhone: client.phone,
-          customerEmail: client.email,
-          customerAddress: client.billingAddress,
-          customerGst: client.gstNumber,
+        return {
+          id: `INV-${b.bookingNumber}`,
+          bookingId: b.id,
+          bookingNumber: b.bookingNumber,
+          date: invoiceDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+          dueDate: dueDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+          customerName: client ? client.companyName : b.customerName,
+          customerAddress: client?.billingAddress || b.customerAddress || "Address not provided",
+          type: b.b2bClientId ? "B2B Corporate" : "B2C Retail",
+          subTotal: subTotal,
+          gstAmount: gstAmount,
+          amount: b.grandTotal || 0,
+          status: b.paymentStatus || "pending",
         }
-        if (client.isGSTEnabled === false) {
-          isGSTEnabled = false
-        }
-      }
-    }
-
-    // Calculate GST
-    const gstRate = isGSTEnabled ? gstConfig.cgstRate + gstConfig.sgstRate : 0
-    const subtotal = booking.totalFare
-    const gstAmount = (subtotal * gstRate) / 100
-    const totalAmount = subtotal + gstAmount
-
-    // Find associated duty slip
-    const dutySlip = dutySlips.find((ds) => ds.bookingId === booking.id)
-
-    const newInvoice: Omit<Invoice, "id" | "createdAt"> = {
-      invoiceNumber: `INV-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(4, "0")}`,
-      bookingId: booking.id,
-      dutySlipId: dutySlip?.id,
-      clientType: formData.clientType,
-      b2bClientId: formData.clientType === "b2b" ? formData.b2bClientId : undefined,
-      ...customerData,
-      invoiceDate: new Date().toISOString(),
-      dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(), // 15 days
-      subtotal,
-      gstRate,
-      gstAmount,
-      cgst: gstAmount / 2,
-      sgst: gstAmount / 2,
-      totalAmount,
-      status: "pending",
-      paidAmount: 0,
-      balanceAmount: totalAmount,
-    }
-
-    addInvoice(newInvoice)
-    toast.success("Invoice created successfully")
-    setIsCreateOpen(false)
-    resetForm()
-  }
-
-  const resetForm = () => {
-    setFormData({
-      bookingId: "",
-      clientType: "b2c",
-      b2bClientId: "",
-      customerName: "",
-      customerPhone: "",
-      customerEmail: "",
-      customerAddress: "",
-    })
-  }
-
-  const handleStatusChange = (invoiceId: string, status: Invoice["status"]) => {
-    const invoice = invoices.find((i) => i.id === invoiceId)
-    if (invoice && status === "paid") {
-      updateInvoice(invoiceId, {
-        status,
-        paidAmount: invoice.totalAmount,
-        balanceAmount: 0,
       })
-    } else {
-      updateInvoice(invoiceId, { status })
-    }
-    toast.success(`Invoice marked as ${status}`)
-  }
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  }, [bookings, getB2BClient])
 
-  const getStatusBadge = (status: Invoice["status"]) => {
-    const styles: Record<string, string> = {
-      pending: "bg-warning/10 text-warning border-warning/20",
-      paid: "bg-success/10 text-success border-success/20",
-      cancelled: "bg-destructive/10 text-destructive border-destructive/20",
-      overdue: "bg-orange-500/10 text-orange-600 border-orange-500/20",
-    }
-    return (
-      <Badge variant="outline" className={styles[status]}>
-        {status}
-      </Badge>
-    )
-  }
-
-  const handlePrintInvoice = (invoice: Invoice) => {
-    setPrintingInvoice(invoice)
-    setTimeout(() => {
-      window.print()
-    }, 500)
-  }
-
-  useEffect(() => {
-    const handleAfterPrint = () => setPrintingInvoice(null)
-    window.addEventListener('afterprint', handleAfterPrint)
-    return () => window.removeEventListener('afterprint', handleAfterPrint)
-  }, [])
-
-  const filteredInvoices = invoices.filter((invoice) => {
-    if (!invoice) return false;
-    const matchesSearch =
-      (invoice.invoiceNumber || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (invoice.customerName || "").toLowerCase().includes(searchQuery.toLowerCase())
-
-    const matchesStatus = statusFilter === "all" || invoice.status === statusFilter
-
+  const filteredInvoices = invoices.filter(inv => {
+    const matchesSearch = inv.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          inv.customerName.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesStatus = statusFilter === "all" || inv.status === statusFilter
     return matchesSearch && matchesStatus
   })
 
-  const stats = {
-    total: invoices.length,
-    pending: invoices.filter((i) => i.status === "pending").length,
-    paid: invoices.filter((i) => i.status === "paid").length,
-    totalRevenue: invoices
-      .filter((i) => i.status === "paid")
-      .reduce((sum, i) => sum + i.totalAmount, 0),
+  const totalRevenue = invoices.filter(i => i.status === "paid").reduce((acc, curr) => acc + curr.amount, 0)
+  const pendingAmount = invoices.filter(i => i.status === "pending").reduce((acc, curr) => acc + curr.amount, 0)
+
+  const handlePrint = () => {
+    window.print()
   }
 
-  const tripTypeLabels: Record<string, string> = {
-    airport_pickup: "Airport Pickup",
-    airport_drop: "Airport Drop",
-    rental: "Rental",
-    city_ride: "City Ride",
-    outstation: "Outstation",
+  const handleMarkAsPaid = () => {
+    if (viewingInvoice) {
+      updateBooking(viewingInvoice.bookingId, { paymentStatus: "paid" })
+      toast.success(`Invoice ${viewingInvoice.id} marked as paid successfully!`)
+      setViewingInvoice(null)
+    }
+  }
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'paid':
+      case 'completed':
+        return <Badge className="bg-green-100 text-green-700 border-green-200">Paid</Badge>
+      case 'pending':
+        return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200">Pending</Badge>
+      case 'overdue':
+        return <Badge className="bg-red-100 text-red-700 border-red-200">Overdue</Badge>
+      default:
+        return <Badge variant="outline" className="capitalize">{status}</Badge>
+    }
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 print:hidden">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Invoices</h1>
-          <p className="text-muted-foreground">Generate and manage invoices for completed bookings</p>
+          <h1 className="text-2xl font-bold tracking-tight">Invoices & Billing</h1>
+          <p className="text-muted-foreground">Manage payments and view auto-generated invoices for closed trips.</p>
         </div>
-        <div className="flex gap-2">
-          <Link href="/bookings">
-            <Button variant="outline">
-              <CalendarCheck className="mr-2 h-4 w-4" />
-              View Bookings
-            </Button>
-          </Link>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Invoice
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Create New Invoice</DialogTitle>
-                <DialogDescription>Generate an invoice from a completed booking</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <Field>
-                  <FieldLabel>Select Booking</FieldLabel>
-                  <Select
-                    value={formData.bookingId}
-                    onValueChange={(value) => {
-                      const booking = getBooking(value)
-                      if (booking) {
-                        setFormData({
-                          ...formData,
-                          bookingId: value,
-                          clientType: booking.b2bClientId ? "b2b" : "b2c",
-                          b2bClientId: booking.b2bClientId || "",
-                        })
-                      }
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a completed booking" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {completedBookings.length === 0 ? (
-                        <SelectItem value="no-bookings" disabled>
-                          No completed bookings available
-                        </SelectItem>
-                      ) : (
-                        completedBookings.map((booking) => (
-                          <SelectItem key={booking.id} value={booking.id}>
-                            {booking.bookingNumber} - {booking.customerName} - Rs.{" "}
-                            {booking.grandTotal.toFixed(0)}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                </Field>
-
-                {formData.bookingId && (
-                  <>
-                    {(() => {
-                      const booking = getBooking(formData.bookingId)
-                      if (!booking) return null
-
-                      return (
-                        <Card className="bg-muted/50">
-                          <CardContent className="pt-4">
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                              <div>
-                                <p className="text-muted-foreground">Trip Type</p>
-                                <p className="font-medium">{tripTypeLabels[booking.tripType]}</p>
-                              </div>
-                              <div>
-                                <p className="text-muted-foreground">Date</p>
-                                <p className="font-medium">{booking.pickupDate}</p>
-                              </div>
-                              <div>
-                                <p className="text-muted-foreground">From</p>
-                                <p className="font-medium">{booking.pickupLocation}</p>
-                              </div>
-                              <div>
-                                <p className="text-muted-foreground">To</p>
-                                <p className="font-medium">{booking.dropLocation}</p>
-                              </div>
-                              <div>
-                                <p className="text-muted-foreground">Total Fare</p>
-                                <p className="font-semibold">Rs. {booking.totalFare.toFixed(2)}</p>
-                              </div>
-                              <div>
-                                <p className="text-muted-foreground">Grand Total</p>
-                                <p className="font-bold text-lg">Rs. {booking.grandTotal.toFixed(2)}</p>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )
-                    })()}
-
-                    <Tabs
-                      value={formData.clientType}
-                      onValueChange={(v) =>
-                        setFormData({ ...formData, clientType: v as "b2c" | "b2b", b2bClientId: "" })
-                      }
-                    >
-                      <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="b2c" className="flex items-center gap-2">
-                          <User className="h-4 w-4" />
-                          Individual (B2C)
-                        </TabsTrigger>
-                        <TabsTrigger value="b2b" className="flex items-center gap-2">
-                          <Building2 className="h-4 w-4" />
-                          Business (B2B)
-                        </TabsTrigger>
-                      </TabsList>
-
-                      <TabsContent value="b2b" className="mt-4">
-                        <Field>
-                          <FieldLabel>B2B Client</FieldLabel>
-                          <Select
-                            value={formData.b2bClientId}
-                            onValueChange={(value) => setFormData({ ...formData, b2bClientId: value })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select B2B client" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {activeB2BClients.length === 0 ? (
-                                <SelectItem value="no-clients" disabled>
-                                  No active B2B clients
-                                </SelectItem>
-                              ) : (
-                                activeB2BClients.map((client) => (
-                                  <SelectItem key={client.id} value={client.id}>
-                                    {client.companyName} ({client.gstNumber})
-                                  </SelectItem>
-                                ))
-                              )}
-                            </SelectContent>
-                          </Select>
-                          {formData.b2bClientId && (
-                            <p className="text-sm text-muted-foreground mt-1">
-                              GST and billing details will be auto-filled from client profile
-                            </p>
-                          )}
-                        </Field>
-                      </TabsContent>
-
-                      <TabsContent value="b2c" className="mt-4">
-                        <p className="text-sm text-muted-foreground">
-                          Customer details will be taken from the booking information.
-                        </p>
-                      </TabsContent>
-                    </Tabs>
-                  </>
-                )}
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleCreate}>Create Invoice</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
+        <Button onClick={() => toast.info("Manual generation coming soon!")}>
+          <FileText className="mr-2 h-4 w-4" />
+          Generate Manual Invoice
+        </Button>
       </div>
 
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
+      {/* Overview Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Invoices</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
+          <CardContent className="pt-6 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Total Revenue (Paid)</p>
+              <h2 className="text-3xl font-bold text-green-600">₹{totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h2>
+            </div>
+            <div className="h-12 w-12 bg-green-100 rounded-full flex items-center justify-center">
+              <CheckCircle className="h-6 w-6 text-green-600" />
+            </div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
-            <Receipt className="h-4 w-4 text-warning" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-warning">{stats.pending}</div>
+          <CardContent className="pt-6 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Pending Payments</p>
+              <h2 className="text-3xl font-bold text-yellow-600">₹{pendingAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h2>
+            </div>
+            <div className="h-12 w-12 bg-yellow-100 rounded-full flex items-center justify-center">
+              <Clock className="h-6 w-6 text-yellow-600" />
+            </div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Paid</CardTitle>
-            <Receipt className="h-4 w-4 text-success" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-success">{stats.paid}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <Receipt className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">Rs. {stats.totalRevenue.toLocaleString()}</div>
+          <CardContent className="pt-6 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Total Invoices</p>
+              <h2 className="text-3xl font-bold text-blue-600">{invoices.length}</h2>
+            </div>
+            <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center">
+              <FileText className="h-6 w-6 text-blue-600" />
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Invoices Table */}
+      {/* Table Section */}
       <Card>
         <CardHeader>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col sm:flex-row justify-between gap-4">
             <div>
-              <CardTitle>All Invoices</CardTitle>
-              <CardDescription>{filteredInvoices.length} invoices found</CardDescription>
+              <CardTitle>Invoice List</CardTitle>
+              <CardDescription>Review all billing transactions.</CardDescription>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="flex gap-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search invoices..."
+                  placeholder="Search invoice or client..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 w-64"
+                  className="pl-9 w-[250px]"
                 />
               </div>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-36">
-                  <SelectValue placeholder="Filter status" />
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="paid">Paid</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="overdue">Overdue</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          {filteredInvoices.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No invoices found</p>
-              <p className="text-sm">Create your first invoice from a completed booking</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Invoice #</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Customer / Client</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredInvoices.length === 0 ? (
                 <TableRow>
-                  <TableHead>Invoice Info</TableHead>
-                  <TableHead>Billed To</TableHead>
-                  <TableHead>Booking Ref</TableHead>
-                  <TableHead>Amount Details</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    No invoices found. Close a trip to generate one automatically.
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredInvoices.map((invoice) => {
-                  const booking = getBooking(invoice.bookingId)
-
-                  return (
-                    <TableRow key={invoice.id}>
-                      <TableCell className="align-top">
-                        <div className="flex flex-col">
-                          <span className="font-mono font-semibold text-sm">{invoice.invoiceNumber}</span>
-                          <span className="text-[11px] text-muted-foreground mt-0.5">
-                            {new Date(invoice.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          </span>
-                          <div className="mt-1.5">
-                            <Badge variant={invoice.clientType === "b2b" ? "default" : "secondary"} className="text-[10px] px-1.5 py-0 h-4">
-                              {String(invoice.clientType || "b2c").toUpperCase()}
-                            </Badge>
-                          </div>
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell className="align-top">
-                        <div className="flex items-start gap-2">
-                          <div className="mt-0.5">
-                            {invoice.clientType === "b2b" ? (
-                              <Building2 className="h-4 w-4 text-primary" />
-                            ) : (
-                              <User className="h-4 w-4 text-muted-foreground" />
-                            )}
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="font-medium text-sm">{invoice.customerName}</span>
-                            {invoice.customerPhone && (
-                              <span className="text-[11px] text-muted-foreground mt-0.5">{invoice.customerPhone}</span>
-                            )}
-                            {invoice.customerEmail && (
-                              <span className="text-[11px] text-muted-foreground mt-0.5">{invoice.customerEmail}</span>
-                            )}
-                            {invoice.customerGst && (
-                        <span className="text-[11px] font-medium text-slate-600 mt-1 bg-slate-100 px-2 py-0.5 rounded w-fit">
-                                GST: {invoice.customerGst}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell className="align-top">
-                        {booking ? (
-                          <div className="flex flex-col">
-                            <span className="font-mono text-sm">{booking.bookingNumber}</span>
-                            <span className="text-[11px] text-muted-foreground mt-0.5">
-                              {tripTypeLabels[booking.tripType]}
-                            </span>
-                            <span className="text-[11px] text-muted-foreground mt-0.5">
-                              {new Date(booking.pickupDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">-</span>
-                        )}
-                      </TableCell>
-                      
-                      <TableCell className="align-top">
-                        <div className="flex flex-col gap-1 w-36">
-                          <div className="flex justify-between text-[11px] text-muted-foreground">
-                            <span>Subtotal:</span>
-                            <span>₹ {invoice.subtotal.toFixed(2)}</span>
-                          </div>
-                          {invoice.gstAmount > 0 ? (
-                            <div className="flex justify-between text-[11px] text-muted-foreground">
-                              <span>GST ({invoice.gstRate}%):</span>
-                              <span>₹ {invoice.gstAmount.toFixed(2)}</span>
-                            </div>
-                          ) : (
-                            <div className="flex justify-between text-[11px] text-muted-foreground">
-                              <span>GST (0%):</span>
-                              <span>₹ 0.00</span>
-                            </div>
-                          )}
-                          <div className="flex justify-between text-sm font-semibold pt-1.5 border-t">
-                            <span>Total:</span>
-                            <span>₹ {invoice.totalAmount.toFixed(2)}</span>
-                          </div>
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell className="align-top">
-                        <div className="flex flex-col gap-1.5 items-start">
-                          {getStatusBadge(invoice.status)}
-                          {invoice.status === 'pending' && (
-                            <span className="text-[10px] text-muted-foreground font-medium flex items-center gap-1 mt-1">
-                              <CalendarCheck className="h-3 w-3" /> Due {new Date(invoice.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell className="text-right align-top">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => setViewInvoice(invoice)}>
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          {invoice.status === "pending" && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleStatusChange(invoice.id, "paid")}
-                            >
-                              Mark Paid
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          )}
+              ) : (
+                filteredInvoices.map((inv) => (
+                  <TableRow key={inv.id}>
+                    <TableCell className="font-medium text-primary">{inv.id}</TableCell>
+                    <TableCell>{inv.date}</TableCell>
+                    <TableCell className="font-medium">{inv.customerName}</TableCell>
+                    <TableCell><Badge variant="secondary" className="font-normal text-xs">{inv.type}</Badge></TableCell>
+                    <TableCell className="font-semibold">₹{inv.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                    <TableCell>{getStatusBadge(inv.status)}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" onClick={() => setViewingInvoice(inv)}>
+                        <FileText className="mr-1 h-4 w-4 text-muted-foreground" /> View
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
-      {/* View Invoice Dialog */}
-      <Dialog open={!!viewInvoice} onOpenChange={() => setViewInvoice(null)}>
-        <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-slate-100">
-          <DialogHeader className="flex-shrink-0 px-6 py-4 bg-white border-b">
+      {/* Invoice Details / Print Dialog */}
+      <Dialog open={!!viewingInvoice} onOpenChange={(open) => !open && setViewingInvoice(null)}>
+        <DialogContent className="max-w-3xl flex flex-col max-h-[90vh]">
+          <DialogHeader className="flex-shrink-0">
             <div className="flex items-center justify-between">
               <div>
-                <DialogTitle>Invoice Preview</DialogTitle>
-                <DialogDescription>
-                  Tax invoice for {viewInvoice?.invoiceNumber}
-                </DialogDescription>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => {
-                  if (viewInvoice) handlePrintInvoice(viewInvoice)
-                }}>
-                  <Printer className="mr-2 h-4 w-4" />
-                  Print Invoice
-                </Button>
+                <DialogTitle>Invoice Details</DialogTitle>
+                <DialogDescription>Reference Booking: {viewingInvoice?.bookingNumber}</DialogDescription>
               </div>
             </div>
           </DialogHeader>
-          
-          <ScrollArea className="flex-grow p-6">
-            {viewInvoice && (() => {
-              const booking = getBooking(viewInvoice.bookingId)
-              const driver = booking?.driverId ? getDriver(booking.driverId) : undefined
-              const car = booking?.carId ? getCar(booking.carId) : undefined
-              
-              return (
-                <div className="flex justify-center pb-8">
-                  <div className="shadow-lg rounded-xl overflow-hidden bg-white print:shadow-none print:rounded-none">
-                    <PrintableInvoice 
-                      invoice={viewInvoice}
-                      booking={booking}
-                      driver={driver}
-                      car={car}
-                      gstConfig={gstConfig}
-                    />
+
+          <div className="flex-1 overflow-y-auto pr-2 pb-4">
+            {viewingInvoice && (
+              <div className="bg-white p-8 border rounded-lg shadow-sm text-sm print-area text-slate-800" id="invoice-print-area">
+                <div className="flex justify-between items-start border-b pb-6 mb-6">
+                  <div>
+                    <h2 className="text-3xl font-bold text-slate-900 tracking-tight">INVOICE</h2>
+                    <p className="text-slate-500 mt-1 font-medium">{viewingInvoice.id}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-xl text-primary mb-1">Trevis Cabs</p>
+                    <p className="text-slate-500">123 Corporate Park, Andheri East</p>
+                    <p className="text-slate-500">Mumbai, Maharashtra 400069</p>
+                    <p className="text-slate-500 mt-1">GSTIN: <span className="font-medium text-slate-700">27AAAAA0000A1Z5</span></p>
                   </div>
                 </div>
-              )
-            })()}
-          </ScrollArea>
+
+                <div className="flex justify-between mb-8 bg-slate-50 p-4 rounded-lg">
+                  <div className="flex-1">
+                    <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Billed To</p>
+                    <p className="font-bold text-lg text-slate-800">{viewingInvoice.customerName}</p>
+                    <p className="text-slate-600 mt-1 whitespace-pre-wrap">{viewingInvoice.customerAddress}</p>
+                  </div>
+                  <div className="text-right flex-1 border-l pl-4 ml-4">
+                    <div className="space-y-2">
+                      <p className="flex justify-between"><span className="text-slate-500">Invoice Date:</span> <span className="font-semibold">{viewingInvoice.date}</span></p>
+                      <p className="flex justify-between"><span className="text-slate-500">Due Date:</span> <span className="font-semibold">{viewingInvoice.dueDate}</span></p>
+                      <p className="flex justify-between items-center"><span className="text-slate-500">Status:</span> {getStatusBadge(viewingInvoice.status)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <Table className="mb-8 border">
+                  <TableHeader>
+                    <TableRow className="bg-slate-100 hover:bg-slate-100">
+                      <TableHead className="font-bold text-slate-700">Description</TableHead>
+                      <TableHead className="text-right font-bold text-slate-700">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell className="py-4">
+                        <p className="font-semibold text-slate-800">Transport / Cab Service</p>
+                        <p className="text-xs text-slate-500 mt-1">Booking Ref: {viewingInvoice.bookingNumber} ({viewingInvoice.type})</p>
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-slate-800 py-4">
+                        ₹{viewingInvoice.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+
+                <div className="flex justify-end">
+                  <div className="w-72 space-y-3 bg-slate-50 p-4 rounded-lg">
+                    <div className="flex justify-between text-slate-600">
+                      <span>Subtotal</span>
+                      <span className="font-medium">₹{viewingInvoice.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>GST (Taxes)</span>
+                      <span className="font-medium">₹{viewingInvoice.gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-slate-200 pt-3 font-bold text-xl text-slate-900">
+                      <span>Total</span>
+                      <span>₹{viewingInvoice.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-12 pt-6 border-t text-center text-slate-500 text-xs">
+                  <p>Thank you for doing business with Trevis Cabs.</p>
+                  <p>For any queries regarding this invoice, please contact support@trevis.com</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex-shrink-0 pt-4 border-t">
+            <Button variant="outline" onClick={() => setViewingInvoice(null)}>Close</Button>
+
+            {/* Only show Mark as Paid if it's currently pending */}
+            {viewingInvoice?.status === "pending" && (
+              <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleMarkAsPaid}>
+                <CheckCircle className="mr-2 h-4 w-4" />
+                Mark as Paid
+              </Button>
+            )}
+
+            {/* In a real app we'd use a dedicated printing library or iframe. Here we just trigger window.print */}
+            <Button onClick={() => {
+              // Quick trick to print only the invoice area
+              const printContent = document.getElementById('invoice-print-area');
+              if(printContent) {
+                document.body.innerHTML = printContent.innerHTML;
+                window.print();
+                window.location.reload(); // reload to restore React state cleanly
+              }
+            }}>
+              <Printer className="mr-2 h-4 w-4" />
+              Print Invoice
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Hidden Print Area */}
-      {printingInvoice && (() => {
-        const booking = getBooking(printingInvoice.bookingId)
-        const driver = booking?.driverId ? getDriver(booking.driverId) : undefined
-        const car = booking?.carId ? getCar(booking.carId) : undefined
-        
-        return (
-          <div className="fixed top-0 left-[200vw] print:left-0 print:inset-0 print:bg-white print:z-[9999] print:m-0 print:p-0">
-            <PrintableInvoice 
-              invoice={printingInvoice}
-              booking={booking}
-              driver={driver}
-              car={car}
-              gstConfig={gstConfig}
-            />
-          </div>
-        );
-      })()}
     </div>
   )
 }
