@@ -146,6 +146,7 @@ export interface Driver {
   status: 'active' | 'inactive' | 'suspended'
   assignedCarId?: string
   hubId?: string
+  rating?: number
   createdAt: string
   joiningDate?: string
   monthlySalary?: number
