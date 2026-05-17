@@ -223,6 +223,7 @@ export function AppSidebar() {
           { title: 'GST Configuration', href: '/gst-config' },
           { title: 'Communication Templates', href: '/communication-templates' },
           { title: 'Cancellation Policy', href: '/cancellation-policy' },
+          { title: 'Cancellation Reasons', href: '/cancellation-reasons' },
           { title: 'Booking Tags', href: '/booking-tags' },
         ],
       },

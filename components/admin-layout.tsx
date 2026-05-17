@@ -19,6 +19,7 @@ const pathTitles: Record<string, string> = {
   'duty-slips': 'Duty Slips',
   'invoices': 'Invoices',
   'gst-config': 'GST Configuration',
+  'cancellation-reasons': 'Cancellation Reasons',
   'driver-payouts': 'Driver Settlements',
 }
 

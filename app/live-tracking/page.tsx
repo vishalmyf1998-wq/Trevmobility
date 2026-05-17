@@ -35,7 +35,7 @@ const MapComponent = dynamic(() => import('@/components/tracking-map'), {
         <p className="text-muted-foreground">Loading map...</p>
       </div>
     </div>
-  ),
+  )
 })
 
 const activeStatuses = ['dispatched', 'arrived', 'picked_up', 'dropped'] as const
@@ -60,6 +60,15 @@ export default function LiveTrackingPage() {
   const [historyFrom, setHistoryFrom] = useState('')
   const [historyTo, setHistoryTo] = useState('')
   const [carPathsRaw, setCarPathsRaw] = useState<Record<string, {lat: number, lng: number, timestamp: string}[]>>({})
+
+  // Read status from URL if coming from dashboard
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const statusParam = params.get('status')
+      if (statusParam) setStatusFilter(statusParam)
+    }
+  }, [])
 
   // Get base trips (include closed/past ones if history filter is applied)
   const baseTrips = useMemo(() => {
@@ -218,7 +227,7 @@ export default function LiveTrackingPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Live Trip Tracking</h1>
           <p className="text-muted-foreground">Monitor active trips and car locations in real-time</p>
@@ -243,7 +252,7 @@ export default function LiveTrackingPage() {
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-5">
-        <Card>
+        <Card className={`cursor-pointer transition-colors hover:bg-muted/50 ${statusFilter === 'all' ? 'ring-2 ring-primary' : ''}`} onClick={() => setStatusFilter('all')}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active Trips</CardTitle>
             <Car className="h-4 w-4 text-muted-foreground" />
@@ -253,7 +262,7 @@ export default function LiveTrackingPage() {
             <p className="text-xs text-muted-foreground">Currently in progress</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={`cursor-pointer transition-colors hover:bg-muted/50 ${statusFilter === 'dispatched' ? 'ring-2 ring-blue-500' : ''}`} onClick={() => setStatusFilter('dispatched')}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Dispatched</CardTitle>
             <Navigation className="h-4 w-4 text-blue-500" />
@@ -262,7 +271,7 @@ export default function LiveTrackingPage() {
             <div className="text-2xl font-bold">{bookings.filter(t => t.status === 'dispatched').length}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={`cursor-pointer transition-colors hover:bg-muted/50 ${statusFilter === 'picked_up' ? 'ring-2 ring-green-500' : ''}`} onClick={() => setStatusFilter('picked_up')}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">En Route</CardTitle>
             <MapPin className="h-4 w-4 text-green-500" />
@@ -271,7 +280,7 @@ export default function LiveTrackingPage() {
             <div className="text-2xl font-bold">{bookings.filter(t => t.status === 'picked_up').length}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={`cursor-pointer transition-colors hover:bg-muted/50 ${statusFilter === 'arrived' ? 'ring-2 ring-yellow-500' : ''}`} onClick={() => setStatusFilter('arrived')}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Arrived</CardTitle>
             <Clock className="h-4 w-4 text-yellow-500" />
@@ -280,7 +289,7 @@ export default function LiveTrackingPage() {
             <div className="text-2xl font-bold">{bookings.filter(t => t.status === 'arrived').length}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={`cursor-pointer transition-colors hover:bg-muted/50 ${statusFilter === 'available' ? 'ring-2 ring-slate-400' : ''}`} onClick={() => setStatusFilter('available')}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Idle / Available</CardTitle>
             <Car className="h-4 w-4 text-slate-400" />
