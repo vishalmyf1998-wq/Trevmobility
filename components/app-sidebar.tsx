@@ -33,6 +33,7 @@ import {
   UserCircle,
   Headset,
   Bell,
+  Activity,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -108,7 +109,13 @@ export function AppSidebar() {
       icon: LayoutDashboard,
       href: isEmployee ? '/employee/dashboard' : isCorpAdmin ? '/corporate-admin/dashboard' : '/trev-admin/dashboard',
     },
-
+    ...(isTrevAdmin ? [
+      {
+        title: 'Active Rides',
+        icon: Activity,
+        href: '/active-ride-dashboard',
+      },
+    ] : []),
     ...(isTrevAdmin ? [
       {
         title: 'Fleet Management',
