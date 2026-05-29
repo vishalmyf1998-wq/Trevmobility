@@ -125,6 +125,7 @@ export function AppSidebar() {
           { title: 'Cars', href: '/cars' },
           { title: 'Driver-Car Mapping', href: '/driver-car-mapping' },
           { title: 'Driver Shifts / Roster', href: '/driver-shifts' },
+          { title: 'Auto Slot Configuration', href: '/auto-slot-configuration' },
           { title: 'Car Categories', href: '/car-categories' },
           { title: 'Hubs', href: '/hubs' },
           { title: 'Live Tracking', href: '/live-tracking' },
@@ -242,26 +243,30 @@ export function AppSidebar() {
     <>
       <style dangerouslySetInnerHTML={{ __html: `
         :root, .dark {
-          --sidebar-background: 0 0% 0% !important;
-          --sidebar-foreground: ${colorHsl} !important;
-          --sidebar-primary: ${colorHsl} !important;
-          --sidebar-primary-foreground: 0 0% 0% !important;
-          --sidebar-accent: 0 0% 15% !important;
-          --sidebar-accent-foreground: ${colorHsl} !important;
-          --sidebar-border: 0 0% 20% !important;
-          --sidebar-ring: ${colorHsl} !important;
+          --sidebar-background: 0 0% 100% !important;
+          --sidebar-foreground: 222 47% 11% !important;
+          --sidebar-primary: 243 75% 59% !important;
+          --sidebar-primary-foreground: 0 0% 100% !important;
+          --sidebar-accent: 210 40% 96% !important;
+          --sidebar-accent-foreground: 222 47% 11% !important;
+          --sidebar-border: 214 32% 91% !important;
+          --sidebar-ring: 243 75% 59% !important;
         }
 
         /* Force Background directly if variables fail */
         [data-sidebar="sidebar"],
         [data-sidebar="sidebar"] > div {
-          background-color: #000000 !important;
-          color: ${sidebarConfig.color} !important;
+          background-color: rgba(255, 255, 255, 0.4) !important;
+          backdrop-filter: blur(24px) !important;
+          -webkit-backdrop-filter: blur(24px) !important;
+          border-right: 1px solid rgba(255, 255, 255, 0.6) !important;
+          color: #0f172a !important;
         }
 
         [data-sidebar="menu-button"][data-active="true"] {
-          background-color: ${sidebarConfig.color} !important;
-          color: #000000 !important;
+          background-color: rgba(99, 102, 241, 0.1) !important;
+          color: #4f46e5 !important;
+          font-weight: bold;
         }
 
         @keyframes notification-pulse {

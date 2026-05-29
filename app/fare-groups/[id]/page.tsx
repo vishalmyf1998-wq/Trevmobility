@@ -1865,15 +1865,17 @@ function FareConfigDialog({
                   </Field>
                 </FieldGroup>
 
-                <FieldGroup className="grid grid-cols-2 gap-4">
-                  <Field>
-                    <FieldLabel>Extra KM Rate (Rs.)</FieldLabel>
-                    <Input
-                      type="number"
-                      value={rentalForm.extraKmRate}
-                      onChange={(e) => setRentalForm(f => ({ ...f, extraKmRate: parseFloat(e.target.value) }))}
-                    />
-                  </Field>
+                <FieldGroup className={rentalForm.rentalType === 'with_capping' ? "grid grid-cols-2 gap-4" : "grid grid-cols-1 gap-4"}>
+                  {rentalForm.rentalType === 'with_capping' && (
+                    <Field>
+                      <FieldLabel>Extra KM Rate (Rs.)</FieldLabel>
+                      <Input
+                        type="number"
+                        value={rentalForm.extraKmRate}
+                        onChange={(e) => setRentalForm(f => ({ ...f, extraKmRate: parseFloat(e.target.value) }))}
+                      />
+                    </Field>
+                  )}
                   <Field>
                     <FieldLabel>Extra Hour Rate (Rs.)</FieldLabel>
                     <Input
@@ -1883,18 +1885,6 @@ function FareConfigDialog({
                     />
                   </Field>
                 </FieldGroup>
-
-                {rentalForm.rentalType === 'with_capping' && (
-                  <Field>
-                    <FieldLabel>KM Capping</FieldLabel>
-                    <Input
-                      type="number"
-                      value={rentalForm.kmCapping}
-                      onChange={(e) => setRentalForm(f => ({ ...f, kmCapping: parseInt(e.target.value) }))}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">Maximum KM allowed in the rental package</p>
-                  </Field>
-                )}
 
                 {renderPreBookingCharges(rentalForm.preBookingCharges!, (charges) => setRentalForm(f => ({ ...f, preBookingCharges: charges })))}
                 {renderPeakHourConfig(rentalForm.peakHour!, (config) => setRentalForm(f => ({ ...f, peakHour: config })))}
@@ -1915,23 +1905,11 @@ function FareConfigDialog({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="fixed">Fixed Fare</SelectItem>
                       <SelectItem value="per_km">Per KM</SelectItem>
                       <SelectItem value="slab">Slab-wise</SelectItem>
                     </SelectContent>
                   </Select>
                 </Field>
-
-                {cityForm.calculationType === 'fixed' && (
-                  <Field>
-                    <FieldLabel>Fixed Fare (Rs.)</FieldLabel>
-                    <Input
-                      type="number"
-                      value={cityForm.fixedFare}
-                      onChange={(e) => setCityForm(f => ({ ...f, fixedFare: parseFloat(e.target.value) }))}
-                    />
-                  </Field>
-                )}
 
                 {cityForm.calculationType === 'per_km' && (
                   <FieldGroup className="grid grid-cols-3 gap-4">
@@ -2050,7 +2028,7 @@ function FareConfigDialog({
                   </div>
                 )}
 
-                <FieldGroup className="grid grid-cols-3 gap-4">
+                <FieldGroup className={outstationForm.outstationType === 'one_way' ? "grid grid-cols-1 gap-4" : "grid grid-cols-2 gap-4"}>
                   <Field>
                     <FieldLabel>Driver Allowance/Day (Rs.)</FieldLabel>
                     <Input
@@ -2059,22 +2037,16 @@ function FareConfigDialog({
                       onChange={(e) => setOutstationForm(f => ({ ...f, driverAllowancePerDay: parseFloat(e.target.value) }))}
                     />
                   </Field>
-                  <Field>
-                    <FieldLabel>Night Halt Charge (Rs.)</FieldLabel>
-                    <Input
-                      type="number"
-                      value={outstationForm.nightHaltCharge}
-                      onChange={(e) => setOutstationForm(f => ({ ...f, nightHaltCharge: parseFloat(e.target.value) }))}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Min KM/Day</FieldLabel>
-                    <Input
-                      type="number"
-                      value={outstationForm.minimumKmPerDay}
-                      onChange={(e) => setOutstationForm(f => ({ ...f, minimumKmPerDay: parseInt(e.target.value) }))}
-                    />
-                  </Field>
+                  {outstationForm.outstationType !== 'one_way' && (
+                    <Field>
+                      <FieldLabel>Min KM/Day</FieldLabel>
+                      <Input
+                        type="number"
+                        value={outstationForm.minimumKmPerDay}
+                        onChange={(e) => setOutstationForm(f => ({ ...f, minimumKmPerDay: parseInt(e.target.value) }))}
+                      />
+                    </Field>
+                  )}
                 </FieldGroup>
 
                 <FieldGroup className="grid grid-cols-2 gap-4">

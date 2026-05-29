@@ -1473,6 +1473,15 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
   }, []);
 
   const updateBooking = useCallback(async (id: string, updates: Partial<Booking>) => {
+    // Check if ID is a valid UUID (Supabase requires UUIDs for the id column)
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+    
+    if (!isUuid || id.includes('demo-')) {
+        // Skip Supabase update for local mock data or invalid UUIDs
+        setBookings(prev => prev.map(b => b.id === id ? { ...b, ...updates } as Booking : b));
+        return;
+    }
+
     const isB2BUser = userType === 'corporate-admin' || userType === 'corporate-employee';
     const originalBooking = bookings.find(b => b.id === id);
 

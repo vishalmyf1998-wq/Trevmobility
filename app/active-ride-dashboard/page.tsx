@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, RefreshCw, Search, Zap, Leaf, Clock, Phone, ChevronDown, BatteryCharging, ChevronUp, AlertCircle, AlertTriangle, PhoneCall, ShieldAlert, History, Map, ClipboardList, Banknote, Download, FileText, Edit3, XCircle, CheckCircle, Gauge, User, Navigation, Headset, Car, Wallet, Copy, MessageCircle } from 'lucide-react';
+import { MapPin, RefreshCw, Zap, Leaf, Clock, Phone, ChevronDown, BatteryCharging, ChevronUp, AlertCircle, AlertTriangle, PhoneCall, ShieldAlert, History, Map, ClipboardList, Banknote, Download, FileText, Edit3, XCircle, CheckCircle, Gauge, User, Headset, Car, Wallet, Copy, MessageCircle } from 'lucide-react';
 import { useAdmin } from "@/lib/admin-context";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -61,6 +61,42 @@ function getEstimatedPickupPoint(ride: any) {
   };
 }
 
+function getEstimatedDropPoint(ride: any) {
+  const booking = ride.originalBooking || ride;
+  if (booking.dropLatitude && booking.dropLongitude) {
+    return { latitude: booking.dropLatitude, longitude: booking.dropLongitude };
+  }
+  const seed = `${booking.id || ""}${booking.dropLocation || "drop"}`;
+  return {
+    latitude: 19.076 + hashToOffset(seed, 0.15),
+    longitude: 72.8777 + hashToOffset(seed.split("").reverse().join(""), 0.15),
+  };
+}
+
+function getEstimatedStopPoints(ride: any) {
+  const booking = ride.originalBooking || ride;
+  const stops = Array.isArray(booking.stops) ? booking.stops : [];
+
+  return stops.map((stop: any, index: number) => {
+    if (stop.latitude && stop.longitude) {
+      return {
+        latitude: stop.latitude,
+        longitude: stop.longitude,
+        label: stop.location || stop.address || `Stop ${index + 1}`,
+        status: stop.status,
+      };
+    }
+
+    const seed = `${booking.id || ""}${stop.id || index}${stop.location || stop.address || "stop"}`;
+    return {
+      latitude: 19.076 + hashToOffset(seed, 0.12),
+      longitude: 72.8777 + hashToOffset(seed.split("").reverse().join(""), 0.12),
+      label: stop.location || stop.address || `Stop ${index + 1}`,
+      status: stop.status,
+    };
+  });
+}
+
 const DriverSearchDropdown = ({ ride }: { ride: any }) => {
     const { drivers, cars, carLocations, updateBooking } = useAdmin();
     const [search, setSearch] = useState("");
@@ -96,13 +132,13 @@ const DriverSearchDropdown = ({ ride }: { ride: any }) => {
             <Input placeholder="Search driver..." value={search} onChange={(e) => setSearch(e.target.value)} className="h-8 text-xs" />
             <ScrollArea className="h-[200px]">
                 {availableDrivers.map((d: any) => (
-                    <div key={d.id} className="flex items-center justify-between gap-3 p-2 hover:bg-slate-50 cursor-pointer rounded-md border-b border-slate-100 last:border-0" onClick={() => { updateBooking(ride.originalBooking.id, { driverId: d.id, carId: d.assignedCarId || d.car?.id || ride.originalBooking.carId }); toast.success("Driver assigned!"); }}>
+                    <div key={d.id} className="flex items-center justify-between gap-3 p-2 hover:bg-slate-50 cursor-pointer rounded-md border-b border-slate-100 last:border-0" onClick={() => { updateBooking(ride.originalBooking.id, { driverId: d.id, carId: d.assignedCarId || d.car?.id || ride.originalBooking.carId, status: 'assigned' }); toast.success("Driver assigned!"); }}>
                         <div>
                             <div className="flex items-center gap-1.5">
                               <p className="text-xs font-bold text-slate-800">{d.name}</p>
                               {d.suggestion.eta <= 12 && <Badge className="h-4 bg-green-100 text-green-700 border-none px-1.5 text-[9px]">Best</Badge>}
                             </div>
-                            <p className="text-[10px] text-slate-500">{d.phone}</p>
+                            <p className="text-[10px] text-slate-500">{d.phone} • {d.car ? `${d.car.category || ''} ${d.car.make || ''} ${d.car.model || ''}`.trim() : 'No Car'} • ⭐ {d.rating || '4.8'} • 08:00 - 18:00</p>
                             <p className="text-[10px] font-semibold text-blue-600">
                               {d.suggestion.distance.toFixed(1)} km • {d.suggestion.eta} min {d.suggestion.isLiveGps ? "live" : "est."}
                             </p>
@@ -117,6 +153,169 @@ const DriverSearchDropdown = ({ ride }: { ride: any }) => {
 
 function formatStatus(status: string) {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function getDelayInfo(ride: any, metrics: any) {
+  const status = ride.status || 'pending';
+  if (!ride.pickupDate || !ride.pickupTime) return null;
+
+  const pickupDateTimeMs = new Date(`${ride.pickupDate}T${ride.pickupTime}`).getTime();
+  if (isNaN(pickupDateTimeMs)) return null;
+
+  const nowMs = Date.now();
+  const minsToPickup = Math.floor((pickupDateTimeMs - nowMs) / 60000);
+  const etaMins = metrics?.eta || 0;
+
+  // 1. Delayed Drop (Ride is ongoing, taking too long)
+  if (status === 'picked_up' && nowMs > pickupDateTimeMs + 120 * 60000) {
+    return { type: 'delayed_drop', label: 'Late Drop', reason: 'Trip taking longer than expected', color: 'indigo' };
+  }
+
+  // 2. Late Pickup (Driver dispatched/arrived but missed pickup time)
+  if (['dispatched', 'arrived'].includes(status) && minsToPickup < 0) {
+    return { type: 'delayed_pickup', label: 'Late Pickup', reason: `Missed pickup by ${Math.abs(minsToPickup)}m`, color: 'red' };
+  }
+
+  // 3. Delayed Dispatch (Assigned but not dispatched, and it's getting close to pickup, e.g., < 30 mins)
+  if (status === 'assigned' && minsToPickup < 30) {
+    return { type: 'delayed_dispatch', label: 'Late Dispatch', reason: `Pickup in ${Math.max(0, minsToPickup)}m, driver inactive`, color: 'fuchsia' };
+  }
+
+  // 4. Deadrun Issue (Assigned/Dispatched, but ETA is greater than time left to pickup)
+  if (['assigned', 'dispatched'].includes(status) && etaMins > minsToPickup + 5 && minsToPickup > 0) {
+    return { type: 'too_far', label: 'Deadrun Issue', reason: `ETA ${etaMins}m > Time left ${minsToPickup}m`, color: 'amber' };
+  }
+
+  // 5. Late Assignment (Unassigned, and time to pickup is very short, e.g., < 45 mins)
+  if (!ride.driverId && ['pending', 'confirmed'].includes(status) && minsToPickup < 45) {
+    return { type: 'late_assignment', label: 'Late Assignment', reason: `Unassigned, pickup in ${Math.max(0, minsToPickup)}m`, color: 'rose' };
+  }
+
+  // Catch-all generic delay
+  if (minsToPickup < 0 && ['pending', 'confirmed', 'assigned'].includes(status)) {
+    return { type: 'delayed_general', label: 'Delayed', reason: `Running late by ${Math.abs(minsToPickup)}m`, color: 'red' };
+  }
+
+  return null;
+}
+
+// Dynamic tailwind styles for specific delay colors
+const delayStyles: Record<string, { normal: string, expanded: string, badge: string, borderNormal: string, borderExpanded: string }> = {
+  rose: {
+    normal: 'border-rose-500/40 bg-rose-50/60 backdrop-blur-2xl shadow-[0_8px_32px_-12px_rgba(244,63,94,0.2)] hover:-translate-y-0.5 hover:shadow-[0_12px_40px_-12px_rgba(244,63,94,0.3)] transition-all duration-500 ease-out z-10',
+    expanded: 'border-rose-500/70 ring-4 ring-rose-500/20 bg-rose-50/80 backdrop-blur-3xl shadow-[0_16px_60px_-16px_rgba(244,63,94,0.4)] scale-[1.01] transition-all duration-500 ease-out z-30',
+    badge: 'bg-rose-50 border-rose-200 text-rose-700',
+    borderNormal: 'border-rose-500/30 bg-rose-50/40 backdrop-blur-2xl shadow-[0_8px_32px_-12px_rgba(244,63,94,0.15)] hover:-translate-y-0.5 hover:shadow-[0_12px_40px_-12px_rgba(244,63,94,0.25)] transition-all duration-500 ease-out z-10',
+    borderExpanded: 'border-rose-500/60 ring-4 ring-rose-500/15 bg-rose-50/60 backdrop-blur-3xl shadow-[0_16px_60px_-16px_rgba(244,63,94,0.35)] scale-[1.01] transition-all duration-500 ease-out z-30'
+  },
+  amber: {
+    normal: 'border-amber-500/40 bg-amber-50/60 backdrop-blur-2xl shadow-[0_8px_32px_-12px_rgba(245,158,11,0.2)] hover:-translate-y-0.5 hover:shadow-[0_12px_40px_-12px_rgba(245,158,11,0.3)] transition-all duration-500 ease-out z-10',
+    expanded: 'border-amber-500/70 ring-4 ring-amber-500/20 bg-amber-50/80 backdrop-blur-3xl shadow-[0_16px_60px_-16px_rgba(245,158,11,0.4)] scale-[1.01] transition-all duration-500 ease-out z-30',
+    badge: 'bg-amber-50 border-amber-200 text-amber-700',
+    borderNormal: 'border-amber-500/30 bg-amber-50/40 backdrop-blur-2xl shadow-[0_8px_32px_-12px_rgba(245,158,11,0.15)] hover:-translate-y-0.5 hover:shadow-[0_12px_40px_-12px_rgba(245,158,11,0.25)] transition-all duration-500 ease-out z-10',
+    borderExpanded: 'border-amber-500/60 ring-4 ring-amber-500/15 bg-amber-50/60 backdrop-blur-3xl shadow-[0_16px_60px_-16px_rgba(245,158,11,0.35)] scale-[1.01] transition-all duration-500 ease-out z-30'
+  },
+  fuchsia: {
+    normal: 'border-fuchsia-500/40 bg-fuchsia-50/60 backdrop-blur-2xl shadow-[0_8px_32px_-12px_rgba(217,70,239,0.2)] hover:-translate-y-0.5 hover:shadow-[0_12px_40px_-12px_rgba(217,70,239,0.3)] transition-all duration-500 ease-out z-10',
+    expanded: 'border-fuchsia-500/70 ring-4 ring-fuchsia-500/20 bg-fuchsia-50/80 backdrop-blur-3xl shadow-[0_16px_60px_-16px_rgba(217,70,239,0.4)] scale-[1.01] transition-all duration-500 ease-out z-30',
+    badge: 'bg-fuchsia-50 border-fuchsia-200 text-fuchsia-700',
+    borderNormal: 'border-fuchsia-500/30 bg-fuchsia-50/40 backdrop-blur-2xl shadow-[0_8px_32px_-12px_rgba(217,70,239,0.15)] hover:-translate-y-0.5 hover:shadow-[0_12px_40px_-12px_rgba(217,70,239,0.25)] transition-all duration-500 ease-out z-10',
+    borderExpanded: 'border-fuchsia-500/60 ring-4 ring-fuchsia-500/15 bg-fuchsia-50/60 backdrop-blur-3xl shadow-[0_16px_60px_-16px_rgba(217,70,239,0.35)] scale-[1.01] transition-all duration-500 ease-out z-30'
+  },
+  red: {
+    normal: 'border-red-500/40 bg-red-50/60 backdrop-blur-2xl shadow-[0_8px_32px_-12px_rgba(239,68,68,0.2)] hover:-translate-y-0.5 hover:shadow-[0_12px_40px_-12px_rgba(239,68,68,0.3)] transition-all duration-500 ease-out z-10',
+    expanded: 'border-red-500/70 ring-4 ring-red-500/20 bg-red-50/80 backdrop-blur-3xl shadow-[0_16px_60px_-16px_rgba(239,68,68,0.4)] scale-[1.01] transition-all duration-500 ease-out z-30',
+    badge: 'bg-red-50 border-red-200 text-red-700',
+    borderNormal: 'border-red-500/30 bg-red-50/40 backdrop-blur-2xl shadow-[0_8px_32px_-12px_rgba(239,68,68,0.15)] hover:-translate-y-0.5 hover:shadow-[0_12px_40px_-12px_rgba(239,68,68,0.25)] transition-all duration-500 ease-out z-10',
+    borderExpanded: 'border-red-500/60 ring-4 ring-red-500/15 bg-red-50/60 backdrop-blur-3xl shadow-[0_16px_60px_-16px_rgba(239,68,68,0.35)] scale-[1.01] transition-all duration-500 ease-out z-30'
+  },
+  indigo: {
+    normal: 'border-indigo-500/40 bg-indigo-50/60 backdrop-blur-2xl shadow-[0_8px_32px_-12px_rgba(99,102,241,0.2)] hover:-translate-y-0.5 hover:shadow-[0_12px_40px_-12px_rgba(99,102,241,0.3)] transition-all duration-500 ease-out z-10',
+    expanded: 'border-indigo-500/70 ring-4 ring-indigo-500/20 bg-indigo-50/80 backdrop-blur-3xl shadow-[0_16px_60px_-16px_rgba(99,102,241,0.4)] scale-[1.01] transition-all duration-500 ease-out z-30',
+    badge: 'bg-indigo-50 border-indigo-200 text-indigo-700',
+    borderNormal: 'border-indigo-500/30 bg-indigo-50/40 backdrop-blur-2xl shadow-[0_8px_32px_-12px_rgba(99,102,241,0.15)] hover:-translate-y-0.5 hover:shadow-[0_12px_40px_-12px_rgba(99,102,241,0.25)] transition-all duration-500 ease-out z-10',
+    borderExpanded: 'border-indigo-500/60 ring-4 ring-indigo-500/15 bg-indigo-50/60 backdrop-blur-3xl shadow-[0_16px_60px_-16px_rgba(99,102,241,0.35)] scale-[1.01] transition-all duration-500 ease-out z-30'
+  }
+};
+
+const eventSyncStatusStyles = {
+  success: {
+    dot: 'bg-green-500',
+    badge: 'bg-green-50 text-green-700 border-green-200',
+    icon: CheckCircle,
+    label: 'Success',
+  },
+  failed: {
+    dot: 'bg-red-500',
+    badge: 'bg-red-50 text-red-700 border-red-200',
+    icon: XCircle,
+    label: 'Failed',
+  },
+  pending: {
+    dot: 'bg-amber-500',
+    badge: 'bg-amber-50 text-amber-700 border-amber-200',
+    icon: Clock,
+    label: 'Pending',
+  },
+};
+
+function getEventSyncStatus(ride: any, eventType: 'assigned' | 'dispatched' | 'arrived' | 'picked_up' | 'dropped' | 'support') {
+  const status = ride.originalBooking?.status || ride.status;
+  const hasDriver = Boolean(ride.originalBooking?.driverId);
+  const orderedStatuses = ['pending', 'confirmed', 'assigned', 'dispatched', 'arrived', 'picked_up', 'dropped', 'closed'];
+  const eventIndex = orderedStatuses.indexOf(eventType);
+  const statusIndex = orderedStatuses.indexOf(status);
+  const eventReached = eventType === 'support' || statusIndex >= eventIndex || status === 'closed';
+
+  if (eventType === 'assigned' && !hasDriver) {
+    return {
+      push: { status: 'pending' as const, message: 'Driver assignment event not pushed yet' },
+      receive: { status: 'pending' as const, message: 'Driver app acknowledgement waiting' },
+    };
+  }
+
+  if (!eventReached) {
+    return {
+      push: { status: 'pending' as const, message: 'Event waiting in queue' },
+      receive: { status: 'pending' as const, message: 'Receiver acknowledgement not due' },
+    };
+  }
+
+  if (eventType === 'arrived' && ride.delayInfo?.type === 'delayed_pickup') {
+    return {
+      push: { status: 'success' as const, message: 'Event pushed to operations bus' },
+      receive: { status: 'failed' as const, message: 'Late pickup acknowledgement breached SLA' },
+    };
+  }
+
+  return {
+    push: { status: 'success' as const, message: eventType === 'support' ? 'Ticket event pushed to support queue' : 'Event pushed to operations bus' },
+    receive: { status: 'success' as const, message: eventType === 'support' ? 'Support queue acknowledged' : 'Driver/admin app acknowledged' },
+  };
+}
+
+function EventSyncLog({ ride, eventType, compact = false }: { ride: any; eventType: 'assigned' | 'dispatched' | 'arrived' | 'picked_up' | 'dropped' | 'support'; compact?: boolean }) {
+  const sync = getEventSyncStatus(ride, eventType);
+  const rows = [
+    { label: 'P', ...sync.push },
+    { label: 'R', ...sync.receive },
+  ];
+
+  return (
+    <div className={`mt-1 flex flex-wrap ${compact ? 'gap-1' : 'gap-1.5'}`}>
+      {rows.map((row) => {
+        const style = eventSyncStatusStyles[row.status];
+        const Icon = style.icon;
+        const label = row.status === 'success' ? 'Pass' : style.label;
+        return (
+          <Badge key={row.label} variant="outline" className={`h-5 rounded-md px-1.5 py-0 text-[9px] font-bold uppercase tracking-wide ${style.badge}`}>
+            <Icon className="mr-1 h-2.5 w-2.5" />
+            {row.label}: {label}
+          </Badge>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function ActiveRideDashboard() {
@@ -138,14 +337,22 @@ export default function ActiveRideDashboard() {
 
   const [expandedRideId, setExpandedRideId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'delayed' | 'unassigned' | 'dispatched' | 'arrived' | 'pickup' | 'dropped' | 'closed'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'delayed' | 'unassigned' | 'dispatched' | 'arrived' | 'pickup' | 'dropped' | 'closed' | 'gps_off' | 'priority'>('all');
+  const [delaySubFilter, setDelaySubFilter] = useState('all');
+  const [ongoingSubFilter, setOngoingSubFilter] = useState('all');
   const [isSimulating, setIsSimulating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [isAutoAllocateOn, setIsAutoAllocateOn] = useState(false);
+  const [autoAllocationRadius, setAutoAllocationRadius] = useState(15);
+  const [autoAllocationDelay, setAutoAllocationDelay] = useState(10); // 10 seconds default hold delay
+  const [minSocThreshold, setMinSocThreshold] = useState(20); // 20% default min SOC
+  const [hoveredDriverId, setHoveredDriverId] = useState<string | null>(null);
+  const [assigningRideId, setAssigningRideId] = useState<string | null>(null);
 
   const [liveMetrics, setLiveMetrics] = useState<Record<string, { distance: number; eta: number; soc: number; actualEta: number }>>({});
-  const stateRef = useRef({ bookings, carLocations });
+  const stateRef = useRef({ bookings, carLocations, drivers, cars });
 
   const [isTicketDialogOpen, setIsTicketDialogOpen] = useState(false);
   const [ticketRide, setTicketRide] = useState<any>(null);
@@ -162,8 +369,8 @@ export default function ActiveRideDashboard() {
   const [manualAdjData, setManualAdjData] = useState({ tollCharges: 0, parkingCharges: 0 });
 
   useEffect(() => {
-    stateRef.current = { bookings, carLocations };
-  }, [bookings, carLocations]);
+    stateRef.current = { bookings, carLocations, drivers, cars };
+  }, [bookings, carLocations, drivers, cars]);
 
   useEffect(() => {
     if (!isSimulating) return;
@@ -207,13 +414,130 @@ export default function ActiveRideDashboard() {
     return () => clearInterval(interval);
   }, [isSimulating, updateCarLocation]);
 
-  const checkIsDelayed = (b: any) => {
-    if (b.status !== 'dispatched' || !b.pickupDate || !b.pickupTime) return false;
-    const pickupTimeMs = new Date(`${b.pickupDate}T${b.pickupTime}`).getTime();
-    const metrics = liveMetrics[b.id];
-    const predictedArrivalMs = metrics ? Date.now() + metrics.eta * 60000 : Date.now();
-    return predictedArrivalMs > pickupTimeMs;
+  // ==========================================
+  // AUTO-ALLOCATION ENGINE
+  // ==========================================
+  useEffect(() => {
+    // Agar auto-allocation band hai to return kar jao
+    if (!isAutoAllocateOn) return;
+
+    // Start an interval engine to tick every 2 seconds
+    const interval = setInterval(() => {
+      const { bookings: currentBookings, carLocations: currentLocations, drivers: currentDrivers, cars: currentCars } = stateRef.current;
+
+      // 1. Find bookings with no drivers assigned that have passed the delay buffer
+      const unassignedBookings = currentBookings
+        .filter((b: any) => {
+          if (b.driverId || !['pending', 'confirmed'].includes(b.status)) return false;
+          // Calculate booking age in seconds
+          const createdAt = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          const ageSecs = (Date.now() - createdAt) / 1000;
+          return ageSecs >= autoAllocationDelay;
+        })
+        .sort((a: any, b: any) => {
+          const isAB2B = !!a.b2bClientId;
+          const isBB2B = !!b.b2bClientId;
+          if (isAB2B && !isBB2B) return -1; // Prioritize B2B
+          if (!isAB2B && isBB2B) return 1;
+          // For same-type bookings, prioritize earlier pickup times
+          const timeA = new Date(`${a.pickupDate}T${a.pickupTime}`).getTime();
+          const timeB = new Date(`${b.pickupDate}T${b.pickupTime}`).getTime();
+          return timeA - timeB;
+        });
+
+      if (unassignedBookings.length === 0) return;
+
+      // 2. Find drivers currently busy with rides
+      const busyDriverIds = currentBookings.filter((b: any) => ['assigned', 'dispatched', 'arrived', 'picked_up'].includes(b.status) && b.driverId).map((b: any) => b.driverId);
+      
+      // 3. Find active (logged in) drivers who are completely free
+      const availableDrivers = currentDrivers
+        .filter((d: any) => d.status === 'active' && !busyDriverIds.includes(d.id))
+        .map((driver: any) => {
+          // NOTE: In a real app, SOC would come from live car telematics data.
+          // Here we are mocking it for demonstration.
+          const car = currentCars.find((c: any) => c.assignedDriverId === driver.id || c.id === driver.assignedCarId);
+          return {
+            ...driver,
+            // Use car's SOC if available, otherwise mock it.
+            soc: (car as any)?.soc || Math.floor(15 + Math.random() * 85)
+          };
+        })
+        .filter((driver: any) => driver.soc >= minSocThreshold);
+
+      if (availableDrivers.length === 0) return;
+
+      unassignedBookings.forEach((booking: any) => {
+        const pickupPoint = getEstimatedPickupPoint(booking);
+        let nearestDriver: any = null;
+        let minDistance = Infinity;
+
+        availableDrivers.forEach((driver: any) => {
+          // Agar is loop me driver already kisi ride ko assign ho chuka hai, to skip karein
+          if (busyDriverIds.includes(driver.id)) return;
+
+          const car = currentCars.find((c: any) => c.assignedDriverId === driver.id || c.id === driver.assignedCarId);
+          const loc = car ? currentLocations.find((l: any) => l.carId === car.id) : null;
+          const dist = distanceKm(loc, pickupPoint) ?? 8; // fallback to 8km
+
+          if (dist < minDistance) {
+            minDistance = dist;
+            nearestDriver = driver;
+          }
+        });
+
+        // Agar nearest driver configured radius me mil jata hai to usko assign kardo
+        if (nearestDriver && minDistance <= autoAllocationRadius) {
+          const bookingType = booking.b2bClientId ? 'B2B' : 'B2C';
+          updateBooking(booking.id, { driverId: nearestDriver.id, carId: nearestDriver.assignedCarId || nearestDriver.car?.id || booking.carId, status: 'assigned' });
+          busyDriverIds.push(nearestDriver.id); // Mark driver as busy so they don't get assigned again
+          toast.success(`Auto-Engine: Assigned ${nearestDriver.name} to ${bookingType} Booking ${booking.bookingNumber}`);
+        }
+      });
+    }, 2000); // Engine ticks every 2 seconds
+
+    return () => clearInterval(interval);
+  }, [isAutoAllocateOn, autoAllocationDelay, autoAllocationRadius, minSocThreshold, updateBooking]);
+
+  const handleAssignDriverFromMap = (driverId: string, carId: string) => {
+    if (!assigningRideId) {
+      toast.error("No ride selected for assignment.");
+      return;
+    }
+    const ride = bookings.find((b: any) => b.id === assigningRideId);
+    if (!ride) {
+      toast.error("Selected ride not found.");
+      return;
+    }
+    const driver = getDriver(driverId);
+
+    updateBooking(assigningRideId, { driverId, carId, status: 'assigned' });
+    toast.success(`Assigned ${driver?.name || 'driver'} to booking ${ride.bookingNumber} from map!`);
+    
+    setExpandedRideId(null);
+    setAssigningRideId(null);
   };
+
+  const checkIsDelayed = (b: any) => {
+    return !!getDelayInfo(b, liveMetrics[b.id]);
+  };
+
+  const isGpsOff = useCallback((b: any) => {
+    if (!['dispatched', 'arrived', 'picked_up'].includes(b.status)) return false;
+    const car = b.carId ? getCar(b.carId) : null;
+    const carLoc = car ? carLocations.find((l: any) => l.carId === car.id) : null;
+    if (!carLoc || !carLoc.lastUpdated) return true;
+    
+    const lastUpdateMs = new Date(carLoc.lastUpdated).getTime();
+    const nowMs = Date.now();
+    return (nowMs - lastUpdateMs) > 5 * 60 * 1000; // 5 mins
+  }, [getCar, carLocations]);
+
+  const isPriority = useCallback((b: any) => {
+    const isAirportDrop = b.dropLocation?.toLowerCase().includes('airport');
+    const hasPriorityTag = b.tags?.some((t: string) => t.toLowerCase().includes('priority'));
+    return isAirportDrop || hasPriorityTag;
+  }, []);
 
   const delayedCount = useMemo(() => bookings.filter((b: any) => checkIsDelayed(b)).length, [bookings, liveMetrics]);
   const unassignedCount = useMemo(() => bookings.filter((b: any) => !b.driverId && ['confirmed', 'assigned'].includes(b.status)).length, [bookings]);
@@ -222,6 +546,11 @@ export default function ActiveRideDashboard() {
   const ongoingCount = useMemo(() => bookings.filter((b: any) => b.status === 'picked_up').length, [bookings]);
   const droppedCount = useMemo(() => bookings.filter((b: any) => b.status === 'dropped').length, [bookings]);
   const closedCount = useMemo(() => bookings.filter((b: any) => ['closed', 'cancelled'].includes(b.status)).length, [bookings]);
+  const gpsOffCount = useMemo(() => bookings.filter((b: any) => isGpsOff(b)).length, [bookings, isGpsOff]);
+  const priorityCount = useMemo(() => bookings.filter((b: any) => {
+      const activeStatuses = ['confirmed', 'assigned', 'dispatched', 'arrived', 'picked_up', 'dropped'];
+      return activeStatuses.includes(b.status) && isPriority(b);
+  }).length, [bookings, isPriority]);
 
   const filteredBookings = useMemo(() => {
     const activeStatuses = ['confirmed', 'assigned', 'dispatched', 'arrived', 'picked_up', 'dropped'];
@@ -240,7 +569,12 @@ export default function ActiveRideDashboard() {
         statusFiltered = bookings.filter((b: any) => b.status === 'arrived');
         break;
       case 'pickup':
-        statusFiltered = bookings.filter((b: any) => b.status === 'picked_up');
+        statusFiltered = bookings.filter((b: any) => {
+            if (b.status !== 'picked_up') return false;
+            if (ongoingSubFilter === 'rental') return b.tripType === 'rental';
+            if (ongoingSubFilter === 'outstation') return b.tripType === 'outstation';
+            return true;
+        });
         break;
       case 'dropped':
         statusFiltered = bookings.filter((b: any) => b.status === 'dropped');
@@ -248,8 +582,19 @@ export default function ActiveRideDashboard() {
       case 'closed':
         statusFiltered = bookings.filter((b: any) => ['closed', 'cancelled'].includes(b.status));
         break;
+      case 'gps_off':
+        statusFiltered = bookings.filter((b: any) => isGpsOff(b));
+        break;
+      case 'priority':
+        statusFiltered = bookings.filter((b: any) => activeStatuses.includes(b.status) && isPriority(b));
+        break;
       case 'delayed':
-        statusFiltered = bookings.filter((b: any) => checkIsDelayed(b));
+        statusFiltered = bookings.filter((b: any) => {
+            const info = getDelayInfo(b, liveMetrics[b.id]);
+            if (!info) return false;
+            if (delaySubFilter !== 'all' && info.type !== delaySubFilter) return false;
+            return true;
+        });
         break;
       default:
         statusFiltered = bookings.filter((b: any) => activeStatuses.includes(b.status));
@@ -270,7 +615,7 @@ export default function ActiveRideDashboard() {
       const matchesTo = !dateTo || pickupDate <= dateTo;
       return matchesSearch && matchesFrom && matchesTo;
     });
-  }, [bookings, statusFilter, liveMetrics, searchQuery, dateFrom, dateTo]);
+  }, [bookings, statusFilter, delaySubFilter, liveMetrics, searchQuery, dateFrom, dateTo]);
 
   const sortedRides = useMemo(() => {
     const liveRides = filteredBookings.map((b: any) => {
@@ -278,15 +623,34 @@ export default function ActiveRideDashboard() {
       const car = b.carId ? getCar(b.carId) : null;
       const carLoc = car ? carLocations.find((l: any) => l.carId === car.id) : null;
 
-      const isDelayed = checkIsDelayed(b);
       const metrics = liveMetrics[b.id];
-      const delayMins = metrics
+      const delayInfo = getDelayInfo(b, metrics);
+      const isDelayed = !!delayInfo;
+      const delayMins = metrics && b.pickupDate && b.pickupTime
         ? Math.max(0, Math.floor((Date.now() + metrics.eta * 60000 - new Date(`${b.pickupDate}T${b.pickupTime}`).getTime()) / 60000))
         : 0;
 
       const rawStatus = b.status;
       const statusColor = isDelayed ? 'amber' : !b.driverId ? 'orange' : rawStatus === 'picked_up' ? 'blue' : 'green';
       const displayStatus = isDelayed ? 'Delayed' : !b.driverId ? 'Unassigned' : rawStatus === 'picked_up' ? 'Ongoing' : formatStatus(rawStatus);
+
+      let formattedRideType = (b.tripType || '').replace(/_/g, ' ');
+      if (b.tripType === 'rental') {
+          const hrs = b.packageHours || 8;
+          const kms = b.packageKm ? `${b.packageKm}km` : '';
+          formattedRideType += ` • ${hrs}h ${kms}`.trim();
+      } else if (b.tripType === 'outstation') {
+          const outType = (b.outstationType || 'round_trip').replace('_', ' ');
+          let days = b.days || 3;
+          if (b.pickupDate && b.returnDate) {
+            const start = new Date(b.pickupDate).getTime();
+            const end = new Date(b.returnDate).getTime();
+            if (!isNaN(start) && !isNaN(end) && end >= start) {
+               days = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
+            }
+          }
+          formattedRideType += ` • ${days} Day${days > 1 ? 's' : ''} (${outType})`;
+      }
 
         return {
           id: b.id,
@@ -298,13 +662,14 @@ export default function ActiveRideDashboard() {
           driverId: driver ? driver.id.split('-')[0].toUpperCase() : 'N/A',
           driverPhone: driver ? driver.phone : 'N/A',
           vehicleNo: car ? car.registrationNumber : 'Unassigned',
-          vehicleType: car ? `${car.make} ${car.model}` : 'N/A',
+          vehicleType: car ? `${(car as any).category || car.categoryId || ''} ${car.make || ''} ${car.model || ''}`.trim() : 'N/A',
         isEV: true,
         isDelayed,
+        delayInfo,
         delayMins,
         status: displayStatus,
         statusColor,
-        rideType: (b.tripType || '').replace(/_/g, ' '),
+        rideType: formattedRideType,
         time: `${b.pickupDate}, ${b.pickupTime || ''}`,
         fare: `₹ ${b.estimatedFare}`,
         walletBal: b.b2bClientId ? 'Corporate' : 'Direct Pay',
@@ -327,11 +692,13 @@ export default function ActiveRideDashboard() {
     return drivers.filter((d: any) => d.status === 'active' && !busyDriverIds.includes(d.id)).map((d: any) => {
         const car = cars.find((c: any) => c.assignedDriverId === d.id);
         const loc = car ? carLocations.find((l: any) => l.carId === car.id) : null;
+        const shiftRides = bookings.filter((b: any) => b.driverId === d.id && ['dropped', 'closed'].includes(b.status)).length;
         return {
             ...d,
             car,
             loc,
-            soc: Math.floor(60 + Math.random() * 40)
+            shiftRides,
+            soc: (car as any)?.soc || Math.floor(15 + Math.random() * 85) // Consistent mocking
         }
     });
   }, [drivers, cars, bookings, carLocations]);
@@ -391,8 +758,12 @@ export default function ActiveRideDashboard() {
   };
 
   return (
-    <div className="flex flex-col xl:flex-row h-screen bg-slate-50 overflow-hidden">
-      <div className="flex-1 p-4 md:p-6 space-y-6 overflow-y-auto">
+    <div className="flex flex-col xl:flex-row h-screen bg-slate-50 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-100/40 via-purple-50/20 to-emerald-50/30 overflow-hidden relative">
+      {/* Decorative Blur Orbs */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-300/20 rounded-full blur-[120px] pointer-events-none mix-blend-multiply" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-300/20 rounded-full blur-[120px] pointer-events-none mix-blend-multiply" />
+      
+      <div className="flex-1 p-4 md:p-6 space-y-6 overflow-y-auto relative z-10 custom-scrollbar">
        <DashboardHeader
          isSimulating={isSimulating}
          setIsSimulating={setIsSimulating}
@@ -416,25 +787,48 @@ export default function ActiveRideDashboard() {
            ongoing: ongoingCount,
            dropped: droppedCount,
            closed: closedCount,
+           gpsOff: gpsOffCount,
+           priority: priorityCount,
          }}
        />
+
+       {statusFilter === 'delayed' && (
+         <div className="flex items-center gap-2 mt-2 mb-4 overflow-x-auto pb-1 custom-scrollbar">
+            <span className="text-xs font-bold text-slate-500 mr-1 uppercase tracking-wider">Delay Type:</span>
+            <Badge variant={delaySubFilter === 'all' ? 'default' : 'outline'} onClick={() => setDelaySubFilter('all')} className={`cursor-pointer ${delaySubFilter === 'all' ? 'bg-slate-800' : 'bg-white hover:bg-slate-50'} shadow-sm`}>All Delays</Badge>
+            <Badge variant={delaySubFilter === 'late_assignment' ? 'default' : 'outline'} onClick={() => setDelaySubFilter('late_assignment')} className={`cursor-pointer ${delaySubFilter === 'late_assignment' ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border-rose-200'} shadow-sm`}>Late Assignment</Badge>
+            <Badge variant={delaySubFilter === 'too_far' ? 'default' : 'outline'} onClick={() => setDelaySubFilter('too_far')} className={`cursor-pointer ${delaySubFilter === 'too_far' ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200'} shadow-sm`}>Deadrun Issue</Badge>
+            <Badge variant={delaySubFilter === 'delayed_dispatch' ? 'default' : 'outline'} onClick={() => setDelaySubFilter('delayed_dispatch')} className={`cursor-pointer ${delaySubFilter === 'delayed_dispatch' ? 'bg-fuchsia-600 text-white' : 'bg-fuchsia-50 text-fuchsia-700 hover:bg-fuchsia-100 border-fuchsia-200'} shadow-sm`}>Late Dispatch</Badge>
+            <Badge variant={delaySubFilter === 'delayed_pickup' ? 'default' : 'outline'} onClick={() => setDelaySubFilter('delayed_pickup')} className={`cursor-pointer ${delaySubFilter === 'delayed_pickup' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-700 hover:bg-red-100 border-red-200'} shadow-sm`}>Late Pickup</Badge>
+            <Badge variant={delaySubFilter === 'delayed_drop' ? 'default' : 'outline'} onClick={() => setDelaySubFilter('delayed_drop')} className={`cursor-pointer ${delaySubFilter === 'delayed_drop' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200'} shadow-sm`}>Late Drop</Badge>
+         </div>
+       )}
+
+       {statusFilter === 'pickup' && (
+         <div className="flex items-center gap-2 mt-2 mb-4 overflow-x-auto pb-1 custom-scrollbar">
+            <span className="text-xs font-bold text-slate-500 mr-1 uppercase tracking-wider">Ride Type:</span>
+            <Badge variant={ongoingSubFilter === 'all' ? 'default' : 'outline'} onClick={() => setOngoingSubFilter('all')} className={`cursor-pointer ${ongoingSubFilter === 'all' ? 'bg-slate-800' : 'bg-white hover:bg-slate-50'} shadow-sm`}>All On-going</Badge>
+            <Badge variant={ongoingSubFilter === 'rental' ? 'default' : 'outline'} onClick={() => setOngoingSubFilter('rental')} className={`cursor-pointer ${ongoingSubFilter === 'rental' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200'} shadow-sm`}>Rental</Badge>
+            <Badge variant={ongoingSubFilter === 'outstation' ? 'default' : 'outline'} onClick={() => setOngoingSubFilter('outstation')} className={`cursor-pointer ${ongoingSubFilter === 'outstation' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200'} shadow-sm`}>Outstation</Badge>
+         </div>
+       )}
 
        {/* List of Active Rides */}
        <div className="space-y-3">
          {isRefreshing && (
             <>
               {[0, 1, 2].map((item) => (
-                <div key={item} className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
+                <div key={item} className="bg-white/40 backdrop-blur-xl rounded-[2rem] border border-white/60 p-5 shadow-sm">
                   <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div className="space-y-3">
-                      <Skeleton className="h-4 w-28" />
-                      <Skeleton className="h-5 w-56" />
-                      <Skeleton className="h-3 w-72 max-w-full" />
+                      <Skeleton className="h-4 w-28 bg-white/60" />
+                      <Skeleton className="h-5 w-56 bg-white/60" />
+                      <Skeleton className="h-3 w-72 max-w-full bg-white/60" />
                     </div>
                     <div className="grid grid-cols-3 gap-3">
-                      <Skeleton className="h-12 w-20 rounded-xl" />
-                      <Skeleton className="h-12 w-20 rounded-xl" />
-                      <Skeleton className="h-12 w-20 rounded-xl" />
+                      <Skeleton className="h-12 w-20 rounded-[1rem] bg-white/60" />
+                      <Skeleton className="h-12 w-20 rounded-[1rem] bg-white/60" />
+                      <Skeleton className="h-12 w-20 rounded-[1rem] bg-white/60" />
                     </div>
                   </div>
                 </div>
@@ -442,10 +836,12 @@ export default function ActiveRideDashboard() {
             </>
          )}
          {!isRefreshing && sortedRides.length === 0 && (
-            <div className="text-center p-12 bg-white rounded-2xl shadow-sm border border-slate-200 mt-4">
-                <Car className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-500 font-semibold text-lg">No matching rides found</p>
-                <p className="text-slate-400 text-sm mt-1">Try changing the search, date range, or status filter.</p>
+            <div className="text-center p-16 bg-white/40 backdrop-blur-2xl rounded-[3rem] shadow-[0_8px_32px_-12px_rgba(0,0,0,0.1)] border border-white/60 mt-4">
+                <div className="mx-auto w-24 h-24 bg-white/60 rounded-full flex items-center justify-center mb-4 shadow-inner border border-white">
+                  <Car className="h-10 w-10 text-slate-400" />
+                </div>
+                <p className="text-slate-800 font-black text-2xl tracking-tight">No active rides right now</p>
+                <p className="text-slate-500 font-medium text-sm mt-2">Try adjusting your filters or date range.</p>
             </div>
          )}
          {!isRefreshing && sortedRides.map((ride) => {
@@ -469,78 +865,117 @@ export default function ActiveRideDashboard() {
                 lastUpdated: new Date().toISOString()
             }] : carLocations;
 
-            // Premium border styling
-            let borderNormal = 'border-slate-100 hover:border-blue-200 shadow-sm';
-            let borderExpanded = 'border-blue-400 ring-2 ring-blue-500/10 shadow-md';
+            // Spatial Glassmorphism styling
+            let borderNormal = 'border-white/60 bg-white/40 backdrop-blur-2xl shadow-[0_8px_32px_-12px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 hover:shadow-[0_12px_40px_-12px_rgba(0,0,0,0.2)] transition-all duration-500 ease-out z-10';
+            let borderExpanded = 'border-indigo-500/50 ring-4 ring-indigo-500/10 bg-white/60 backdrop-blur-3xl shadow-[0_16px_60px_-16px_rgba(79,70,229,0.3)] scale-[1.01] transition-all duration-500 ease-out z-30';
 
-            if (isDelayed) {
-                borderNormal = 'border-amber-300 hover:border-amber-400 shadow-sm';
-                borderExpanded = 'border-amber-500 ring-2 ring-amber-500/20 shadow-md';
+            if (isDelayed && ride.delayInfo) {
+                const style = delayStyles[ride.delayInfo.color] || delayStyles['red'];
+                borderNormal = style.normal;
+                borderExpanded = style.expanded;
+            } else if (isDelayed) {
+                borderNormal = 'border-rose-500/30 bg-rose-50/40 backdrop-blur-2xl shadow-[0_8px_32px_-12px_rgba(244,63,94,0.15)] hover:-translate-y-0.5 hover:shadow-[0_12px_40px_-12px_rgba(244,63,94,0.25)] transition-all duration-500 ease-out z-10';
+                borderExpanded = 'border-rose-500/60 ring-4 ring-rose-500/15 bg-rose-50/60 backdrop-blur-3xl shadow-[0_16px_60px_-16px_rgba(244,63,94,0.35)] scale-[1.01] transition-all duration-500 ease-out z-30';
             } else if (isUnassigned) {
-                borderNormal = 'border-orange-300 hover:border-orange-400 shadow-sm';
-                borderExpanded = 'border-orange-500 ring-2 ring-orange-500/20 shadow-md';
+                borderNormal = 'border-amber-500/30 bg-amber-50/40 backdrop-blur-2xl shadow-[0_8px_32px_-12px_rgba(245,158,11,0.15)] hover:-translate-y-0.5 hover:shadow-[0_12px_40px_-12px_rgba(245,158,11,0.25)] transition-all duration-500 ease-out z-10';
+                borderExpanded = 'border-amber-500/60 ring-4 ring-amber-500/15 bg-amber-50/60 backdrop-blur-3xl shadow-[0_16px_60px_-16px_rgba(245,158,11,0.35)] scale-[1.01] transition-all duration-500 ease-out z-30';
             } else if (isClosed) {
-                borderNormal = 'border-slate-200 opacity-60 bg-slate-50/50 grayscale hover:grayscale-0 transition-all';
-                borderExpanded = 'border-slate-300 ring-1 ring-slate-300/20 opacity-100 bg-white grayscale-0';
+                borderNormal = 'border-white/40 opacity-70 bg-white/30 backdrop-blur-xl grayscale hover:grayscale-0 transition-all duration-500 ease-out z-10';
+                borderExpanded = 'border-white/80 ring-2 ring-white/50 opacity-100 bg-white/80 grayscale-0 shadow-[0_16px_60px_-16px_rgba(0,0,0,0.15)] scale-[1.01] transition-all duration-500 ease-out z-30';
             }
 
             const rideMetrics = liveMetrics[ride.originalBooking.id] || { distance: 4.2, eta: 12, actualEta: 14, soc: 68 + Math.random() * 20 };
             const estRange = Math.floor((rideMetrics.soc / 100) * 250);
+
+            const pickupPoint = getEstimatedPickupPoint(ride.originalBooking);
+            const dropPoint = getEstimatedDropPoint(ride.originalBooking);
+            const stopPoints = getEstimatedStopPoints(ride.originalBooking).map((stop: any) => ({
+              position: [stop.latitude, stop.longitude] as [number, number],
+              label: stop.label,
+              status: stop.status,
+            }));
 
             return (
               <div key={ride.id} className={`relative bg-white rounded-2xl border transition-all duration-300 overflow-hidden ${isExpanded ? borderExpanded : borderNormal}`}>
                 
                 {/* Clickable Header */}
                 <div 
-                   className={`group p-3 md:p-4 px-4 cursor-pointer select-none relative z-10`}
+                   className={`group p-2 md:p-2.5 px-3 cursor-pointer select-none relative z-10`}
                    onClick={(e) => {
-                       setExpandedRideId(isExpanded ? null : ride.id)
+                       const newExpandedId = isExpanded ? null : ride.id;
+                       const isUnassigned = ride.driverName === 'Unassigned';
+                       
+                       setExpandedRideId(newExpandedId);
+                       // Set assigningRideId only if the newly expanded ride is unassigned
+                       setAssigningRideId(newExpandedId && isUnassigned ? ride.id : null);
                    }}
                 >
                    <div className="flex flex-col md:flex-row md:items-center text-sm w-full relative">
                        {/* Alert Pulse Background for Critical states */}
-                       {isDelayed && !isClosed && <div className="absolute inset-0 bg-red-500/10 animate-pulse pointer-events-none rounded-xl" />}
+                       {isDelayed && !isClosed && <div className={`absolute inset-0 ${ride.delayInfo ? `bg-${ride.delayInfo.color}-500/10` : 'bg-red-500/10'} animate-pulse pointer-events-none rounded-xl`} />}
                        {isUnassigned && !isDelayed && !isClosed && <div className="absolute inset-0 bg-orange-500/10 animate-pulse pointer-events-none rounded-xl" />}
 
                        {/* Col 1: Status & Booking */}
-                       <div className="w-full md:w-[20%] flex flex-col gap-1 pr-4 border-b md:border-b-0 md:border-r border-slate-100 py-2 md:py-0 relative z-10">
+                       <div className="w-full md:w-[16%] flex flex-col gap-0.5 pr-2 border-b md:border-b-0 md:border-r border-slate-100 py-1 md:py-0 relative z-10">
                            <div className="flex justify-between items-center">
-                               <span className="font-bold text-slate-800 tracking-tight">{ride.displayId}</span>
-                               <div className="flex items-center gap-1.5">
+                               <span className="font-bold text-slate-800 tracking-tight text-[12px]">{ride.displayId}</span>
+                               <div className="flex items-center gap-1">
                                    {ride.delayMins > 0 && (
-                                       <Badge className="bg-red-600 text-white hover:bg-red-700 border-none text-[10px] font-bold h-5 py-0 px-2 rounded-md shadow-sm animate-pulse">
+                                       <Badge className="bg-red-600 text-white hover:bg-red-700 border-none text-[9px] font-bold h-4 py-0 px-1.5 rounded-sm shadow-sm animate-pulse">
                                            {ride.delayMins}m Late
                                        </Badge>
                                    )}
-                                   <Badge className={`bg-${ride.statusColor}-100 text-${ride.statusColor}-700 hover:bg-${ride.statusColor}-200 border-none text-[10px] font-bold h-5 py-0 px-2 rounded-md shadow-sm`}>
+                                   <Badge className={`bg-${ride.statusColor}-100 text-${ride.statusColor}-700 hover:bg-${ride.statusColor}-200 border-none text-[9px] font-bold h-4 py-0 px-1.5 rounded-sm shadow-sm`}>
                                        {ride.status}
                                    </Badge>
                                </div>
                            </div>
-                           <div className="text-[11px] text-slate-500 font-medium">{ride.bookingId} • <span className="capitalize">{ride.rideType}</span></div>
-                           <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-1"><Clock className="h-3.5 w-3.5 text-slate-400" /> {ride.time}</div>
+                           <div className="text-[10px] text-slate-500 font-medium leading-none">{ride.bookingId} • <span className="capitalize">{ride.rideType}</span></div>
+                           
+                           {/* DIAGNOSTIC DELAY INFO */}
+                           {ride.delayInfo && (
+                             <div className={`mt-0.5 px-1.5 py-0.5 rounded border shadow-sm flex items-center justify-between gap-1 w-full ${delayStyles[ride.delayInfo.color]?.badge || 'bg-red-50 border-red-200 text-red-700'}`}>
+                               <p className="text-[8px] font-bold uppercase tracking-wider whitespace-nowrap">{ride.delayInfo.label}</p>
+                               <p className="text-[9px] font-medium leading-none opacity-90 truncate max-w-[90px]">{ride.delayInfo.reason}</p>
+                             </div>
+                           )}
                        </div>
 
                        {/* Col 2: Customer */}
-                       <div className="w-full md:w-[18%] flex flex-col gap-1 px-0 md:px-4 border-b md:border-b-0 md:border-r border-slate-100 py-2 md:py-0">
-                           <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Customer</div>
-                           <div className="font-bold text-slate-800 truncate text-[13px]" title={ride.customerName}>{ride.customerName}</div>
-                           <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5"><Phone className="h-3 w-3 text-slate-400" /> {ride.customerPhone}</div>
+                       <div className="w-full md:w-[14%] flex flex-col gap-0.5 px-0 md:px-2.5 border-b md:border-b-0 md:border-r border-slate-100 py-1 md:py-0">
+                           <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Customer</div>
+                           <div className="font-bold text-slate-800 truncate text-[12px] leading-tight" title={ride.customerName}>{ride.customerName}</div>
+                           <div className="text-[10px] text-slate-500 flex items-center gap-1 leading-none mb-1"><Phone className="h-2.5 w-2.5 text-slate-400" /> {ride.customerPhone}</div>
+                           <div className="text-[9px] text-slate-500 leading-none">Src: <span className="font-bold text-slate-700">{b2bClient ? b2bClient.companyName : ride.walletBal}</span></div>
+                           <div className="text-[9px] text-slate-500 leading-none mt-0.5">By: <span className="font-bold text-slate-700">{ride.originalBooking.createdBy || 'Admin'}</span></div>
                        </div>
 
-                       {/* Col 3: Driver */}
-                       <div className="w-full md:w-[20%] flex flex-col gap-1 px-0 md:px-4 border-b md:border-b-0 md:border-r border-slate-100 py-2 md:py-0">
-                           <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Driver</div>
+                       {/* Col 3: Route */}
+                       <div className="w-full md:w-[20%] flex flex-col justify-center gap-0.5 px-0 md:px-2.5 border-b md:border-b-0 md:border-r border-slate-100 py-1 md:py-0">
+                           <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none mb-0.5">Route</div>
+                           <div className="text-[10px] text-slate-800 truncate flex items-center gap-1 leading-tight" title={ride.originalBooking.pickupLocation}>
+                               <div className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
+                               <span className="truncate">{ride.originalBooking.pickupLocation || 'N/A'}</span>
+                           </div>
+                           <div className="text-[10px] text-slate-800 truncate flex items-center gap-1 leading-tight" title={ride.originalBooking.dropLocation}>
+                               <div className="h-1.5 w-1.5 rounded-full bg-blue-600 shrink-0" />
+                               <span className="truncate">{ride.originalBooking.dropLocation || 'N/A'}</span>
+                           </div>
+                       </div>
+
+                       {/* Col 4: Driver */}
+                       <div className="w-full md:w-[16%] flex flex-col gap-0.5 px-0 md:px-2.5 border-b md:border-b-0 md:border-r border-slate-100 py-1 md:py-0">
+                           <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Driver</div>
                            
                            {!isClosed ? (
                                <Popover>
                                    <PopoverTrigger asChild>
                                        <div 
-                                           className="flex items-center gap-1 font-bold text-slate-800 truncate cursor-pointer hover:text-blue-600 transition-colors group/driver p-1 -ml-1 rounded-lg hover:bg-blue-50 w-fit text-[13px]"
+                                           className="flex items-center gap-1 font-bold text-slate-800 truncate cursor-pointer hover:text-blue-600 transition-colors group/driver p-0.5 -ml-0.5 rounded hover:bg-blue-50 w-fit text-[12px] leading-tight"
                                            onClick={(e) => e.stopPropagation()}
                                        >
                                            <span className={`truncate ${ride.driverName === 'Unassigned' ? 'text-orange-600' : ''}`}>{ride.driverName}</span>
-                                           <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-300 group-hover/driver:text-blue-500" />
+                                           <ChevronDown className="h-3 w-3 shrink-0 text-slate-300 group-hover/driver:text-blue-500" />
                                        </div>
                                    </PopoverTrigger>
                                    <PopoverContent className="w-72 p-3 shadow-xl border-slate-200 rounded-xl" align="start" side="bottom">
@@ -548,39 +983,37 @@ export default function ActiveRideDashboard() {
                                    </PopoverContent>
                                </Popover>
                            ) : (
-                               <div className="font-bold text-slate-800 truncate w-full p-1 -ml-1 text-[13px]">{ride.driverName}</div>
+                               <div className="font-bold text-slate-800 truncate w-full p-0.5 -ml-0.5 text-[12px] leading-tight">{ride.driverName}</div>
                            )}
                            
-                           <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                           <div className="text-[10px] text-slate-500 flex items-center gap-1 leading-none">
                                {ride.driverName !== 'Unassigned' ? ride.driverId : 'Awaiting Assignment'}
                            </div>
                        </div>
 
-                       {/* Col 4: Vehicle & EV Metrics */}
-                       <div className="w-full md:w-[18%] flex flex-col gap-1 px-0 md:px-4 border-b md:border-b-0 md:border-r border-slate-100 py-2 md:py-0">
-                           <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Vehicle Details</div>
-                           <div className="font-bold text-slate-800 truncate flex items-center gap-1.5 text-[13px]">
+                       {/* Col 5: Vehicle & EV Metrics */}
+                       <div className="w-full md:w-[14%] flex flex-col gap-0.5 px-0 md:px-2.5 border-b md:border-b-0 md:border-r border-slate-100 py-1 md:py-0">
+                           <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Vehicle</div>
+                           <div className="font-bold text-slate-800 truncate flex items-center gap-1 text-[12px] leading-tight">
                                <span className="truncate">{ride.vehicleNo}</span>
-                               {ride.isEV && <Badge variant="outline" className="text-[9px] bg-green-50 text-green-700 px-1.5 py-0 h-4 rounded-sm border-green-200 shrink-0"><Leaf className="h-2 w-2 mr-0.5" /> EV</Badge>}
+                               {ride.isEV && <Badge variant="outline" className="text-[8px] bg-green-50 text-green-700 px-1 py-0 h-3.5 flex items-center rounded-sm border-green-200 shrink-0 leading-none"><Leaf className="h-2 w-2 mr-0.5" /> EV</Badge>}
                            </div>
-                           <div className="flex items-center gap-2 mt-0.5">
+                           <div className="flex flex-col gap-1 mt-0.5">
+                               <span className="text-[10px] text-slate-500 truncate leading-none">{ride.vehicleType}</span>
                                {ride.driverName !== 'Unassigned' && !isClosed && (
-                                   <div className={`flex items-center gap-1 text-[11px] font-medium ${rideMetrics.soc < 20 ? 'text-red-600' : 'text-green-600'}`}>
-                                       <BatteryCharging className="h-3.5 w-3.5" />
+                                   <div className={`flex items-center gap-1 text-[10px] font-medium leading-none ${rideMetrics.soc < 20 ? 'text-red-600' : 'text-green-600'}`}>
+                                       <BatteryCharging className="h-3 w-3" />
                                        <span>{rideMetrics.soc.toFixed(0)}%</span>
                                        <span className="text-slate-400 font-normal">({estRange}km)</span>
                                    </div>
                                )}
-                               {(isClosed || ride.driverName === 'Unassigned') && (
-                                   <span className="text-[11px] text-slate-500 truncate">{ride.vehicleType}</span>
-                               )}
                            </div>
                        </div>
 
-                       {/* Col 5: Current Event */}
-                       <div className="w-full md:w-[14%] flex flex-col justify-center gap-1 px-0 md:px-4 border-b md:border-b-0 md:border-r border-slate-100 py-2 md:py-0">
-                           <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Trip Event</div>
-                           <Badge variant="outline" className={`w-fit border-none px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                       {/* Col 6: Current Event */}
+                       <div className="w-full md:w-[10%] flex flex-col justify-center gap-0.5 px-0 md:px-2.5 border-b md:border-b-0 md:border-r border-slate-100 py-1 md:py-0">
+                           <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Event</div>
+                           <Badge variant="outline" className={`w-fit border-none px-1.5 py-0 text-[9px] font-bold uppercase tracking-wider h-4 flex items-center ${
                                (!ride.originalBooking.driverId && ['pending', 'confirmed'].includes(ride.originalBooking.status)) ? 'bg-amber-100 text-amber-700' :
                                ride.originalBooking.status === 'assigned' ? 'bg-blue-100 text-blue-700' :
                                ride.originalBooking.status === 'dispatched' ? 'bg-indigo-100 text-indigo-700' :
@@ -593,24 +1026,24 @@ export default function ActiveRideDashboard() {
                            </Badge>
                        </div>
 
-                       {/* Col 6: Fare & Mode */}
-                       <div className="w-full md:flex-1 flex justify-between items-center pl-0 md:pl-4 py-2 md:py-0">
-                           <div className="flex flex-col gap-1">
-                               <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Fare / Mode</div>
-                               <div className="font-bold text-slate-900 text-[14px] whitespace-nowrap">{ride.fare}</div>
-                               <div className="text-[11px] text-slate-500 font-medium mt-0.5 whitespace-nowrap">{ride.originalBooking.b2bClientId ? 'Corporate' : 'Direct Pay'}</div>
+                       {/* Col 7: Fare & Mode */}
+                       <div className="w-full md:flex-1 flex justify-between items-center pl-0 md:pl-2.5 py-1 md:py-0">
+                           <div className="flex flex-col gap-0.5">
+                               <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Fare</div>
+                               <div className="font-bold text-slate-900 text-[13px] whitespace-nowrap leading-tight">{ride.fare}</div>
+                               <div className="text-[10px] text-slate-500 font-medium whitespace-nowrap leading-none">{ride.originalBooking.b2bClientId ? 'Corp.' : 'Direct'}</div>
                            </div>
 
                            {/* Chevron */}
-                           <div className={`p-1.5 rounded-full transition-colors ${isExpanded ? 'bg-blue-100 text-blue-600' : 'bg-transparent text-slate-400 group-hover:bg-slate-100 group-hover:text-slate-600'}`}>
-                               {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                           <div className={`p-1 rounded-full transition-colors ${isExpanded ? 'bg-blue-100 text-blue-600' : 'bg-transparent text-slate-400 group-hover:bg-slate-100 group-hover:text-slate-600'}`}>
+                               {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                            </div>
                        </div>
                    </div>
 
                    {/* Tags Row */}
                    {(!isClosed || (ride.tags && ride.tags.length > 0)) && (
-                       <div className="flex items-center gap-2 flex-wrap mt-3">
+                       <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
                            {ride.tags?.map((t: string) => (
                                <Badge key={t} className="text-[10px] bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-100 px-2 py-0.5 h-5 rounded-md font-semibold flex items-center gap-1 shadow-sm">
                                    {t}
@@ -627,11 +1060,12 @@ export default function ActiveRideDashboard() {
                                </Badge>
                            ))}
                            {!isClosed && (
+                               <div onClick={(e) => e.stopPropagation()}>
                                <Popover>
                                    <PopoverTrigger asChild>
-                                       <span className="text-[10px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer bg-blue-50/50 hover:bg-blue-100 px-2 py-0.5 rounded-md border border-blue-100 border-dashed flex items-center h-5 transition-colors" onClick={(e) => e.stopPropagation()}>+ Add Tag</span>
+                                       <button className="text-[10px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer bg-blue-50/50 hover:bg-blue-100 px-2 py-0.5 rounded-md border border-blue-100 border-dashed flex items-center h-5 transition-colors">+ Add Tag</button>
                                    </PopoverTrigger>
-                                   <PopoverContent className="w-56 p-3 shadow-xl border-slate-200 rounded-xl" align="start" side="bottom">
+                                   <PopoverContent className="w-56 p-3 shadow-xl border-slate-200 rounded-xl" align="start" side="bottom" onClick={(e) => e.stopPropagation()}>
                                        <p className="text-[11px] font-bold text-slate-800 mb-3">Select Tag to Add</p>
                                        <div className="flex flex-wrap gap-1.5">
                                            {bookingTags && bookingTags.length > 0 ? bookingTags.map((tag: any) => {
@@ -642,12 +1076,12 @@ export default function ActiveRideDashboard() {
                                                        variant="outline" 
                                                        className={`text-[10px] cursor-pointer hover:bg-slate-100 transition-colors rounded-md ${ride.tags?.includes(tagName) ? 'opacity-50 cursor-not-allowed' : ''}`}
                                                        onClick={(e) => {
-                                                           e.stopPropagation();
+                                                           e.preventDefault();
                                                            const currentTags = ride.tags || [];
                                                            if (!currentTags.includes(tagName)) {
                                                                updateBooking(ride.originalBooking.id, { tags: [...currentTags, tagName] });
                                                                toast.success("Tag added");
-                                                               document.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+                                                               document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); // Close popover safely
                                                            }
                                                        }}
                                                    >
@@ -660,6 +1094,7 @@ export default function ActiveRideDashboard() {
                                        </div>
                                    </PopoverContent>
                                </Popover>
+                               </div>
                            )}
                        </div>
                    )}
@@ -669,42 +1104,45 @@ export default function ActiveRideDashboard() {
                 {/* EXPANDED CONTENT AREA - ACTIVE RIDE */}
                 {/* ========================================================= */}
                 {isExpanded && !isClosed && (
-                  <div className="border-t border-slate-100 bg-slate-50/50 p-4 md:p-6 animate-in fade-in slide-in-from-top-2 duration-300 relative z-10 rounded-b-2xl">
+                  <div className="border-t border-slate-100 bg-slate-50/50 p-3 md:p-4 animate-in fade-in slide-in-from-top-2 duration-300 relative z-10 rounded-b-2xl">
                     
                     {/* Ride specific action buttons */}
-                    <div className="flex justify-end items-center mb-6 gap-3 flex-wrap">
+                    <div className="flex justify-end items-center mb-4 gap-2 flex-wrap">
                         <Button variant="outline" size="sm" className="bg-white rounded-xl shadow-sm border-slate-200 hover:bg-slate-50 hover:text-blue-700" onClick={() => ride.driverPhone !== 'N/A' ? window.open(`tel:${ride.driverPhone}`) : toast.error('No driver assigned')}><PhoneCall className="h-4 w-4 mr-2 text-blue-600" /> Call Driver</Button>
                         <Button variant="outline" size="sm" className="bg-white rounded-xl shadow-sm border-slate-200 hover:bg-slate-50 hover:text-green-700" onClick={() => ride.customerPhone ? window.open(`tel:${ride.customerPhone}`) : toast.error('No customer phone')}><PhoneCall className="h-4 w-4 mr-2 text-green-600" /> Call Customer</Button>
-                        <Button variant="secondary" size="sm" className="bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200 border rounded-xl shadow-sm"><AlertTriangle className="h-4 w-4 mr-2" /> Breakdown Alert</Button>
-                        <Button variant="default" size="sm" className="bg-slate-800 hover:bg-slate-900 text-white rounded-xl shadow-sm" onClick={() => { setTicketRide(ride); setTicketData({ subject: `Issue with Booking ${ride.bookingId}`, type: "Complaint", priority: "medium", description: "" }); setIsTicketDialogOpen(true); }}><Headset className="h-4 w-4 mr-2" /> Raise Ticket</Button>
+                        <Button variant="secondary" size="sm" className="bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200 border rounded-xl shadow-sm"><AlertTriangle className="h-4 w-4 mr-2" /> Mark Breakdown</Button>
                     </div>
 
-                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
                       
                       {/* Main Content Column (Left - 8 columns) */}
-                      <div className="xl:col-span-8 space-y-6">
+                      <div className="xl:col-span-8 space-y-4">
                          
+                         {/* EV Ride Metrics / Live Analytics */}
+                         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2">
+                             {[
+                               { label: 'ETA', value: `${rideMetrics.eta}m`, valueClass: 'text-blue-700' },
+                               { label: 'AETA', value: `${rideMetrics.actualEta}m`, valueClass: 'text-slate-800' },
+                               { label: 'Dist', value: `${rideMetrics.distance.toFixed(1)}km`, valueClass: 'text-blue-700' },
+                               { label: 'Speed', value: `${ride.speed.toFixed(0)}km/h`, valueClass: 'text-amber-600' },
+                               { label: 'SOC', value: `${rideMetrics.soc.toFixed(0)}%`, valueClass: 'text-green-700' },
+                               { label: 'Range', value: `${Math.floor((rideMetrics.soc / 100) * 250)}km`, valueClass: 'text-green-700' },
+                             ].map((metric) => (
+                               <div key={metric.label} className="rounded-xl border border-slate-100 bg-white px-3 py-2 shadow-sm">
+                                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider leading-none">{metric.label}</p>
+                                 <p className={`mt-1 text-sm font-black leading-none ${metric.valueClass}`}>{metric.value}</p>
+                               </div>
+                             ))}
+                         </div>
+
                          {/* Live Ride Status Panel */}
                          <Card className={`shadow-md overflow-hidden rounded-2xl border-none`}>
-                            <div className={`${ride.status === 'Delayed' ? 'bg-amber-500' : ride.driverName === 'Unassigned' ? 'bg-orange-500' : 'bg-blue-700'} text-white p-4 flex justify-between items-center`}>
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-white/20 rounded-full"><Navigation className="h-5 w-5 animate-pulse" /></div>
-                                    <div>
-                                        <span className="font-bold tracking-wide uppercase text-sm block leading-none mb-1">
-                                            Live Status: {ride.status} {ride.delayMins ? `(Delayed by ${ride.delayMins} mins)` : ''}
-                                        </span>
-                                        <span className="text-xs text-white/80 font-medium">Tracking via Vehicle Telematics</span>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <Badge variant="secondary" className="bg-white/20 hover:bg-white/30 text-white border-none text-[10px] animate-pulse rounded-full px-3 py-1"><div className="h-2 w-2 rounded-full bg-green-400 mr-2 shadow-[0_0_8px_rgba(74,222,128,0.8)]"></div>Connected</Badge>
-                                </div>
-                            </div>
                             <CardContent className="p-0 relative">
                                {/* Real-Time Tracking System Map */}
-                               <div className="h-[400px] w-full bg-slate-100 relative flex items-center justify-center overflow-hidden z-0">
+                               <div className="h-[360px] w-full bg-slate-100 relative flex items-center justify-center overflow-hidden z-0">
                                    <div className="absolute inset-0 z-0">
                                      <MapComponent
+                                       key={`map-active-${ride.id}`}
                                        trips={[ride.originalBooking]}
                                        carLocations={carLocations}
                                        selectedTrip={ride.originalBooking.id}
@@ -712,6 +1150,12 @@ export default function ActiveRideDashboard() {
                                        getDriver={getDriver}
                                        getCar={getCar}
                                        showAllRoutes={true}
+                                       hoveredDriverId={hoveredDriverId}
+                                       assigningRideId={assigningRideId}
+                                       onAssignDriver={handleAssignDriverFromMap}
+                                       pickupPoint={[pickupPoint.latitude, pickupPoint.longitude]}
+                                       dropPoint={[dropPoint.latitude, dropPoint.longitude]}
+                                       stopPoints={stopPoints}
                                      />
                                    </div>
                                    
@@ -719,327 +1163,109 @@ export default function ActiveRideDashboard() {
                                    <div className="absolute top-4 left-4 flex flex-col gap-2 z-[400] pointer-events-none">
                                        <Badge className="bg-white/70 text-slate-800 shadow-sm backdrop-blur-md hover:bg-white/90 pointer-events-auto rounded-lg px-3 py-1.5"><MapPin className="h-3.5 w-3.5 mr-2 text-green-600" /> Live Vehicle Location</Badge>
                                        <Badge className="bg-white/70 text-slate-800 shadow-sm backdrop-blur-md hover:bg-white/90 pointer-events-auto rounded-lg px-3 py-1.5"><Zap className="h-3.5 w-3.5 mr-2 text-blue-600" /> Route Polyline Active</Badge>
+                                       {stopPoints.length > 0 && (
+                                         <Badge className="bg-amber-50/90 text-amber-700 shadow-sm backdrop-blur-md hover:bg-amber-50 pointer-events-auto rounded-lg px-3 py-1.5">
+                                           <MapPin className="h-3.5 w-3.5 mr-2 text-amber-600" /> {stopPoints.length} Stop{stopPoints.length > 1 ? 's' : ''}
+                                         </Badge>
+                                       )}
                                    </div>
                                </div>
                             </CardContent>
                          </Card>
 
-                         {/* EV Ride Metrics / Live Analytics */}
-                         <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-                             <Card className="col-span-1 md:col-span-1 shadow-sm bg-white rounded-2xl border-slate-100">
-                                 <CardContent className="p-4 text-center">
-                                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">ETA</p>
-                                     <p className="text-xl font-bold text-blue-700">{rideMetrics.eta} min</p>
-                                 </CardContent>
-                             </Card>
-                             <Card className="col-span-1 md:col-span-1 shadow-sm bg-white rounded-2xl border-slate-100">
-                                 <CardContent className="p-4 text-center">
-                                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Actual ETA</p>
-                                     <p className="text-xl font-bold text-slate-800">{rideMetrics.actualEta} min</p>
-                                 </CardContent>
-                             </Card>
-                             <Card className="col-span-1 md:col-span-1 shadow-sm bg-white rounded-2xl border-slate-100">
-                                 <CardContent className="p-4 text-center">
-                                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Dist Left</p>
-                                     <p className="text-xl font-bold text-blue-700">{rideMetrics.distance.toFixed(1)} km</p>
-                                 </CardContent>
-                             </Card>
-                             <Card className="col-span-1 md:col-span-1 shadow-sm bg-white rounded-2xl border-slate-100">
-                                 <CardContent className="p-4 text-center">
-                                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Live Speed</p>
-                                     <p className="text-xl font-bold text-amber-600">{ride.speed.toFixed(0)} km/h</p>
-                                 </CardContent>
-                             </Card>
-                             <Card className="col-span-1 md:col-span-1 shadow-sm bg-green-50 border border-green-100 rounded-2xl relative overflow-hidden">
-                                 <div className="absolute top-0 right-0 p-1"><Leaf className="h-6 w-6 text-green-200/50" /></div>
-                                 <CardContent className="p-4 text-center relative z-10">
-                                     <p className="text-[10px] text-green-700 font-bold uppercase tracking-wider mb-1">Battery (SOC)</p>
-                                     <p className="text-xl font-bold text-green-800">{rideMetrics.soc.toFixed(0)}%</p>
-                                 </CardContent>
-                             </Card>
-                             <Card className="col-span-1 md:col-span-1 shadow-sm bg-green-50 border border-green-100 rounded-2xl relative overflow-hidden">
-                                 <CardContent className="p-4 text-center relative z-10">
-                                     <p className="text-[10px] text-green-700 font-bold uppercase tracking-wider mb-1">Est. Range</p>
-                                     <p className="text-xl font-bold text-green-800">{Math.floor((rideMetrics.soc / 100) * 250)} km</p>
-                                 </CardContent>
-                             </Card>
-                             <Card className="col-span-2 md:col-span-6 shadow-none bg-blue-50/50 border border-blue-100 border-dashed rounded-xl">
-                                 <CardContent className="p-3 flex justify-center items-center gap-2">
-                                     <Clock className="h-4 w-4 text-blue-500" />
-                                     <span className="text-sm font-medium text-blue-800">Idle Time during ride: <strong>3 mins</strong></span>
-                                 </CardContent>
-                             </Card>
-                         </div>
-
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Trip Details Section */}
-                            <Card className="shadow-sm bg-white rounded-2xl border-slate-100">
-                                <CardHeader className="pb-3 bg-slate-50/50 border-b border-slate-100 rounded-t-2xl px-5">
-                                    <CardTitle className="text-md flex items-center gap-2 text-slate-800"><MapPin className="h-5 w-5 text-blue-500" /> Route Information</CardTitle>
-                                </CardHeader>
-                                <CardContent className="p-5 space-y-4">
-                                    <div className="relative pl-6 border-l-2 border-slate-200 ml-3 space-y-8">
-                                        <div className="relative">
-                                            <div className="absolute -left-[31px] bg-white border-4 border-green-500 rounded-full h-4 w-4 shadow-sm"></div>
-                                            <h4 className="text-sm font-bold text-slate-800">Pickup Location</h4>
-                                            <p className="text-[13px] text-slate-500 mt-1 leading-relaxed font-medium">{ride.originalBooking.pickupLocation || 'N/A'}</p>
-                                            <div className="grid grid-cols-2 gap-3 mt-4">
-                                                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                                                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Reached Time</p>
-                                                    <p className="text-[13px] font-bold text-slate-700">10:15 AM</p>
-                                                </div>
-                                                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                                                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Left Time</p>
-                                                    <p className="text-[13px] font-bold text-slate-700">10:20 AM</p>
-                                                </div>
-                                            </div>
-                                            <p className="text-[10px] text-slate-400 mt-2 font-medium">Added by: System Auto-assign</p>
-                                        </div>
-                                        <div className="relative">
-                                            <div className="absolute -left-[31px] bg-white border-4 border-blue-600 rounded-full h-4 w-4 shadow-sm"></div>
-                                            <h4 className="text-sm font-bold text-slate-800">Drop Location</h4>
-                                            <p className="text-[13px] text-slate-500 mt-1 leading-relaxed font-medium">{ride.originalBooking.dropLocation || 'N/A'}</p>
-                                            <div className="grid grid-cols-2 gap-3 mt-4">
-                                                <div className="bg-blue-50/80 p-2.5 rounded-xl border border-blue-100">
-                                                    <p className="text-[10px] text-blue-600 uppercase font-bold tracking-wider mb-0.5">Current ETA</p>
-                                                    <p className="text-[13px] font-bold text-blue-800">{new Date(Date.now() + rideMetrics.eta * 60000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                                                </div>
-                                                <div className="bg-blue-50/80 p-2.5 rounded-xl border border-blue-100">
-                                                    <p className="text-[10px] text-blue-600 uppercase font-bold tracking-wider mb-0.5">Dist. Remaining</p>
-                                                    <p className="text-[13px] font-bold text-blue-800">{rideMetrics.distance.toFixed(1)} km</p>
-                                                </div>
-                                            </div>
-                                        </div>
+                         {/* Fare / Price Details Module */}
+                         <Card className="shadow-sm bg-white rounded-2xl border-slate-100">
+                            <CardHeader className="py-3 bg-slate-50/50 border-b border-slate-100 rounded-t-2xl px-4">
+                                <CardTitle className="text-sm flex items-center gap-2 text-slate-800"><Wallet className="h-4 w-4 text-blue-500" /> Fare Estimate</CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-4">
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-[12px] font-medium text-slate-600">
+                                    <div>
+                                        <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Base</p>
+                                        <p className="mt-1 font-bold text-slate-800">₹ {(ride.originalBooking.estimatedFare || 0).toFixed(2)}</p>
                                     </div>
-                                </CardContent>
-                            </Card>
+                                    <div>
+                                        <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Toll/Parking</p>
+                                        <p className="mt-1 font-bold text-slate-800">+ ₹ {((ride.originalBooking.tollCharges || 0) + (ride.originalBooking.parkingCharges || 0)).toFixed(2)}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">GST</p>
+                                        <p className="mt-1 font-bold text-slate-800">+ ₹ {(ride.originalBooking.gstAmount || 0).toFixed(2)}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Discount</p>
+                                        <p className="mt-1 font-bold text-green-600">- ₹ {(ride.originalBooking.promoDiscount || 0).toFixed(2)}</p>
+                                    </div>
+                                    <div className={`col-span-2 md:col-span-1 rounded-xl border px-3 py-2 ${ride.originalBooking.paymentStatus === 'paid' ? 'bg-blue-50/50 border-blue-100' : 'bg-red-50 border-red-200'}`}>
+                                        <p className={`text-[9px] uppercase font-bold tracking-wider ${ride.originalBooking.paymentStatus === 'paid' ? 'text-green-600' : 'text-red-600'}`}>
+                                            {ride.originalBooking.paymentStatus === 'paid' ? 'Paid' : 'Due'}
+                                        </p>
+                                        <p className={`mt-1 text-lg font-black leading-none ${ride.originalBooking.paymentStatus === 'paid' ? 'text-blue-700' : 'text-red-600'}`}>₹ {(ride.originalBooking.grandTotal || ride.originalBooking.estimatedFare || 0).toFixed(2)}</p>
+                                    </div>
+                                </div>
+                            </CardContent>
+                         </Card>
 
-                            <div className="space-y-6">
-                                {/* Driver Details Card */}
-                                <Card className="shadow-sm bg-white rounded-2xl border-slate-100">
-                                    <CardHeader className="pb-3 bg-slate-50/50 border-b border-slate-100 rounded-t-2xl px-5 flex flex-row justify-between items-center">
-                                        <CardTitle className="text-md flex items-center gap-2 text-slate-800"><User className="h-5 w-5 text-blue-500" /> Driver Profile</CardTitle>
-                                        <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center border-2 border-white shadow-sm ring-1 ring-slate-100">
-                                            <User className="h-5 w-5 text-blue-600" />
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent className="p-5 space-y-5">
-                                        <div className="grid grid-cols-2 gap-y-5 gap-x-4">
-                                            <div>
-                                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Driver Status</p>
-                                                <Badge className="bg-green-100 text-green-800 hover:bg-green-200 text-[11px] border-none font-bold rounded-md px-2">{ride.driverName === 'Unassigned' ? 'Not Assigned' : 'On Duty - In Ride'}</Badge>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Shift Timing</p>
-                                                <p className="font-bold text-slate-700 text-[13px]">08:00 AM - 06:00 PM</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Duty Hours Today</p>
-                                                <p className="font-bold text-slate-700 text-[13px]">2h 45m</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Rating</p>
-                                                <p className="font-bold text-amber-500 text-[14px]">★ {driver?.rating || "4.8"} <span className="text-slate-400 font-medium text-[11px]">/ 5.0</span></p>
-                                            </div>
-                                        </div>
-                                        
-                                        <Popover>
-                                            <PopoverTrigger asChild>
-                                                <Button variant="outline" className="w-full text-[13px] font-semibold bg-slate-50 border-slate-200 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 rounded-xl h-10 transition-colors" onClick={(e) => e.stopPropagation()}>
-                                                    <Search className="h-4 w-4 mr-2" /> Change or Assign Driver
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-72 p-3 shadow-2xl border-slate-200 rounded-xl" align="center" side="bottom">
-                                                <DriverSearchDropdown ride={ride} />
-                                            </PopoverContent>
-                                        </Popover>
-                                    </CardContent>
-                                </Card>
-
-                                {/* Ride Details Card */}
-                                <Card className="shadow-sm bg-white rounded-2xl border-slate-100">
-                                    <CardHeader className="pb-3 bg-slate-50/50 border-b border-slate-100 rounded-t-2xl px-5">
-                                        <CardTitle className="text-md flex items-center gap-2 text-slate-800"><Car className="h-5 w-5 text-blue-500" /> Booking Details</CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="p-5">
-                                        <div className="grid grid-cols-2 gap-y-5 gap-x-4">
-                                            <div>
-                                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Created By</p>
-                                                <p className="font-bold text-slate-700 text-[13px]">{ride.originalBooking.createdBy || 'Admin'}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Source</p>
-                                                <Badge variant="secondary" className="bg-slate-100 text-slate-700 rounded-md text-[11px] font-bold px-2">{b2bClient ? b2bClient.companyName : ride.walletBal}</Badge>
-                                            </div>
-                                            <div className="col-span-2">
-                                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Ride Category</p>
-                                                <p className="font-bold text-slate-700 text-[13px] capitalize bg-slate-50 p-2 rounded-lg border border-slate-100 inline-block">{ride.rideType}</p>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </div>
-                         </div>
                       </div>
 
                       {/* Sidebar Column (Right - 4 columns) */}
-                      <div className="xl:col-span-4 space-y-6">
+                      <div className="xl:col-span-4 space-y-4">
 
-                         {/* Support Request Module (Important) */}
-                         <Card className={`border-${activeTickets.length > 0 ? 'red-200' : 'slate-100'} shadow-sm bg-white rounded-2xl`}>
-                            <CardHeader className={`${activeTickets.length > 0 ? 'bg-red-50' : 'bg-slate-50/50'} pb-4 border-b border-${activeTickets.length > 0 ? 'red-100' : 'slate-100'} rounded-t-2xl px-5`}>
-                                <div className="flex justify-between items-center">
-                                    <CardTitle className={`text-md flex items-center gap-2 ${activeTickets.length > 0 ? 'text-red-700' : 'text-slate-800'}`}>
-                                        <AlertCircle className="h-5 w-5" /> Active Support
-                                    </CardTitle>
-                                    {activeTickets.length > 0 && <Badge variant="outline" className="bg-red-600 text-white border-none font-bold text-[10px] px-2 rounded-md">{activeTickets.length} Alert(s)</Badge>}
-                                </div>
-                            </CardHeader>
-                            <CardContent className={`p-5 ${activeTickets.length > 0 ? 'bg-red-50/30' : ''}`}>
-                                {activeTickets.length === 0 ? (
-                                    <div className="text-center py-6">
-                                        <ShieldAlert className="h-8 w-8 text-slate-300 mx-auto mb-2" />
-                                        <p className="text-[13px] text-slate-500 font-medium">No active support requests.</p>
-                                    </div>
-                                ) : (
-                                    activeTickets.map((ticket: any) => (
-                                        <div key={ticket.id} className="bg-white p-4 rounded-xl border border-red-200 shadow-sm mb-4 last:mb-0">
-                                            <div className="flex justify-between items-start mb-3">
-                                                <div>
-                                                    <Badge variant="outline" className="text-red-700 border-red-200 bg-red-50 text-[10px] px-2 rounded-md font-bold">{ticket.ticketNumber || ticket.id}</Badge>
-                                                    <span className="text-[10px] text-slate-500 ml-2 capitalize font-medium">{ticket.priority} Priority</span>
-                                                </div>
-                                                <span className="text-[10px] font-bold text-slate-400">{new Date(ticket.createdAt).toLocaleDateString()}</span>
-                                            </div>
-                                            
-                                            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 mb-4">
-                                                <p className="text-[10px] text-slate-500 uppercase font-bold mb-1.5">{ticket.subject || 'Complaint'}</p>
-                                                <p className="text-[13px] font-medium text-slate-800 leading-relaxed">"{ticket.description}"</p>
-                                                <p className="text-[11px] text-slate-500 mt-2.5 font-medium">Raised By: <strong className="capitalize text-slate-700">{ticket.userType || 'Customer'}</strong></p>
-                                            </div>
-
-                                            <div className="grid grid-cols-2 gap-2.5">
-                                                <Button size="sm" variant="destructive" className="w-full text-xs bg-red-600 hover:bg-red-700 rounded-lg shadow-sm" onClick={() => { if(updateSupportTicket) updateSupportTicket(ticket.id, { priority: 'high' }); toast.success("Ticket Escalated!"); }}><AlertTriangle className="h-3.5 w-3.5 mr-1.5" /> Escalate</Button>
-                                                <Button size="sm" variant="outline" className="w-full text-xs bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 rounded-lg shadow-sm" onClick={() => { updateBooking(ride.originalBooking.id, { status: 'cancelled' }); if(updateSupportTicket) updateSupportTicket(ticket.id, { status: 'resolved' }); toast.error("Ride marked as Breakdown!"); }}><ShieldAlert className="h-3.5 w-3.5 mr-1.5" /> Breakdown</Button>
-                                                <Button size="sm" variant="outline" className="w-full text-xs rounded-lg border-slate-200 hover:bg-slate-50 font-medium" onClick={() => window.open(`tel:${ride.driverPhone}`)}><PhoneCall className="h-3.5 w-3.5 mr-1.5 text-blue-600" /> Call</Button>
-                                                <Button size="sm" variant="outline" className="w-full text-xs text-slate-500 hover:text-red-600 rounded-lg border-slate-200 hover:bg-red-50 font-medium" onClick={() => { if(updateSupportTicket) updateSupportTicket(ticket.id, { status: 'resolved' }); toast.success("Ticket Rejected & Closed"); }}><XCircle className="h-3.5 w-3.5 mr-1.5" /> Reject</Button>
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
-                            </CardContent>
-                         </Card>
-
-                         {/* Fare / Price Details Module */}
+                         {/* ADAPDC Timeline Module */}
                          <Card className="shadow-sm bg-white rounded-2xl border-slate-100">
-                            <CardHeader className="pb-4 bg-slate-50/50 border-b border-slate-100 rounded-t-2xl px-5">
-                                <CardTitle className="text-md flex items-center gap-2 text-slate-800"><Wallet className="h-5 w-5 text-blue-500" /> Fare Estimate</CardTitle>
+                            <CardHeader className="py-3 bg-slate-50/50 border-b border-slate-100 rounded-t-2xl px-4">
+                                <CardTitle className="text-sm flex items-center gap-2 text-slate-800"><History className="h-4 w-4 text-blue-500" /> ADAPDC</CardTitle>
                             </CardHeader>
-                            <CardContent className="p-5">
-                                <div className="space-y-3.5 text-[13px] font-medium text-slate-600">
-                                    <div className="flex justify-between items-center">
-                                        <span>Current Base Fare</span>
-                                        <span className="font-bold text-slate-800">₹ {(ride.originalBooking.estimatedFare || 0).toFixed(2)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span>Toll & Parking</span>
-                                        <span className="font-bold text-slate-800">+ ₹ {((ride.originalBooking.tollCharges || 0) + (ride.originalBooking.parkingCharges || 0)).toFixed(2)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span>GST Amount</span>
-                                        <span className="font-bold text-slate-800">+ ₹ {(ride.originalBooking.gstAmount || 0).toFixed(2)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center text-green-600">
-                                        <span>Discount (CORP_10)</span>
-                                        <span className="font-bold">- ₹ {(ride.originalBooking.promoDiscount || 0).toFixed(2)}</span>
-                                    </div>
-                                    <Separator className="my-4 bg-slate-100" />
-                                    <div className={`flex justify-between items-center font-bold text-lg p-4 rounded-xl border shadow-sm ${ride.originalBooking.paymentStatus === 'paid' ? 'bg-blue-50/50 border-blue-100' : 'bg-red-50 border-red-200'}`}>
-                                        <div className="flex flex-col">
-                                            <span className="text-slate-800">Total Fare</span>
-                                            <span className={`text-[10px] font-bold mt-1 uppercase tracking-wider ${ride.originalBooking.paymentStatus === 'paid' ? 'text-green-600' : 'text-red-600'}`}>
-                                                {ride.originalBooking.paymentStatus === 'paid' 
-                                                    ? (ride.originalBooking.b2bClientId ? '✓ Online Paid' : '✓ Paid to Driver (Cash)') 
-                                                    : (ride.originalBooking.b2bClientId ? `Due (Online): ₹${(ride.originalBooking.grandTotal || ride.originalBooking.estimatedFare || 0).toFixed(2)}` : `Due (Cash): ₹${(ride.originalBooking.grandTotal || ride.originalBooking.estimatedFare || 0).toFixed(2)}`)
-                                                }
-                                            </span>
+                            <CardContent className="p-4">
+                                <div className="relative border-l-2 border-slate-200 ml-2 space-y-4">
+                                    <div className="relative pl-5">
+                                        <div className="absolute -left-[25px] bg-blue-500 rounded-full h-3 w-3 border-2 border-white shadow-sm"></div>
+                                        <h4 className="text-[12px] font-bold text-slate-800">Assigned</h4>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <p className="text-[10px] text-slate-500">{(!ride.originalBooking.driverId && ['pending', 'confirmed'].includes(ride.originalBooking.status)) ? 'Pending' : '05:45 PM'}</p>
+                                            {ride.originalBooking.driverId && <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">By: System</span>}
                                         </div>
-                                        <div className="flex items-center gap-3">
-                                            {ride.originalBooking.paymentStatus !== 'paid' && (
-                                                <Button 
-                                                    size="sm" 
-                                                    className="bg-green-600 hover:bg-green-700 text-white text-xs h-8 px-3 rounded-lg shadow-sm"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        updateBooking(ride.originalBooking.id, { paymentStatus: 'paid' });
-                                                        toast.success("Payment marked as Paid!");
-                                                    }}
-                                                >
-                                                    Mark as Paid
-                                                </Button>
-                                            )}
-                                            <span className={`text-xl ${ride.originalBooking.paymentStatus === 'paid' ? 'text-blue-700' : 'text-red-600'}`}>₹ {(ride.originalBooking.grandTotal || ride.originalBooking.estimatedFare || 0).toFixed(2)}</span>
+                                        <EventSyncLog ride={ride} eventType="assigned" compact />
+                                    </div>
+                                    <div className={`relative pl-5 ${['pending', 'confirmed', 'assigned'].includes(ride.originalBooking.status) ? 'opacity-50' : ''}`}>
+                                        <div className="absolute -left-[25px] bg-indigo-500 rounded-full h-3 w-3 border-2 border-white shadow-sm"></div>
+                                        <h4 className="text-[12px] font-bold text-slate-800">Dispatched</h4>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <p className="text-[10px] text-slate-500">{!['pending', 'confirmed', 'assigned'].includes(ride.originalBooking.status) ? '05:46 PM' : 'Pending'}</p>
+                                            {!['pending', 'confirmed', 'assigned'].includes(ride.originalBooking.status) && <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">By: {ride.driverName}</span>}
                                         </div>
+                                        <EventSyncLog ride={ride} eventType="dispatched" compact />
+                                    </div>
+                                    <div className={`relative pl-5 ${['pending', 'confirmed', 'assigned', 'dispatched'].includes(ride.originalBooking.status) ? 'opacity-50' : ''}`}>
+                                        <div className="absolute -left-[25px] bg-purple-500 rounded-full h-3 w-3 border-2 border-white shadow-sm"></div>
+                                        <h4 className="text-[12px] font-bold text-slate-800">Arrived</h4>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <p className="text-[10px] text-slate-500">{!['pending', 'confirmed', 'assigned', 'dispatched'].includes(ride.originalBooking.status) ? '06:05 PM' : 'Pending'}</p>
+                                            {!['pending', 'confirmed', 'assigned', 'dispatched'].includes(ride.originalBooking.status) && <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">By: {ride.driverName}</span>}
+                                        </div>
+                                        <EventSyncLog ride={ride} eventType="arrived" compact />
+                                    </div>
+                                    <div className={`relative pl-5 ${!['picked_up', 'dropped', 'closed', 'Cancelled', 'Completed'].includes(ride.originalBooking.status) ? 'opacity-50' : ''}`}>
+                                        <div className="absolute -left-[25px] bg-emerald-500 rounded-full h-3 w-3 border-2 border-white shadow-sm"></div>
+                                        <h4 className="text-[12px] font-bold text-slate-800">Picked Up</h4>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <p className="text-[10px] text-slate-500">{['picked_up', 'dropped', 'closed', 'Completed'].includes(ride.originalBooking.status) ? '06:12 PM' : 'Pending'}</p>
+                                            {['picked_up', 'dropped', 'closed', 'Completed'].includes(ride.originalBooking.status) && <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">By: {ride.driverName}</span>}
+                                        </div>
+                                        <EventSyncLog ride={ride} eventType="picked_up" compact />
+                                    </div>
+                                    <div className={`relative pl-5 ${!['dropped', 'closed', 'Completed'].includes(ride.originalBooking.status) ? 'opacity-50' : ''}`}>
+                                        <div className="absolute -left-[25px] bg-teal-500 rounded-full h-3 w-3 border-2 border-white shadow-sm"></div>
+                                        <h4 className="text-[12px] font-bold text-slate-800">Dropped Off</h4>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <p className="text-[10px] text-slate-500">{['dropped', 'closed', 'Completed'].includes(ride.originalBooking.status) ? '07:45 PM' : 'Pending'}</p>
+                                            {['dropped', 'closed', 'Completed'].includes(ride.originalBooking.status) && <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">By: {ride.driverName}</span>}
+                                        </div>
+                                        <EventSyncLog ride={ride} eventType="dropped" compact />
                                     </div>
                                 </div>
                             </CardContent>
                          </Card>
-
-                         {/* Trip History Timeline */}
-                         <Card className="shadow-sm bg-white rounded-2xl border-slate-100">
-                            <CardHeader className="pb-4 bg-slate-50/50 border-b border-slate-100 rounded-t-2xl px-5">
-                                <CardTitle className="text-md flex items-center gap-2 text-slate-800"><History className="h-5 w-5 text-blue-500" /> Trip Timeline</CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-5">
-                                <ScrollArea className="h-[280px] pr-4">
-                                    <div className="relative border-l-2 border-slate-200 ml-3 space-y-7 pb-4">
-                                        
-                                        {rideTickets.map((ticket: any) => (
-                                            <div key={ticket.id} className="relative pl-6">
-                                                <div className="absolute -left-[9px] bg-red-500 rounded-full h-4 w-4 border-4 border-white shadow-sm"></div>
-                                                <h4 className="text-[13px] font-bold text-slate-800">Support Raised</h4>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <Badge variant="outline" className="text-[9px] py-0 h-4 border-slate-200">{new Date(ticket.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Badge>
-                                                    <span className="text-[10px] text-slate-400 capitalize font-medium">{ticket.userType || 'Customer'}</span>
-                                                </div>
-                                                <p className="text-[11px] text-slate-600 mt-2 bg-slate-50 p-2 rounded-lg border border-slate-100 font-medium">{ticket.subject ? `${ticket.subject}: ` : ''}{ticket.description}</p>
-                                            </div>
-                                        ))}
-
-                                        <div className="relative pl-6">
-                                            <div className="absolute -left-[9px] bg-green-500 rounded-full h-4 w-4 border-4 border-white shadow-sm"></div>
-                                            <h4 className="text-[13px] font-bold text-slate-800">Ride Started</h4>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <Badge variant="outline" className="text-[9px] py-0 h-4 border-slate-200">10:20 AM</Badge>
-                                                <span className="text-[10px] text-slate-400 font-medium">Driver</span>
-                                            </div>
-                                            <p className="text-[11px] text-green-700 mt-2 bg-green-50 p-2 rounded-lg border border-green-100 font-medium flex items-center gap-1"><CheckCircle className="w-3 h-3" /> OTP Verified Successfully</p>
-                                        </div>
-
-                                        <div className="relative pl-6">
-                                            <div className="absolute -left-[9px] bg-green-500 rounded-full h-4 w-4 border-4 border-white shadow-sm"></div>
-                                            <h4 className="text-[13px] font-bold text-slate-800">Driver Arrived</h4>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <Badge variant="outline" className="text-[9px] py-0 h-4 border-slate-200">10:15 AM</Badge>
-                                                <span className="text-[10px] text-slate-400 font-medium">GPS Geofence</span>
-                                            </div>
-                                            <p className="text-[11px] text-slate-500 mt-1 font-medium">Wait time: 5 mins</p>
-                                        </div>
-                                        
-                                        <div className="relative pl-6">
-                                            <div className="absolute -left-[9px] bg-blue-500 rounded-full h-4 w-4 border-4 border-white shadow-sm"></div>
-                                            <h4 className="text-[13px] font-bold text-slate-800">Driver Enroute</h4>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <Badge variant="outline" className="text-[9px] py-0 h-4 border-slate-200">09:45 AM</Badge>
-                                                <span className="text-[10px] text-slate-400 font-medium">Driver Action</span>
-                                            </div>
-                                        </div>
-                                        
-                                    </div>
-                                </ScrollArea>
-                            </CardContent>
-                         </Card>
-
                       </div>
                     </div>
                   </div>
@@ -1049,7 +1275,7 @@ export default function ActiveRideDashboard() {
                 {/* EXPANDED CONTENT AREA - POST RIDE (CLOSED) */}
                 {/* ========================================================= */}
                 {isExpanded && isClosed && (
-                  <div className="border-t border-slate-100 bg-slate-50/80 p-4 md:p-6 animate-in fade-in slide-in-from-top-2 duration-300 relative z-10 rounded-b-2xl">
+                  <div className="border-t border-slate-100/50 bg-slate-50/50 backdrop-blur-md p-4 md:p-6 animate-in fade-in slide-in-from-top-2 duration-300 relative z-10 rounded-b-3xl">
                     
                     {/* Post Ride Action Buttons */}
                     <div className="flex justify-end items-center mb-6 gap-3 flex-wrap">
@@ -1106,7 +1332,7 @@ export default function ActiveRideDashboard() {
                     <Tabs defaultValue="overview" className="w-full">
                         <TabsList className="mb-6 bg-white border border-slate-200 shadow-sm rounded-xl p-1">
                             <TabsTrigger value="overview" className="rounded-lg data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:shadow-none">Overview</TabsTrigger>
-                            <TabsTrigger value="timeline" className="rounded-lg data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:shadow-none">Timeline</TabsTrigger>
+                            <TabsTrigger value="adapdc" className="rounded-lg data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:shadow-none">ADAPDC</TabsTrigger>
                             <TabsTrigger value="fare" className="rounded-lg data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:shadow-none">Fare Details</TabsTrigger>
                             <TabsTrigger value="tracking" className="rounded-lg data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:shadow-none">Tracking Replay</TabsTrigger>
                             <TabsTrigger value="audit" className="rounded-lg data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:shadow-none">Audit Logs</TabsTrigger>
@@ -1316,10 +1542,10 @@ export default function ActiveRideDashboard() {
                             </Card>
                         </TabsContent>
 
-                        <TabsContent value="timeline">
+                        <TabsContent value="adapdc">
                              <Card className="shadow-sm border-slate-200 bg-white rounded-2xl max-w-3xl mx-auto">
                                 <CardHeader className="pb-4 border-b border-slate-100">
-                                    <CardTitle className="text-md flex items-center gap-2 text-slate-800"><History className="h-5 w-5 text-blue-500" /> Full Trip Timeline</CardTitle>
+                                    <CardTitle className="text-md flex items-center gap-2 text-slate-800"><History className="h-5 w-5 text-blue-500" /> ADAPDC</CardTitle>
                                 </CardHeader>
                                 <CardContent className="p-6">
                                     <div className="relative border-l-2 border-slate-200 ml-4 space-y-10">
@@ -1333,6 +1559,7 @@ export default function ActiveRideDashboard() {
                                                     <span className="text-[11px] text-slate-500 capitalize font-medium">{ticket.userType || 'Customer'}</span>
                                                 </div>
                                                 <p className="text-[12px] text-slate-700 mt-2 bg-slate-50 p-3 rounded-xl border border-slate-100 font-medium"><strong>{ticket.subject ? `${ticket.subject}: ` : ''}</strong>{ticket.description}</p>
+                                                <EventSyncLog ride={ride} eventType="support" />
                                             </div>
                                         ))}
 
@@ -1341,8 +1568,9 @@ export default function ActiveRideDashboard() {
                                             <h4 className="text-[14px] font-bold text-slate-800">Ride Dropped Off</h4>
                                             <div className="flex items-center gap-2 mt-1.5">
                                                 <Badge variant="outline" className="text-[10px] border-slate-200 py-0.5">07:45 PM</Badge>
-                                                <span className="text-[11px] text-slate-500 font-medium">Driver App</span>
+                                                <span className="text-[11px] text-slate-500 font-medium">By: <span className="font-bold text-slate-700">{ride.driverName}</span> (Driver App)</span>
                                             </div>
+                                            <EventSyncLog ride={ride} eventType="dropped" />
                                         </div>
 
                                         <div className="relative pl-6">
@@ -1350,8 +1578,9 @@ export default function ActiveRideDashboard() {
                                             <h4 className="text-[14px] font-bold text-slate-800">Ride Started</h4>
                                             <div className="flex items-center gap-2 mt-1.5">
                                                 <Badge variant="outline" className="text-[10px] border-slate-200 py-0.5">06:12 PM</Badge>
-                                                <span className="text-[11px] text-slate-500 font-medium">OTP Verified</span>
+                                                <span className="text-[11px] text-slate-500 font-medium">By: <span className="font-bold text-slate-700">{ride.driverName}</span> (OTP Verified)</span>
                                             </div>
+                                            <EventSyncLog ride={ride} eventType="picked_up" />
                                         </div>
 
                                         <div className="relative pl-6">
@@ -1359,8 +1588,9 @@ export default function ActiveRideDashboard() {
                                             <h4 className="text-[14px] font-bold text-slate-800">Driver Arrived at Pickup</h4>
                                             <div className="flex items-center gap-2 mt-1.5">
                                                 <Badge variant="outline" className="text-[10px] border-slate-200 py-0.5">06:05 PM</Badge>
-                                                <span className="text-[11px] text-slate-500 font-medium">GPS Geofence</span>
+                                                <span className="text-[11px] text-slate-500 font-medium">By: <span className="font-bold text-slate-700">{ride.driverName}</span> (GPS Geofence)</span>
                                             </div>
+                                            <EventSyncLog ride={ride} eventType="arrived" />
                                         </div>
                                         
                                         <div className="relative pl-6">
@@ -1368,8 +1598,9 @@ export default function ActiveRideDashboard() {
                                             <h4 className="text-[14px] font-bold text-slate-800">Driver Enroute</h4>
                                             <div className="flex items-center gap-2 mt-1.5">
                                                 <Badge variant="outline" className="text-[10px] border-slate-200 py-0.5">05:46 PM</Badge>
-                                                <span className="text-[11px] text-slate-500 font-medium">Driver App</span>
+                                                <span className="text-[11px] text-slate-500 font-medium">By: <span className="font-bold text-slate-700">{ride.driverName}</span> (Driver App)</span>
                                             </div>
+                                            <EventSyncLog ride={ride} eventType="dispatched" />
                                         </div>
 
                                         <div className="relative pl-6">
@@ -1377,8 +1608,9 @@ export default function ActiveRideDashboard() {
                                             <h4 className="text-[14px] font-bold text-slate-800">Driver Assigned</h4>
                                             <div className="flex items-center gap-2 mt-1.5">
                                                 <Badge variant="outline" className="text-[10px] border-slate-200 py-0.5">05:45 PM</Badge>
-                                                <span className="text-[11px] text-slate-500 font-medium">System Auto-Assign</span>
+                                                <span className="text-[11px] text-slate-500 font-medium">By: <span className="font-bold text-slate-700">System Auto-Assign</span></span>
                                             </div>
+                                            <EventSyncLog ride={ride} eventType="assigned" />
                                         </div>
                                         
                                     </div>
@@ -1395,6 +1627,7 @@ export default function ActiveRideDashboard() {
                                    <div className="h-[500px] w-full bg-slate-100 relative flex flex-col items-center justify-center overflow-hidden z-0 rounded-b-2xl">
                                        <div className="absolute inset-0 z-0">
                                            <MapComponent
+                                             key={`map-history-${ride.id}`}
                                              trips={[ride.originalBooking]}
                                              carLocations={displayCarLocations}
                                              selectedTrip={ride.originalBooking.id}
@@ -1402,6 +1635,12 @@ export default function ActiveRideDashboard() {
                                              getDriver={getDriver}
                                              getCar={getCar}
                                              showAllRoutes={true}
+                                             assigningRideId={assigningRideId}
+                                             onAssignDriver={handleAssignDriverFromMap}
+                                             hoveredDriverId={hoveredDriverId}
+                                             pickupPoint={[pickupPoint.latitude, pickupPoint.longitude]}
+                                             dropPoint={[dropPoint.latitude, dropPoint.longitude]}
+                                             stopPoints={stopPoints}
                                            />
                                        </div>
                                    </div>
@@ -1626,8 +1865,19 @@ export default function ActiveRideDashboard() {
          </DialogContent>
        </Dialog>
       </div>
-
-      <FreeDriversSidebar freeDrivers={freeDrivers} />
+      <FreeDriversSidebar 
+        freeDrivers={freeDrivers}
+        isAutoAllocateOn={isAutoAllocateOn}
+        setIsAutoAllocateOn={setIsAutoAllocateOn}
+        autoAllocationRadius={autoAllocationRadius}
+        setAutoAllocationRadius={setAutoAllocationRadius}
+        autoAllocationDelay={autoAllocationDelay}
+        setAutoAllocationDelay={setAutoAllocationDelay}
+        minSocThreshold={minSocThreshold}
+        setMinSocThreshold={setMinSocThreshold}
+        setHoveredDriverId={setHoveredDriverId}
+        assigningRideId={assigningRideId}
+      />
     </div>
   );
 }
