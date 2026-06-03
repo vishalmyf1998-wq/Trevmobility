@@ -29,6 +29,7 @@ interface DashboardHeaderProps {
     closed: number;
     gpsOff: number;
     priority: number;
+    lowSoc: number;
   };
 }
 
@@ -165,6 +166,9 @@ export function DashboardHeader({
         </Button>
         <Button size="sm" variant="ghost" onClick={() => setStatusFilter('priority')} className={`h-8 px-4 rounded-full text-[12px] font-bold transition-all duration-300 ${statusFilter === 'priority' ? 'bg-pink-600 text-white shadow-md shadow-pink-600/25' : 'bg-white/40 text-pink-700 hover:bg-white/80 border border-white/60 backdrop-blur-md shadow-sm'}`}>
           Priority <Badge variant="secondary" className={`ml-1.5 px-1.5 min-w-[20px] rounded-full border-none ${statusFilter === 'priority' ? 'bg-white/30 text-white' : 'bg-pink-100 text-pink-800'}`}>{counts.priority}</Badge>
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setStatusFilter('low_soc')} className={`h-8 px-4 rounded-full text-[12px] font-bold transition-all duration-300 ${statusFilter === 'low_soc' ? 'bg-red-600 text-white shadow-md shadow-red-600/25' : 'bg-white/40 text-red-700 hover:bg-white/80 border border-white/60 backdrop-blur-md shadow-sm'}`}>
+          Low SOC &lt; 20% <Badge variant="secondary" className={`ml-1.5 px-1.5 min-w-[20px] rounded-full border-none ${statusFilter === 'low_soc' ? 'bg-white/30 text-white' : 'bg-red-100 text-red-800'}`}>{counts.lowSoc}</Badge>
         </Button>
       </div>
 

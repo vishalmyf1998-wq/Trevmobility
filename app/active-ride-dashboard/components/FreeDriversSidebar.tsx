@@ -146,27 +146,8 @@ export function FreeDriversSidebar({ freeDrivers, isAutoAllocateOn, setIsAutoAll
                                 {isAutoAllocateOn ? 'Active' : 'Enable'}
                             </Button>
                         </div>
+                        {/* Search Radius and Hold Delay inputs hidden as per request */}
                         <div className="flex items-center justify-between">
-                            <Label htmlFor="alloc-radius-sidebar" className="text-xs font-medium text-slate-600">Search Radius (km)</Label>
-                            <Input
-                                id="alloc-radius-sidebar"
-                                type="number"
-                                value={autoAllocationRadius}
-                                onChange={(e) => setAutoAllocationRadius(Number(e.target.value))}
-                                className="h-8 w-20 text-sm font-bold rounded-lg border-slate-200 bg-white shadow-sm text-center"
-                            />
-                        </div>
-                        <div className="flex items-center justify-between mt-3">
-                            <Label htmlFor="alloc-delay-sidebar" className="text-xs font-medium text-slate-600">Hold Delay (sec)</Label>
-                            <Input
-                                id="alloc-delay-sidebar"
-                                type="number"
-                                value={autoAllocationDelay}
-                                onChange={(e) => setAutoAllocationDelay(Number(e.target.value))}
-                                className="h-8 w-20 text-sm font-bold rounded-lg border-slate-200 bg-white shadow-sm text-center"
-                            />
-                        </div>
-                        <div className="flex items-center justify-between mt-3">
                             <Label htmlFor="alloc-soc-sidebar" className="text-xs font-medium text-slate-600">Min. SOC (%)</Label>
                             <Input
                                 id="alloc-soc-sidebar"

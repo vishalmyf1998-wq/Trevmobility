@@ -337,7 +337,7 @@ export default function ActiveRideDashboard() {
 
   const [expandedRideId, setExpandedRideId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'delayed' | 'unassigned' | 'dispatched' | 'arrived' | 'pickup' | 'dropped' | 'closed' | 'gps_off' | 'priority'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'delayed' | 'unassigned' | 'dispatched' | 'arrived' | 'pickup' | 'dropped' | 'closed' | 'gps_off' | 'priority' | 'low_soc'>('all');
   const [delaySubFilter, setDelaySubFilter] = useState('all');
   const [ongoingSubFilter, setOngoingSubFilter] = useState('all');
   const [isSimulating, setIsSimulating] = useState(false);
@@ -551,6 +551,10 @@ export default function ActiveRideDashboard() {
       const activeStatuses = ['confirmed', 'assigned', 'dispatched', 'arrived', 'picked_up', 'dropped'];
       return activeStatuses.includes(b.status) && isPriority(b);
   }).length, [bookings, isPriority]);
+  const lowSocCount = useMemo(() => bookings.filter((b: any) => {
+      const metrics = liveMetrics[b.id];
+      return metrics && metrics.soc < 20;
+  }).length, [bookings, liveMetrics]);
 
   const filteredBookings = useMemo(() => {
     const activeStatuses = ['confirmed', 'assigned', 'dispatched', 'arrived', 'picked_up', 'dropped'];
@@ -587,6 +591,12 @@ export default function ActiveRideDashboard() {
         break;
       case 'priority':
         statusFiltered = bookings.filter((b: any) => activeStatuses.includes(b.status) && isPriority(b));
+        break;
+      case 'low_soc':
+        statusFiltered = bookings.filter((b: any) => {
+            const metrics = liveMetrics[b.id];
+            return activeStatuses.includes(b.status) && metrics && metrics.soc < 20;
+        });
         break;
       case 'delayed':
         statusFiltered = bookings.filter((b: any) => {
@@ -789,6 +799,7 @@ export default function ActiveRideDashboard() {
            closed: closedCount,
            gpsOff: gpsOffCount,
            priority: priorityCount,
+           lowSoc: lowSocCount,
          }}
        />
 
