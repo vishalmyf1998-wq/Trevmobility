@@ -45,6 +45,9 @@ export async function POST(req: Request) {
       dropLocation: body.dropLocation,
       pickupDate: body.pickupDate,
       pickupTime: body.pickupTime,
+      isAutoSlotReturn: body.isAutoSlotReturn || body.autoSlotReturn || false,
+      returnDiscountAmount: body.returnDiscountAmount || 0,
+      returnDiscountLabel: body.returnDiscountLabel || null,
       estimatedKm: body.estimatedKm || 0,
       estimatedFare: body.estimatedFare || 0,
       status: 'confirmed', // Auto-accepting the booking
@@ -60,7 +63,7 @@ export async function POST(req: Request) {
           toStatus: 'confirmed',
           performedBy: body.source || 'External API',
           performedAt: now,
-          notes: body.notes || 'Booking auto-accepted via External API'
+          notes: body.notes || (body.returnDiscountAmount ? `Booking auto-accepted via External API with ${body.returnDiscountLabel || 'auto return discount'}` : 'Booking auto-accepted via External API')
         }
       ]
     };

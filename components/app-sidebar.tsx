@@ -115,6 +115,11 @@ export function AppSidebar() {
         icon: Activity,
         href: '/active-ride-dashboard',
       },
+      {
+        title: 'Live Tracking',
+        icon: MapPinned,
+        href: '/live-tracking',
+      },
     ] : []),
     ...(isTrevAdmin ? [
       {
@@ -128,7 +133,6 @@ export function AppSidebar() {
           { title: 'Auto Slot Configuration', href: '/auto-slot-configuration' },
           { title: 'Car Categories', href: '/car-categories' },
           { title: 'Hubs', href: '/hubs' },
-          { title: 'Live Tracking', href: '/live-tracking' },
         ],
       },
       {

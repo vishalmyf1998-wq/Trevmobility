@@ -566,6 +566,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
               minimumKmPerDay: outstationFare.minimumKmPerDay,
               preBookingCharges: outstationFare.preBookingCharges,
               urgentBooking: outstationFare.urgentBooking,
+              autoSlotReturn: outstationFare.autoSlotReturn,
             }
           }
           break
@@ -665,6 +666,24 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
           estimatedFare = fareConfig.baseFare || fareConfig.minimumFare || 0
         }
 
+        let returnDiscountAmount = 0
+        let returnDiscountLabel = ''
+        if ((formData as any).isAutoSlotReturn && fareConfig.autoSlotReturn?.discountEnabled) {
+          const discountValue = fareConfig.autoSlotReturn.discountValue || 0
+          if (fareConfig.autoSlotReturn.discountType === 'flat') {
+            returnDiscountAmount = discountValue
+            returnDiscountLabel = `Auto return discount Rs. ${discountValue}`
+          } else {
+            returnDiscountAmount = (estimatedFare * discountValue) / 100
+            returnDiscountLabel = `Auto return discount ${discountValue}%`
+          }
+          if (fareConfig.autoSlotReturn.maxDiscount && returnDiscountAmount > fareConfig.autoSlotReturn.maxDiscount) {
+            returnDiscountAmount = fareConfig.autoSlotReturn.maxDiscount
+          }
+          returnDiscountAmount = Math.min(returnDiscountAmount, estimatedFare)
+          estimatedFare = Math.max(estimatedFare - returnDiscountAmount, 0)
+        }
+
         let urgentCharge = 0
         if (fareConfig.urgentBooking?.enabled && formData.pickupDate && formData.pickupTime) {
           const pickupDateTime = new Date(`${formData.pickupDate}T${formData.pickupTime}`)
@@ -704,6 +723,8 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
         setFormData(prev => ({
           ...prev,
           estimatedFare,
+          returnDiscountAmount,
+          returnDiscountLabel,
           tollCharges: preBookingToll,
           parkingCharges: preBookingParking,
           extraCharges: urgentCharge, // Store urgent charge as extra charge
@@ -713,7 +734,7 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
           grandTotal,
         }))
       }
-    }, [formData.cityId, formData.carCategoryId, formData.tripType, formData.b2bClientId, formData.airportId, formData.airportTerminalId, formData.promoCodeId, customerType, calculateFareFromConfig, getPromoEligibilityError, calculatePromoDiscount, promoCodes, gstConfig, b2bClients])
+    }, [formData.cityId, formData.carCategoryId, formData.tripType, (formData as any).isAutoSlotReturn, formData.b2bClientId, formData.airportId, formData.airportTerminalId, formData.promoCodeId, customerType, calculateFareFromConfig, getPromoEligibilityError, calculatePromoDiscount, promoCodes, gstConfig, b2bClients])
 
     // Auto-calculate Estimated Distance based on Pickup & Drop Locations
     useEffect(() => {

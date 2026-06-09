@@ -154,17 +154,62 @@ const initialAirports: Airport[] = [
   },
 ]
 
-const initialDrivers: Driver[] = [
-  { id: 'demo-driver-1', driverId: 'DRV-001', name: 'Ramesh Yadav', phone: '9000000001', email: 'ramesh@trev.test', licenseNumber: 'MH12-2024-1001', licenseExpiry: demoNextMonth, address: 'Andheri East, Mumbai', status: 'active', assignedCarId: 'demo-car-1', hubId: 'demo-hub-mumbai-airport', joiningDate: demoToday, monthlySalary: 28500, password: 'test123', createdAt: demoNow },
-  { id: 'demo-driver-2', driverId: 'DRV-002', name: 'Suresh Patil', phone: '9000000002', email: 'suresh@trev.test', licenseNumber: 'DL09-2023-2202', licenseExpiry: demoNextMonth, address: 'Dwarka, Delhi', status: 'active', assignedCarId: 'demo-car-2', hubId: 'demo-hub-delhi-ncr', joiningDate: demoToday, monthlySalary: 31000, password: 'test123', createdAt: demoNow },
-  { id: 'demo-driver-3', driverId: 'DRV-003', name: 'Imran Shaikh', phone: '9000000003', email: 'imran@trev.test', licenseNumber: 'KA05-2022-3303', licenseExpiry: demoNextMonth, address: 'Hebbal, Bengaluru', status: 'inactive', assignedCarId: '', hubId: 'demo-hub-bengaluru', joiningDate: demoToday, monthlySalary: 29500, password: 'test123', createdAt: demoNow },
-]
+const generateMockDrivers = (): Driver[] => {
+  const drivers: Driver[] = []
+  const names = ['Ramesh Yadav', 'Suresh Patil', 'Imran Shaikh', 'Rajesh Kumar', 'Vijay Singh', 'Amit Patel', 'Sandeep Sharma', 'Sunil Verma', 'Deepak Gupta', 'Manoj Tiwari', 'Ravi Shankar', 'Prakash Jadhav', 'Anil Deshmukh', 'Rahul Chauhan', 'Sachin Kale', 'Vikram Singh', 'Pramod More', 'Sanjay Mhatre', 'Ganesh Kadam', 'Kiran Pawar']
+  for (let i = 1; i <= 20; i++) {
+    drivers.push({
+      id: `demo-driver-${i}`,
+      driverId: `DRV-${String(i).padStart(3, '0')}`,
+      name: names[i - 1] || `Driver ${i}`,
+      phone: `9000000${String(i).padStart(3, '0')}`,
+      email: `driver${i}@trev.test`,
+      licenseNumber: `MH12-2024-${1000 + i}`,
+      licenseExpiry: demoNextMonth,
+      address: 'Delhi NCR',
+      status: i % 5 === 0 ? 'inactive' : 'active',
+      assignedCarId: `demo-car-${i}`,
+      hubId: 'demo-hub-delhi-ncr',
+      joiningDate: demoToday,
+      monthlySalary: 25000 + (i * 500),
+      password: 'test123',
+      createdAt: demoNow
+    })
+  }
+  return drivers
+}
+const initialDrivers = generateMockDrivers()
 
-const initialCars: Car[] = [
-  { id: 'demo-car-1', registrationNumber: 'MH 01 AB 1234', categoryId: 'demo-cat-sedan', make: 'Maruti Suzuki', model: 'Dzire', year: 2023, color: 'White', fuelType: 'cng', seatingCapacity: 4, status: 'on_trip', assignedDriverId: 'demo-driver-1', hubId: 'demo-hub-mumbai-airport', createdAt: demoNow },
-  { id: 'demo-car-2', registrationNumber: 'DL 02 CD 5678', categoryId: 'demo-cat-suv', make: 'Toyota', model: 'Innova Crysta', year: 2022, color: 'Silver', fuelType: 'diesel', seatingCapacity: 6, status: 'available', assignedDriverId: 'demo-driver-2', hubId: 'demo-hub-delhi-ncr', createdAt: demoNow },
-  { id: 'demo-car-3', registrationNumber: 'KA 03 EF 9012', categoryId: 'demo-cat-premium', make: 'Honda', model: 'City', year: 2024, color: 'Black', fuelType: 'petrol', seatingCapacity: 4, status: 'maintenance', assignedDriverId: '', hubId: 'demo-hub-bengaluru', createdAt: demoNow },
-]
+const generateMockCars = (): Car[] => {
+  const cars: Car[] = []
+  const templates = [
+    { make: 'Maruti Suzuki', model: 'Dzire', cat: 'demo-cat-sedan', fuel: 'cng', cap: 4 },
+    { make: 'Toyota', model: 'Innova Crysta', cat: 'demo-cat-suv', fuel: 'diesel', cap: 6 },
+    { make: 'Honda', model: 'City', cat: 'demo-cat-premium', fuel: 'petrol', cap: 4 },
+    { make: 'Hyundai', model: 'Aura', cat: 'demo-cat-sedan', fuel: 'cng', cap: 4 },
+    { make: 'Kia', model: 'Carens', cat: 'demo-cat-suv', fuel: 'diesel', cap: 6 }
+  ]
+  for (let i = 1; i <= 20; i++) {
+    const t = templates[i % templates.length]
+    cars.push({
+      id: `demo-car-${i}`,
+      registrationNumber: `MH 01 AB ${1000 + i}`,
+      categoryId: t.cat,
+      make: t.make,
+      model: t.model,
+      year: 2022 + (i % 3),
+      color: i % 2 === 0 ? 'White' : 'Silver',
+      fuelType: t.fuel as any,
+      seatingCapacity: t.cap,
+      status: i % 4 === 0 ? 'maintenance' : (i % 3 === 0 ? 'on_trip' : 'available'),
+      assignedDriverId: `demo-driver-${i}`,
+      hubId: 'demo-hub-delhi-ncr',
+      createdAt: demoNow
+    })
+  }
+  return cars
+}
+const initialCars = generateMockCars()
 
 const initialFareGroups: FareGroup[] = [
   {
@@ -183,7 +228,7 @@ const initialFareGroups: FareGroup[] = [
       { id: 'demo-cityfare-1', cityId: 'demo-city-mumbai', carCategoryId: 'demo-cat-sedan', calculationType: 'per_km', perKmRate: 18, peakHour: defaultPeakHour, nightCharge: defaultNightCharge, baseFare: 199, minimumFare: 299, perMinuteRate: 2, freeWaitingMinutes: 10 },
     ],
     outstationFares: [
-      { id: 'demo-outstation-1', cityId: 'demo-city-mumbai', carCategoryId: 'demo-cat-sedan', outstationType: 'one_way', calculationType: 'per_km', baseFare: 1200, oneWayPerKmRate: 22, roundTripPerKmRate: 18, driverAllowancePerDay: 500, nightHaltCharge: 800, peakHour: defaultPeakHour, nightCharge: defaultNightCharge, minimumKmPerDay: 250, freeWaitingMinutes: 15 },
+      { id: 'demo-outstation-1', cityId: 'demo-city-mumbai', carCategoryId: 'demo-cat-sedan', outstationType: 'one_way', calculationType: 'per_km', baseFare: 1200, oneWayPerKmRate: 22, roundTripPerKmRate: 18, driverAllowancePerDay: 500, nightHaltCharge: 800, peakHour: defaultPeakHour, nightCharge: defaultNightCharge, minimumKmPerDay: 250, freeWaitingMinutes: 15, autoSlotReturn: { enabled: true, bufferMinutes: 60, discountEnabled: true, discountType: 'percentage', discountValue: 15, maxDiscount: 1000 } },
     ],
     createdAt: demoNow,
   },
@@ -263,16 +308,80 @@ const initialB2BApprovalRules: B2BApprovalRule[] = [
   { id: 'demo-approval-2', clientId: 'demo-b2b-zen', approverEmployeeId: 'demo-emp-3', maxApprovalAmount: 7500, name: 'Zen operations approval', isActive: true, createdAt: demoNow },
 ]
 
-const initialBookings: Booking[] = [
-  { id: 'demo-booking-1', bookingNumber: 'BK-TEST-001', b2cCustomerId: 'demo-b2c-1', customerName: 'Priya Mehta', customerPhone: '9800000001', customerEmail: 'priya@example.com', customerAddress: 'Bandra West, Mumbai', driverId: 'demo-driver-1', carId: 'demo-car-1', cityId: 'demo-city-mumbai', carCategoryId: 'demo-cat-sedan', tripType: 'airport_drop', airportId: 'demo-airport-bom', airportTerminalId: 'demo-terminal-bom-t2', pickupLocation: 'Bandra West', dropLocation: 'BOM Terminal 2', pickupDate: demoToday, pickupTime: '09:30', estimatedKm: 18, estimatedFare: 999, actualKm: 19, actualFare: 1040, extraCharges: 0, peakHourCharge: 50, nightCharge: 0, waitingCharge: 30, tollCharges: 85, parkingCharges: 0, miscCharges: 0, totalFare: 1205, gstAmount: 60, grandTotal: 1265, advancePaid: 500, promoCodeId: 'demo-promo-1', promoDiscount: 100, status: 'dispatched', paymentStatus: 'partial', remarks: 'Demo airport booking with stops', tags: ['3'], eventLog: [], createdBy: 'Admin', createdAt: demoNow,
-    stops: [
-        { id: 'stop-1', location: 'Andheri Station, Mumbai', status: 'pending' },
-        { id: 'stop-2', location: 'Juhu Circle, Mumbai', status: 'pending' }
-    ]
-  },
-  { id: 'demo-booking-2', bookingNumber: 'BK-TEST-002', b2bClientId: 'demo-b2b-acme', b2bEmployeeId: 'demo-emp-1', customerName: 'Nitin Rao', customerPhone: '9600000001', customerEmail: 'nitin.rao@acmetech.test', customerAddress: 'Powai, Mumbai', cityId: 'demo-city-mumbai', carCategoryId: 'demo-cat-premium', tripType: 'city_ride', pickupLocation: 'Acme Mumbai HQ', dropLocation: 'Nariman Point', pickupDate: demoTomorrow, pickupTime: '14:00', estimatedKm: 24, estimatedFare: 1450, actualKm: 0, actualFare: 0, extraCharges: 0, peakHourCharge: 0, nightCharge: 0, waitingCharge: 0, tollCharges: 0, parkingCharges: 0, miscCharges: 0, totalFare: 1450, gstAmount: 72.5, grandTotal: 1522.5, advancePaid: 0, promoDiscount: 0, status: 'pending_edit_approval', paymentStatus: 'pending', remarks: 'Demo corporate edit approval', tags: ['2'], eventLog: [], pendingEdits: { pickupTime: '15:00' }, originalStatus: 'confirmed', createdBy: 'Corporate Admin', createdAt: demoNow, approvalStatus: 'pending' },
-  { id: 'demo-booking-3', bookingNumber: 'BK-TEST-003', b2bClientId: 'demo-b2b-zen', b2bEmployeeId: 'demo-emp-3', customerName: 'Rohit Bansal', customerPhone: '9600000003', customerEmail: 'rohit@zenhealth.test', cityId: 'demo-city-delhi', carCategoryId: 'demo-cat-suv', tripType: 'rental', pickupLocation: 'Connaught Place', dropLocation: 'Delhi NCR Visits', pickupDate: demoNextWeek, pickupTime: '10:00', estimatedKm: 80, estimatedFare: 3200, actualKm: 82, actualFare: 3300, extraCharges: 100, peakHourCharge: 0, nightCharge: 0, waitingCharge: 100, tollCharges: 0, parkingCharges: 150, miscCharges: 0, totalFare: 3650, gstAmount: 182.5, grandTotal: 3832.5, advancePaid: 1000, promoDiscount: 0, status: 'closed', paymentStatus: 'paid', remarks: 'Closed rental demo booking', tags: ['2'], eventLog: [], createdBy: 'Corporate Employee', createdAt: demoNow, approvalStatus: 'approved' },
-]
+const generateMockBookings = (): Booking[] => {
+  const generatedBookings: Booking[] = []
+  const statuses = ['pending', 'confirmed', 'assigned', 'dispatched', 'arrived', 'picked_up', 'dropped', 'closed', 'cancelled']
+  const tripTypes = ['city_ride', 'airport_pickup', 'airport_drop', 'rental', 'outstation']
+  const customers = ['Rahul Sharma', 'Priya Singh', 'Amit Kumar', 'Neha Gupta', 'Vikram Patel', 'Sunil Shetty', 'Anjali Desai']
+  const locations = ['Delhi Airport T3', 'Connaught Place, Delhi', 'Cyber City, Gurgaon', 'DLF Phase 3, Gurgaon', 'Sector 18, Noida', 'Film City, Noida', 'Indirapuram, Ghaziabad', 'Raj Nagar, Ghaziabad', 'Sector 15, Faridabad', 'NIT Faridabad', 'Saket, Delhi', 'Vasant Kunj, Delhi', 'Dwarka Sector 21, Delhi', 'Aerocity, Delhi']
+
+  for (let i = 1; i <= 100; i++) {
+    const dateOffset = Math.floor(Math.random() * 30) - 15 
+    const date = new Date()
+    date.setDate(date.getDate() + dateOffset)
+    
+    const isPast = dateOffset < 0
+    const isFuture = dateOffset > 0
+
+    let status = 'pending'
+    if (isPast) {
+      status = Math.random() > 0.2 ? 'closed' : 'cancelled'
+    } else if (isFuture) {
+      status = Math.random() > 0.5 ? 'confirmed' : (Math.random() > 0.5 ? 'assigned' : 'pending')
+    } else {
+      const activeStatuses = ['dispatched', 'arrived', 'picked_up', 'dropped']
+      status = activeStatuses[Math.floor(Math.random() * activeStatuses.length)]
+    }
+
+    const isAssigned = ['assigned', 'dispatched', 'arrived', 'picked_up', 'dropped', 'closed'].includes(status)
+    const isB2B = Math.random() > 0.5
+    
+    const carId = isAssigned ? `demo-car-${Math.floor(Math.random() * 20) + 1}` : undefined
+    const driverId = isAssigned ? `demo-driver-${Math.floor(Math.random() * 20) + 1}` : undefined
+
+    const tripType = tripTypes[Math.floor(Math.random() * tripTypes.length)]
+    const estimatedFare = Math.floor(Math.random() * 3000) + 500
+    const gstAmount = Math.floor(estimatedFare * 0.05)
+    
+    const pickup = locations[Math.floor(Math.random() * locations.length)]
+    let drop = locations[Math.floor(Math.random() * locations.length)]
+    while(drop === pickup) drop = locations[Math.floor(Math.random() * locations.length)]
+
+    generatedBookings.push({
+      id: `demo-booking-${i}`,
+      bookingNumber: `BK${10000 + i}`,
+      customerName: customers[Math.floor(Math.random() * customers.length)],
+      customerPhone: `+9198765${Math.floor(10000 + Math.random() * 90000)}`,
+      customerEmail: `customer${i}@trevcabs.test`,
+      pickupLocation: pickup,
+      dropLocation: drop,
+      pickupDate: date.toISOString().split('T')[0],
+      pickupTime: `${String(Math.floor(Math.random() * 14) + 6).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
+      status: status as any,
+      tripType: tripType as any,
+      carId: carId,
+      driverId: driverId,
+      b2bClientId: isB2B ? 'demo-b2b-acme' : undefined,
+      b2bEmployeeId: isB2B ? 'demo-emp-1' : undefined,
+      b2cCustomerId: !isB2B ? 'demo-b2c-1' : undefined,
+      estimatedFare: estimatedFare,
+      totalFare: estimatedFare + 100,
+      grandTotal: estimatedFare + gstAmount + 100,
+      gstAmount: gstAmount,
+      tollCharges: Math.random() > 0.5 ? 100 : 0,
+      parkingCharges: Math.random() > 0.8 ? 150 : 0,
+      promoDiscount: Math.random() > 0.8 ? 50 : 0,
+      remarks: Math.random() > 0.8 ? 'VIP Guest - Please arrive 10 mins early' : '',
+      createdBy: isB2B ? 'Corporate Admin' : 'System',
+      createdAt: new Date(Date.now() - Math.random() * 10000000000).toISOString(),
+      cityId: 'demo-city-delhi',
+      carCategoryId: 'demo-cat-sedan',
+      eventLog: []
+    })
+  }
+  return generatedBookings
+}
+const initialBookings = generateMockBookings()
 const initialWalletTransactions: WalletTransaction[] = [
   { id: 'demo-wallet-1', customerId: 'demo-b2c-1', amount: 1500, type: 'credit', description: 'Demo wallet top-up', referenceType: 'manual', createdAt: demoNow },
   { id: 'demo-wallet-2', customerId: 'demo-b2c-1', amount: 250, type: 'debit', description: 'Demo ride adjustment', referenceId: 'demo-booking-1', referenceType: 'booking', createdAt: demoNow },
@@ -299,11 +408,21 @@ const initialCityPolygons: CityPolygon[] = [
   { id: 'demo-poly-blr-north', cityId: 'demo-city-bengaluru', name: 'Bengaluru North Zone', color: '#3B82F6', isActive: true, createdAt: demoNow, coordinates: [{ lat: 13.02, lng: 77.55 }, { lat: 13.08, lng: 77.58 }, { lat: 13.06, lng: 77.65 }, { lat: 13.0, lng: 77.62 }] },
 ]
 
-const initialCarLocations: CarLocation[] = [
-  { carId: 'demo-car-1', latitude: 19.088, longitude: 72.868, heading: 120, speed: 34, lastUpdated: demoNow },
-  { carId: 'demo-car-2', latitude: 28.556, longitude: 77.1, heading: 270, speed: 0, lastUpdated: demoNow },
-  { carId: 'demo-car-3', latitude: 13.0358, longitude: 77.597, heading: 45, speed: 0, lastUpdated: demoNow },
-]
+const generateMockCarLocations = (): CarLocation[] => {
+  const locs: CarLocation[] = []
+  for (let i = 1; i <= 20; i++) {
+    locs.push({
+      carId: `demo-car-${i}`,
+      latitude: 28.5562 + (Math.random() - 0.5) * 0.3,
+      longitude: 77.1000 + (Math.random() - 0.5) * 0.3,
+      heading: Math.floor(Math.random() * 360),
+      speed: Math.floor(Math.random() * 60),
+      lastUpdated: demoNow
+    })
+  }
+  return locs
+}
+const initialCarLocations = generateMockCarLocations()
 
 const initialCommunicationTemplates: CommunicationTemplate[] = [
   { id: 'demo-template-1', name: 'Booking Confirmed SMS', type: 'sms', targetAudience: 'customer', event: 'booking_confirmed', content: 'Hi {{customerName}}, your Trev booking {{bookingNumber}} is confirmed for {{pickupDate}} {{pickupTime}}.', variables: ['customerName', 'bookingNumber', 'pickupDate', 'pickupTime'], isActive: true, createdAt: demoNow },
@@ -773,29 +892,29 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   // Persist all state to localStorage
   // Clear old localStorage bookings to load new fields (one-time migration)
   useEffect(() => {
-    const migrated = localStorage.getItem('bookings_migrated_v4')
+    const migrated = localStorage.getItem('bookings_migrated_v6')
     if (!migrated) {
       localStorage.removeItem('bookings')
-      localStorage.setItem('bookings_migrated_v4', 'true')
+      localStorage.setItem('bookings_migrated_v6', 'true')
       setBookings(initialBookings)
     }
 
-    const catMigrated = localStorage.getItem('categories_cleared_v1')
+    const catMigrated = localStorage.getItem('categories_cleared_v3')
     if (!catMigrated) {
       localStorage.removeItem('carCategories')
-      localStorage.setItem('categories_cleared_v1', 'true')
+      localStorage.setItem('categories_cleared_v3', 'true')
       setCarCategories([])
     }
 
-    const masterClear = localStorage.getItem('master_clear_v1')
+    const masterClear = localStorage.getItem('master_clear_v3')
     if (!masterClear) {
       const allKeys = Object.keys(localStorage)
       allKeys.forEach(key => {
-        if (!key.includes('supabase') && key !== 'master_clear_v1') {
+        if (!key.includes('supabase') && key !== 'master_clear_v3') {
           localStorage.removeItem(key)
         }
       })
-      localStorage.setItem('master_clear_v1', 'true')
+      localStorage.setItem('master_clear_v3', 'true')
       window.location.reload()
     }
   }, [])
@@ -829,7 +948,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   // One-time testing seed for every sidebar module. This also upgrades browsers
   // that already have older empty localStorage arrays.
   useEffect(() => {
-    const seedFlag = localStorage.getItem('dummy_sidebar_data_v1')
+    const seedFlag = localStorage.getItem('dummy_sidebar_data_v3')
     if (seedFlag) return
 
     const mergeById = <T extends { id: string }>(current: T[], seed: T[]) => {
@@ -866,12 +985,12 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     setCancellationPolicies((prev) => mergeById(prev, initialCancellationPolicies))
     setSupportTickets((prev) => mergeById(prev, initialSupportTickets))
 
-    localStorage.setItem('dummy_sidebar_data_v1', 'true')
+    localStorage.setItem('dummy_sidebar_data_v3', 'true')
   }, [])
 
   // Inject Dummy Bookings
   useEffect(() => {
-    const addedDummies = localStorage.getItem('dummy_b2b_bookings_v4')
+    const addedDummies = localStorage.getItem('dummy_b2b_bookings_v6')
     if (!addedDummies) {
       setB2BClients(prev => {
         if (!prev.some(c => c.id === 'dummy-corp-client')) return [...prev, dummyClient]
@@ -897,7 +1016,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       })
       setCarLocations(prev => {
         if (!prev.some(l => l.carId === 'live-car-1')) {
-          return [...prev, { carId: 'live-car-1', latitude: 19.0760, longitude: 72.8777, heading: 90, speed: 45, lastUpdated: new Date().toISOString() }]
+          return [...prev, { carId: 'live-car-1', latitude: 28.6139, longitude: 77.2090, heading: 90, speed: 45, lastUpdated: new Date().toISOString() }]
         }
         return prev
       })
@@ -943,12 +1062,12 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       })
       setCarLocations(prev => {
         if (!prev.some(l => l.carId === 'live-car-2')) {
-          return [...prev, { carId: 'live-car-2', latitude: 19.0850, longitude: 72.8850, heading: 120, speed: 30, lastUpdated: new Date().toISOString() }]
+          return [...prev, { carId: 'live-car-2', latitude: 28.5562, longitude: 77.1000, heading: 120, speed: 30, lastUpdated: new Date().toISOString() }]
         }
         return prev
       })
 
-      localStorage.setItem('dummy_b2b_bookings_v4', 'true')
+      localStorage.setItem('dummy_b2b_bookings_v6', 'true')
     }
   }, [])
 

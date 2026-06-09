@@ -3,11 +3,10 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useAdmin } from '@/lib/admin-context'
-import { Booking, Car } from '@/lib/types'
+import { Booking, Car, ChargeType } from '@/lib/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
@@ -18,14 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { CalendarClock, CheckCircle2, Clock3, MapPin, Plus, RefreshCw, Settings2, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -40,6 +31,7 @@ type AutoSlotRule = {
   bufferMinutes: number
   slotDurationMinutes: number
   maxSlotsPerCar: number
+  isOutstationRule?: boolean
 }
 
 type AutoSlot = {
@@ -52,10 +44,18 @@ type AutoSlot = {
   areaLabel: string
   opensAt: string
   closesAt: string
-  source: 'available_now' | 'upcoming_free'
+  source: 'available_now' | 'upcoming_free' | 'outstation_return'
   status: 'open' | 'queued' | 'expired'
   generatedAt: string
   bookingId?: string
+  isOutstationReturn?: boolean
+  returnFromCity?: string
+  returnDiscount?: {
+    enabled: boolean
+    type: ChargeType
+    value: number
+    maxDiscount?: number
+  }
 }
 
 type FleetSignal = {
@@ -64,6 +64,8 @@ type FleetSignal = {
   freeAt: Date
   source: AutoSlot['source']
   activeBooking?: Booking
+  isOutstationReturn?: boolean
+  returnFromCity?: string
 }
 
 const RULES_KEY = 'autoSlotRules'
@@ -134,6 +136,7 @@ export default function AutoSlotConfigurationPage() {
     cities,
     dutySlips,
     hubs,
+    fareGroups,
     getCarCategory,
     getCity,
     getHub,
@@ -141,7 +144,6 @@ export default function AutoSlotConfigurationPage() {
 
   const [rules, setRules] = useState<AutoSlotRule[]>([])
   const [slots, setSlots] = useState<AutoSlot[]>([])
-  const [isRuleDialogOpen, setIsRuleDialogOpen] = useState(false)
   const [editingRule, setEditingRule] = useState<AutoSlotRule | null>(null)
   const [formData, setFormData] = useState<Omit<AutoSlotRule, 'id'>>({
     name: '',
@@ -153,6 +155,7 @@ export default function AutoSlotConfigurationPage() {
     bufferMinutes: 20,
     slotDurationMinutes: 60,
     maxSlotsPerCar: 2,
+    isOutstationRule: false,
   })
   const [manualFreeAt, setManualFreeAt] = useState(toDateTimeLocalValue(new Date(Date.now() + 45 * 60 * 1000)))
 
@@ -210,12 +213,16 @@ export default function AutoSlotConfigurationPage() {
           : parsePickupDate(activeBooking)
         const freeAt = new Date(tripStart.getTime() + getTripDurationMinutes(activeBooking) * 60 * 1000)
 
+        const isOutstationReturn = activeBooking.tripType === 'outstation' && ['one_way', 'route_wise'].includes(activeBooking.outstationType)
+
         return {
           car,
           areaLabel: activeBooking.dropLocation || hub?.name || city?.name || 'Trip end area',
           freeAt,
-          source: 'upcoming_free',
+          source: isOutstationReturn ? 'outstation_return' : 'upcoming_free',
           activeBooking,
+          isOutstationReturn,
+          returnFromCity: isOutstationReturn ? (activeBooking.dropLocation || 'Destination') : undefined
         }
       })
   }, [activeBookings, cars, dutySlips, getCity, getHub])
@@ -224,8 +231,91 @@ export default function AutoSlotConfigurationPage() {
     const now = new Date()
     const candidates: AutoSlot[] = []
 
-    activeRules.forEach((rule) => {
-      fleetSignals.forEach((signal) => {
+    fleetSignals.forEach((signal) => {
+      if (signal.isOutstationReturn && signal.activeBooking) {
+        // Handle outstation returns using Fare Groups configuration
+        const booking = signal.activeBooking;
+        let applicableFareConfig = null;
+        for (const fg of fareGroups) {
+           const fare = fg.outstationFares.find(f => 
+             f.cityId === booking.cityId && 
+             f.carCategoryId === booking.carCategoryId && 
+             f.outstationType === booking.outstationType &&
+             f.autoSlotReturn?.enabled
+           );
+           if (fare) {
+             applicableFareConfig = fare;
+             break;
+           }
+        }
+
+        if (applicableFareConfig && applicableFareConfig.autoSlotReturn?.enabled) {
+          const bufferMinutes = applicableFareConfig.autoSlotReturn.bufferMinutes;
+          // For outstation returns, slot duration and openBefore are fixed or inherited from generic logic. 
+          // We'll use 60 mins slot and 120 mins openBefore for outstation returns by default if not specified.
+          const slotDurationMinutes = 60;
+          const openBeforeMinutes = 120;
+          
+          const openWindowStart = new Date(signal.freeAt.getTime() - openBeforeMinutes * 60 * 1000)
+          const bufferedStart = new Date(signal.freeAt.getTime() + bufferMinutes * 60 * 1000)
+          const openStart = bufferedStart < now ? now : bufferedStart
+
+          if (openWindowStart > now) {
+            candidates.push({
+              id: `outstation-return:${signal.car.id}:${openStart.toISOString()}`,
+              ruleId: 'fare-config-return',
+              carId: signal.car.id,
+              cityId: booking.cityId,
+              hubId: signal.car.hubId,
+              carCategoryId: signal.car.categoryId,
+              areaLabel: signal.areaLabel,
+              opensAt: openStart.toISOString(),
+              closesAt: new Date(openStart.getTime() + slotDurationMinutes * 60 * 1000).toISOString(),
+              source: signal.source,
+              status: 'queued',
+              generatedAt: now.toISOString(),
+              bookingId: signal.activeBooking?.id,
+              isOutstationReturn: signal.isOutstationReturn,
+              returnFromCity: signal.returnFromCity,
+              returnDiscount: applicableFareConfig.autoSlotReturn?.discountEnabled ? {
+                enabled: true,
+                type: applicableFareConfig.autoSlotReturn.discountType || 'percentage',
+                value: applicableFareConfig.autoSlotReturn.discountValue || 0,
+                maxDiscount: applicableFareConfig.autoSlotReturn.maxDiscount || 0,
+              } : undefined,
+            })
+          } else {
+            const closesAt = new Date(openStart.getTime() + slotDurationMinutes * 60 * 1000);
+            candidates.push({
+              id: `outstation-return:${signal.car.id}:${openStart.toISOString()}`,
+              ruleId: 'fare-config-return',
+              carId: signal.car.id,
+              cityId: booking.cityId,
+              hubId: signal.car.hubId,
+              carCategoryId: signal.car.categoryId,
+              areaLabel: signal.areaLabel,
+              opensAt: openStart.toISOString(),
+              closesAt: closesAt.toISOString(),
+              source: signal.source,
+              status: getSlotStatus(openStart, closesAt, now),
+              generatedAt: now.toISOString(),
+              bookingId: signal.activeBooking?.id,
+              isOutstationReturn: signal.isOutstationReturn,
+              returnFromCity: signal.returnFromCity,
+              returnDiscount: applicableFareConfig.autoSlotReturn?.discountEnabled ? {
+                enabled: true,
+                type: applicableFareConfig.autoSlotReturn.discountType || 'percentage',
+                value: applicableFareConfig.autoSlotReturn.discountValue || 0,
+                maxDiscount: applicableFareConfig.autoSlotReturn.maxDiscount || 0,
+              } : undefined,
+            })
+          }
+        }
+        return; // Skip processing outstation returns with standard rules
+      }
+
+      // Handle standard rules
+      activeRules.forEach((rule) => {
         if (rule.cityId && signal.car.hubId) {
           const hub = getHub(signal.car.hubId)
           if (hub?.cityId !== rule.cityId) return
@@ -281,14 +371,36 @@ export default function AutoSlotConfigurationPage() {
     })
 
     return candidates
-  }, [activeRules, fleetSignals, getHub])
+  }, [activeRules, fleetSignals, getHub, fareGroups])
 
   const openSlots = slots.filter((slot) => slot.status === 'open')
   const queuedSlots = slots.filter((slot) => slot.status === 'queued')
+  const expiredSlots = slots.filter((slot) => slot.status === 'expired')
+  const recentSlots = slots.slice(0, 8)
   const availableCars = fleetSignals.filter((signal) => signal.source === 'available_now').length
   const freeingSoon = fleetSignals.filter((signal) => signal.source === 'upcoming_free').length
+  const outstationReturns = fleetSignals.filter((signal) => signal.source === 'outstation_return').length
+  const nextOpenSlot = queuedSlots
+    .slice()
+    .sort((first, second) => new Date(first.opensAt).getTime() - new Date(second.opensAt).getTime())[0]
 
-  const openRuleDialog = (rule?: AutoSlotRule) => {
+  const resetRuleForm = () => {
+    setEditingRule(null)
+    setFormData({
+      name: '',
+      cityId: cities[0]?.id || '',
+      carCategoryId: ALL_VALUE,
+      hubId: ALL_VALUE,
+      enabled: true,
+      openBeforeMinutes: 60,
+      bufferMinutes: 20,
+      slotDurationMinutes: 60,
+      maxSlotsPerCar: 2,
+      isOutstationRule: false,
+    })
+  }
+
+  const editRule = (rule?: AutoSlotRule) => {
     if (rule) {
       setEditingRule(rule)
       setFormData({
@@ -301,23 +413,12 @@ export default function AutoSlotConfigurationPage() {
         bufferMinutes: rule.bufferMinutes,
         slotDurationMinutes: rule.slotDurationMinutes,
         maxSlotsPerCar: rule.maxSlotsPerCar,
+        isOutstationRule: rule.isOutstationRule || false,
       })
-    } else {
-      setEditingRule(null)
-      setFormData({
-        name: '',
-        cityId: cities[0]?.id || '',
-        carCategoryId: ALL_VALUE,
-        hubId: ALL_VALUE,
-        enabled: true,
-        openBeforeMinutes: 60,
-        bufferMinutes: 20,
-        slotDurationMinutes: 60,
-        maxSlotsPerCar: 2,
-      })
+      return
     }
 
-    setIsRuleDialogOpen(true)
+    resetRuleForm()
   }
 
   const handleSubmitRule = (event: FormEvent<HTMLFormElement>) => {
@@ -347,8 +448,8 @@ export default function AutoSlotConfigurationPage() {
       toast.success('Auto slot rule created')
     }
 
-    setIsRuleDialogOpen(false)
     setEditingRule(null)
+    resetRuleForm()
   }
 
   const handleToggleRule = (ruleId: string, enabled: boolean) => {
@@ -413,234 +514,87 @@ export default function AutoSlotConfigurationPage() {
     toast.success('Expired slots cleared')
   }
 
+  const getSourceLabel = (slot: AutoSlot) => {
+    if (slot.isOutstationReturn) return 'Outstation return'
+    if (slot.source === 'available_now') return 'Available now'
+    if (slot.source === 'upcoming_free') return 'Freeing soon'
+    return 'Manual'
+  }
+
+  const getReturnDiscountLabel = (slot: AutoSlot) => {
+    if (!slot.returnDiscount?.enabled || !slot.returnDiscount.value) return null
+    const value = slot.returnDiscount.type === 'flat'
+      ? `Rs. ${slot.returnDiscount.value}`
+      : `${slot.returnDiscount.value}%`
+    const cap = slot.returnDiscount.maxDiscount ? ` up to Rs. ${slot.returnDiscount.maxDiscount}` : ''
+    return `${value} return discount${cap}`
+  }
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div className="flex flex-col gap-5 pl-16 sm:pl-0">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Auto Slot Configuration</h1>
-          <p className="text-muted-foreground">Open booking slots automatically when cars are free or about to be free in an area</p>
+          <h1 className="text-2xl font-semibold text-foreground">Auto Slots</h1>
+          <p className="text-sm text-muted-foreground">Simple slot opening for available cars, soon-free cars, and return trips.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={handleClearExpired}>
+          <Button onClick={handleGenerateSlots}>
+            <Sparkles className="mr-2 h-4 w-4" />
+            Run Now
+          </Button>
+          <Button variant="ghost" onClick={handleClearExpired}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Clear Expired
           </Button>
-          <Button variant="outline" onClick={() => openRuleDialog()}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Rule
-          </Button>
-          <Button onClick={handleGenerateSlots}>
-            <Sparkles className="mr-2 h-4 w-4" />
-            Run Auto Slots
-          </Button>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Open Slots</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{openSlots.length}</div>
-            <p className="text-xs text-muted-foreground">ready for booking</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Queued Slots</CardTitle>
-            <Clock3 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{queuedSlots.length}</div>
-            <p className="text-xs text-muted-foreground">waiting for open window</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Cars Available</CardTitle>
-            <CalendarClock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{availableCars}</div>
-            <p className="text-xs text-muted-foreground">can open now</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Freeing Soon</CardTitle>
-            <MapPin className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{freeingSoon}</div>
-            <p className="text-xs text-muted-foreground">active rides tracked</p>
-          </CardContent>
-        </Card>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: 'Open slots', value: openSlots.length, note: `${queuedSlots.length} queued`, icon: CheckCircle2, color: 'text-emerald-600' },
+          { label: 'Active rules', value: activeRules.length, note: `${rules.length} total`, icon: Settings2, color: 'text-blue-600' },
+          { label: 'Cars ready', value: availableCars, note: `${freeingSoon} freeing soon`, icon: CalendarClock, color: 'text-slate-600' },
+          { label: 'Return trips', value: outstationReturns, note: `${expiredSlots.length} expired`, icon: MapPin, color: 'text-indigo-600' },
+        ].map((item) => {
+          const Icon = item.icon
+          return (
+            <div key={item.label} className="rounded-lg border bg-background p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-muted-foreground">{item.label}</span>
+                <Icon className={`h-4 w-4 ${item.color}`} />
+              </div>
+              <div className="mt-2 text-3xl font-semibold">{item.value}</div>
+              <div className="mt-1 text-xs text-muted-foreground">{item.note}</div>
+            </div>
+          )
+        })}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
         <Card>
           <CardHeader>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <CardTitle>Auto Rules</CardTitle>
-                <CardDescription>City, category, hub, buffer, and slot window rules</CardDescription>
+                <CardTitle>Rule Setup</CardTitle>
+                <CardDescription>{editingRule ? `Editing ${editingRule.name}` : 'Create one rule and run slots from it.'}</CardDescription>
               </div>
-              <Badge variant="outline">{activeRules.length} active</Badge>
+              {editingRule ? (
+                <Button type="button" variant="outline" size="sm" onClick={resetRuleForm}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Rule
+                </Button>
+              ) : null}
             </div>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Rule</TableHead>
-                    <TableHead>Area</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Timing</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rules.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                        No auto slot rules yet. Add a rule to start opening availability slots.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    rules.map((rule) => (
-                      <TableRow key={rule.id}>
-                        <TableCell>
-                          <div className="font-medium">{rule.name}</div>
-                          <div className="text-xs text-muted-foreground">{rule.maxSlotsPerCar} slot/car</div>
-                        </TableCell>
-                        <TableCell>
-                          <div>{getCity(rule.cityId)?.name || 'Any city'}</div>
-                          <div className="text-xs text-muted-foreground">{rule.hubId === ALL_VALUE ? 'All hubs' : getHub(rule.hubId)?.name}</div>
-                        </TableCell>
-                        <TableCell>{rule.carCategoryId === ALL_VALUE ? 'All categories' : getCarCategory(rule.carCategoryId)?.name}</TableCell>
-                        <TableCell>
-                          <div className="text-sm">{rule.openBeforeMinutes} min before free</div>
-                          <div className="text-xs text-muted-foreground">{rule.bufferMinutes} min buffer, {rule.slotDurationMinutes} min slot</div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Switch checked={rule.enabled} onCheckedChange={(checked) => handleToggleRule(rule.id, checked)} />
-                            <span className="text-sm">{rule.enabled ? 'Enabled' : 'Disabled'}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" onClick={() => openRuleDialog(rule)}>
-                            <Settings2 className="mr-2 h-4 w-4" />
-                            Edit
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Manual Availability Push</CardTitle>
-            <CardDescription>Use this when dispatch gets a real-time call that a car will be free soon</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Field>
-              <FieldLabel>Car free at</FieldLabel>
-              <Input type="datetime-local" value={manualFreeAt} onChange={(event) => setManualFreeAt(event.target.value)} />
-            </Field>
-            <Button className="w-full" onClick={handleManualOpen}>
-              <Sparkles className="mr-2 h-4 w-4" />
-              Open Slot From First Active Rule
-            </Button>
-            <div className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
-              Auto run uses live cars and active bookings. Manual push is for operations team override when a driver confirms early availability.
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Opened Slots</CardTitle>
-          <CardDescription>Slots generated from current fleet availability and upcoming trip completion</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Slot</TableHead>
-                  <TableHead>Car</TableHead>
-                  <TableHead>Area</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Source</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {slots.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                      Run auto slots to generate availability.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  slots.map((slot) => {
-                    const car = cars.find((item) => item.id === slot.carId)
-                    return (
-                      <TableRow key={slot.id}>
-                        <TableCell>
-                          <div className="font-medium">{formatDateTime(slot.opensAt)} - {formatDateTime(slot.closesAt)}</div>
-                          <div className="text-xs text-muted-foreground">Generated {formatDateTime(slot.generatedAt)}</div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-mono text-sm">{car?.registrationNumber || slot.carId}</div>
-                          <div className="text-xs text-muted-foreground">{car ? `${car.make} ${car.model}` : 'Car removed'}</div>
-                        </TableCell>
-                        <TableCell>{slot.areaLabel}</TableCell>
-                        <TableCell>{getCarCategory(slot.carCategoryId)?.name || slot.carCategoryId || 'Category'}</TableCell>
-                        <TableCell>{slot.source === 'available_now' ? 'Available now' : 'Upcoming free'}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={getStatusClass(slot.status)}>
-                            {slot.status}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Dialog open={isRuleDialogOpen} onOpenChange={setIsRuleDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{editingRule ? 'Edit Auto Slot Rule' : 'Add Auto Slot Rule'}</DialogTitle>
-            <DialogDescription>
-              Configure when slots should open based on car area, category, and expected free time.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSubmitRule}>
-            <div className="grid gap-4 py-4">
+            <form onSubmit={handleSubmitRule} className="space-y-5">
               <FieldGroup className="grid gap-4 md:grid-cols-2">
                 <Field>
-                  <FieldLabel>Rule Name</FieldLabel>
+                  <FieldLabel>Rule name</FieldLabel>
                   <Input
                     value={formData.name}
                     onChange={(event) => setFormData({ ...formData, name: event.target.value })}
-                    placeholder="e.g., Mumbai Sedan Airport Slots"
+                    placeholder="Mumbai Sedan Slots"
                     required
                   />
                 </Field>
@@ -663,7 +617,7 @@ export default function AutoSlotConfigurationPage() {
 
               <FieldGroup className="grid gap-4 md:grid-cols-2">
                 <Field>
-                  <FieldLabel>Car Category</FieldLabel>
+                  <FieldLabel>Car category</FieldLabel>
                   <Select value={formData.carCategoryId} onValueChange={(value) => setFormData({ ...formData, carCategoryId: value })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select category" />
@@ -679,13 +633,13 @@ export default function AutoSlotConfigurationPage() {
                   </Select>
                 </Field>
                 <Field>
-                  <FieldLabel>Hub / Area</FieldLabel>
+                  <FieldLabel>Hub / area</FieldLabel>
                   <Select value={formData.hubId} onValueChange={(value) => setFormData({ ...formData, hubId: value })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select hub" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={ALL_VALUE}>All hubs in city</SelectItem>
+                      <SelectItem value={ALL_VALUE}>All hubs</SelectItem>
                       {hubs.filter((hub) => !formData.cityId || hub.cityId === formData.cityId).map((hub) => (
                         <SelectItem key={hub.id} value={hub.id}>
                           {hub.name}
@@ -696,9 +650,9 @@ export default function AutoSlotConfigurationPage() {
                 </Field>
               </FieldGroup>
 
-              <FieldGroup className="grid gap-4 md:grid-cols-4">
+              <FieldGroup className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <Field>
-                  <FieldLabel>Open Before (min)</FieldLabel>
+                  <FieldLabel>Open before</FieldLabel>
                   <Input
                     type="number"
                     min={0}
@@ -707,7 +661,7 @@ export default function AutoSlotConfigurationPage() {
                   />
                 </Field>
                 <Field>
-                  <FieldLabel>Buffer (min)</FieldLabel>
+                  <FieldLabel>Buffer min</FieldLabel>
                   <Input
                     type="number"
                     min={0}
@@ -716,7 +670,7 @@ export default function AutoSlotConfigurationPage() {
                   />
                 </Field>
                 <Field>
-                  <FieldLabel>Slot Duration</FieldLabel>
+                  <FieldLabel>Slot min</FieldLabel>
                   <Input
                     type="number"
                     min={15}
@@ -725,7 +679,7 @@ export default function AutoSlotConfigurationPage() {
                   />
                 </Field>
                 <Field>
-                  <FieldLabel>Slots / Car</FieldLabel>
+                  <FieldLabel>Slots / car</FieldLabel>
                   <Input
                     type="number"
                     min={1}
@@ -736,23 +690,155 @@ export default function AutoSlotConfigurationPage() {
                 </Field>
               </FieldGroup>
 
-              <div className="flex items-center justify-between rounded-md border p-3">
+              <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <div className="text-sm font-medium">Enable this rule</div>
-                  <div className="text-xs text-muted-foreground">Disabled rules do not open slots during auto run.</div>
+                  <div className="text-sm font-medium">Rule status</div>
+                  <div className="text-xs text-muted-foreground">{formData.enabled ? 'Active rules are used in Run Now.' : 'Off rules are saved but skipped.'}</div>
                 </div>
                 <Switch checked={formData.enabled} onCheckedChange={(checked) => setFormData({ ...formData, enabled: checked })} />
               </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsRuleDialogOpen(false)}>
-                Cancel
+
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit">
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  {editingRule ? 'Update Rule' : 'Save Rule'}
+                </Button>
+                <Button type="button" variant="outline" onClick={resetRuleForm}>
+                  Reset
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+
+        <div className="flex flex-col gap-5">
+          <Card>
+            <CardHeader>
+              <CardTitle>Run Panel</CardTitle>
+              <CardDescription>Generate availability from current fleet signals.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Button className="w-full" onClick={handleGenerateSlots}>
+                <Sparkles className="mr-2 h-4 w-4" />
+                Run Auto Slots
               </Button>
-              <Button type="submit">{editingRule ? 'Update Rule' : 'Create Rule'}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg border p-3">
+                  <div className="text-xs text-muted-foreground">New candidates</div>
+                  <div className="mt-1 text-2xl font-semibold">{proposedSlots.length}</div>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <div className="text-xs text-muted-foreground">Next slot</div>
+                  <div className="mt-1 text-sm font-medium">{nextOpenSlot ? formatDateTime(nextOpenSlot.opensAt) : 'None'}</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Manual Slot</CardTitle>
+              <CardDescription>Open one slot from the first active rule.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Field>
+                <FieldLabel>Car free at</FieldLabel>
+                <Input type="datetime-local" value={manualFreeAt} onChange={(event) => setManualFreeAt(event.target.value)} />
+              </Field>
+              <Button className="w-full" variant="outline" onClick={handleManualOpen}>
+                <Clock3 className="mr-2 h-4 w-4" />
+                Open Manual Slot
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Saved Rules</CardTitle>
+            <CardDescription>{rules.length} rules configured</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {rules.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                No rules saved.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {rules.map((rule) => (
+                  <div key={rule.id} className="rounded-lg border p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">{rule.name}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {getCity(rule.cityId)?.name || 'Any city'} - {rule.hubId === ALL_VALUE ? 'All hubs' : getHub(rule.hubId)?.name} - {rule.carCategoryId === ALL_VALUE ? 'All categories' : getCarCategory(rule.carCategoryId)?.name}
+                        </div>
+                      </div>
+                      <Badge variant="outline" className={rule.enabled ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-muted bg-muted text-muted-foreground'}>
+                        {rule.enabled ? 'On' : 'Off'}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-2">
+                      <div className="text-xs text-muted-foreground">
+                        {rule.bufferMinutes} min buffer - {rule.maxSlotsPerCar} / car
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => editRule(rule)}>
+                        Edit
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Latest Slots</CardTitle>
+            <CardDescription>Recent generated availability</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {recentSlots.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                No slots generated.
+              </div>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2">
+                {recentSlots.map((slot) => {
+                  const car = cars.find((item) => item.id === slot.carId)
+                  return (
+                    <div key={slot.id} className="rounded-lg border bg-background p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-medium">{formatDateTime(slot.opensAt)}</div>
+                          <div className="text-xs text-muted-foreground">to {formatDateTime(slot.closesAt)}</div>
+                        </div>
+                        <Badge variant="outline" className={getStatusClass(slot.status)}>
+                          {slot.status}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 grid gap-1 text-sm">
+                        <div>{car?.registrationNumber || slot.carId}</div>
+                        <div className="text-muted-foreground">{slot.isOutstationReturn ? slot.returnFromCity : slot.areaLabel}</div>
+                        <div className="text-muted-foreground">{getCarCategory(slot.carCategoryId)?.name || slot.carCategoryId || 'Category'}</div>
+                      </div>
+                      <div className="mt-3 text-xs text-muted-foreground">{getSourceLabel(slot)}</div>
+                      {getReturnDiscountLabel(slot) ? (
+                        <div className="mt-2 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
+                          {getReturnDiscountLabel(slot)}
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

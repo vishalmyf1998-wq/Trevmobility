@@ -14,12 +14,15 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, RefreshCw, Zap, Leaf, Clock, Phone, ChevronDown, BatteryCharging, ChevronUp, AlertCircle, AlertTriangle, PhoneCall, ShieldAlert, History, Map, ClipboardList, Banknote, Download, FileText, Edit3, XCircle, CheckCircle, Gauge, User, Headset, Car, Wallet, Copy, MessageCircle } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { MapPin, RefreshCw, Zap, Leaf, Clock, Phone, ChevronDown, BatteryCharging, ChevronUp, AlertCircle, AlertTriangle, PhoneCall, ShieldAlert, History, Map, ClipboardList, Banknote, Download, FileText, Edit3, XCircle, CheckCircle, Gauge, User, Headset, Car, Wallet, Copy, MessageCircle, MoreHorizontal, ThumbsUp, ThumbsDown, Target, Tag, Save, Printer } from 'lucide-react';
 import { useAdmin } from "@/lib/admin-context";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardHeader } from "./components/DashboardHeader";
 import { FreeDriversSidebar } from "./components/FreeDriversSidebar";
+import { PrintableDutySlip } from "@/components/DutySlipPrint";
+import { PrintableInvoice } from "@/components/InvoicePrint";
 
 const MapComponent = dynamic(() => import('@/components/tracking-map'), {
   ssr: false,
@@ -332,14 +335,20 @@ export default function ActiveRideDashboard() {
     addSupportTicket,
     updateCarLocation,
     drivers,
-    cars
+    cars,
+    gstConfig,
+    dutySlips = [],
+    invoices = [],
+    getCity,
+    getB2BEmployee
   } = useAdmin();
 
   const [expandedRideId, setExpandedRideId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'delayed' | 'unassigned' | 'dispatched' | 'arrived' | 'pickup' | 'dropped' | 'closed' | 'gps_off' | 'priority' | 'low_soc'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'delayed' | 'unassigned' | 'dispatched' | 'arrived' | 'pickup' | 'dropped' | 'closed' | 'cancelled' | 'gps_off' | 'priority' | 'low_soc'>('all');
   const [delaySubFilter, setDelaySubFilter] = useState('all');
   const [ongoingSubFilter, setOngoingSubFilter] = useState('all');
+  const [prioritySubFilter, setPrioritySubFilter] = useState('all');
   const [isSimulating, setIsSimulating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -350,6 +359,8 @@ export default function ActiveRideDashboard() {
   const [minSocThreshold, setMinSocThreshold] = useState(20); // 20% default min SOC
   const [hoveredDriverId, setHoveredDriverId] = useState<string | null>(null);
   const [assigningRideId, setAssigningRideId] = useState<string | null>(null);
+  const [lastAllocationTime, setLastAllocationTime] = useState<Date | null>(null);
+  const [nextAllocationTime, setNextAllocationTime] = useState<Date | null>(null);
 
   const [liveMetrics, setLiveMetrics] = useState<Record<string, { distance: number; eta: number; soc: number; actualEta: number }>>({});
   const stateRef = useRef({ bookings, carLocations, drivers, cars });
@@ -367,6 +378,31 @@ export default function ActiveRideDashboard() {
   const [isManualAdjDialogOpen, setIsManualAdjDialogOpen] = useState(false);
   const [manualAdjRide, setManualAdjRide] = useState<any>(null);
   const [manualAdjData, setManualAdjData] = useState({ tollCharges: 0, parkingCharges: 0 });
+
+  // Cancel Booking State
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [cancelRideTarget, setCancelRideTarget] = useState<any>(null);
+  const [cancelReason, setCancelReason] = useState("");
+
+  // Edit Booking State
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editRideTarget, setEditRideTarget] = useState<any>(null);
+  const [editRideData, setEditRideData] = useState({ 
+    customerName: '', customerPhone: '', tripType: '', 
+    pickupLocation: '', dropLocation: '', pickupDate: '', pickupTime: '', remarks: '',
+    estimatedFare: 0, tollCharges: 0, parkingCharges: 0, promoDiscount: 0, advancePaid: 0 
+  });
+
+  // Manual Event State
+  const [isManualEventDialogOpen, setIsManualEventDialogOpen] = useState(false);
+  const [manualEventTarget, setManualEventTarget] = useState<any>(null);
+  const [manualEventStatus, setManualEventStatus] = useState("");
+
+  // Duty Slip & Invoice Dialogs
+  const [isDutySlipDialogOpen, setIsDutySlipDialogOpen] = useState(false);
+  const [dutySlipRide, setDutySlipRide] = useState<any>(null);
+  const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
+  const [invoiceRide, setInvoiceRide] = useState<any>(null);
 
   useEffect(() => {
     stateRef.current = { bookings, carLocations, drivers, cars };
@@ -536,7 +572,9 @@ export default function ActiveRideDashboard() {
   const isPriority = useCallback((b: any) => {
     const isAirportDrop = b.dropLocation?.toLowerCase().includes('airport');
     const hasPriorityTag = b.tags?.some((t: string) => t.toLowerCase().includes('priority'));
-    return isAirportDrop || hasPriorityTag;
+    const isCorp = !!b.b2bClientId;
+    const isHighValue = (b.estimatedFare || b.grandTotal || 0) > 3000;
+    return isAirportDrop || hasPriorityTag || isCorp || isHighValue;
   }, []);
 
   const delayedCount = useMemo(() => bookings.filter((b: any) => checkIsDelayed(b)).length, [bookings, liveMetrics]);
@@ -545,7 +583,8 @@ export default function ActiveRideDashboard() {
   const arrivedCount = useMemo(() => bookings.filter((b: any) => b.status === 'arrived').length, [bookings]);
   const ongoingCount = useMemo(() => bookings.filter((b: any) => b.status === 'picked_up').length, [bookings]);
   const droppedCount = useMemo(() => bookings.filter((b: any) => b.status === 'dropped').length, [bookings]);
-  const closedCount = useMemo(() => bookings.filter((b: any) => ['closed', 'cancelled'].includes(b.status)).length, [bookings]);
+  const closedCount = useMemo(() => bookings.filter((b: any) => b.status === 'closed').length, [bookings]);
+  const cancelledCount = useMemo(() => bookings.filter((b: any) => b.status === 'cancelled').length, [bookings]);
   const gpsOffCount = useMemo(() => bookings.filter((b: any) => isGpsOff(b)).length, [bookings, isGpsOff]);
   const priorityCount = useMemo(() => bookings.filter((b: any) => {
       const activeStatuses = ['confirmed', 'assigned', 'dispatched', 'arrived', 'picked_up', 'dropped'];
@@ -584,13 +623,22 @@ export default function ActiveRideDashboard() {
         statusFiltered = bookings.filter((b: any) => b.status === 'dropped');
         break;
       case 'closed':
-        statusFiltered = bookings.filter((b: any) => ['closed', 'cancelled'].includes(b.status));
+        statusFiltered = bookings.filter((b: any) => b.status === 'closed');
+        break;
+      case 'cancelled':
+        statusFiltered = bookings.filter((b: any) => b.status === 'cancelled');
         break;
       case 'gps_off':
         statusFiltered = bookings.filter((b: any) => isGpsOff(b));
         break;
       case 'priority':
-        statusFiltered = bookings.filter((b: any) => activeStatuses.includes(b.status) && isPriority(b));
+        statusFiltered = bookings.filter((b: any) => {
+            if (!activeStatuses.includes(b.status)) return false;
+            if (prioritySubFilter === 'trev_biz') return !!b.b2bClientId;
+            if (prioritySubFilter === 'airport') return b.dropLocation?.toLowerCase().includes('airport');
+            if (prioritySubFilter === 'high_value') return (b.estimatedFare || b.grandTotal || 0) > 3000;
+            return isPriority(b);
+        });
         break;
       case 'low_soc':
         statusFiltered = bookings.filter((b: any) => {
@@ -641,8 +689,19 @@ export default function ActiveRideDashboard() {
         : 0;
 
       const rawStatus = b.status;
-      const statusColor = isDelayed ? 'amber' : !b.driverId ? 'orange' : rawStatus === 'picked_up' ? 'blue' : 'green';
-      const displayStatus = isDelayed ? 'Delayed' : !b.driverId ? 'Unassigned' : rawStatus === 'picked_up' ? 'Ongoing' : formatStatus(rawStatus);
+      const isTerminal = ['closed', 'cancelled'].includes(rawStatus);
+      
+      const statusColor = rawStatus === 'cancelled' ? 'red' : 
+                          rawStatus === 'closed' ? 'slate' : 
+                          isDelayed ? 'amber' : 
+                          !b.driverId ? 'orange' : 
+                          rawStatus === 'picked_up' ? 'blue' : 'green';
+                          
+      const displayStatus = isTerminal ? formatStatus(rawStatus) : 
+                            isDelayed ? 'Delayed' : 
+                            !b.driverId ? 'Unassigned' : 
+                            rawStatus === 'picked_up' ? 'Ongoing' : 
+                            formatStatus(rawStatus);
 
       let formattedRideType = (b.tripType || '').replace(/_/g, ' ');
       if (b.tripType === 'rental') {
@@ -713,6 +772,34 @@ export default function ActiveRideDashboard() {
     });
   }, [drivers, cars, bookings, carLocations]);
 
+  // Mock computation for Arrival punctuality based on booking IDs to keep percentages stable 
+  // (In real life, this would compare b.arrivedAt with b.pickupTime)
+  const arrivalMetrics = useMemo(() => {
+      let green = 0;
+      let yellow = 0;
+      let red = 0;
+      
+      const relevantBookings = bookings.filter((b: any) => ['arrived', 'picked_up', 'dropped', 'closed', 'Completed'].includes(b.status));
+      
+      relevantBookings.forEach((b: any) => {
+          const seed = b.id ? b.id.charCodeAt(0) + b.id.charCodeAt(b.id.length - 1) : 0;
+          const pseudoRandom = (seed % 100) / 100;
+          
+          if (pseudoRandom < 0.65) {
+              green++; // > 15m Early
+          } else if (pseudoRandom < 0.90) {
+              yellow++; // 0 - 15m Early
+          } else {
+              red++; // Late
+          }
+      });
+      
+      if (relevantBookings.length === 0) return { green: 68, yellow: 22, red: 10, total: 0 };
+      
+      const total = green + yellow + red;
+      return { green: Math.round((green / total) * 100), yellow: Math.round((yellow / total) * 100), red: Math.round((red / total) * 100), total };
+  }, [bookings]);
+
   const handleCreateTicket = () => {
       if (!ticketData.subject) {
           toast.error("Subject is required");
@@ -775,8 +862,6 @@ export default function ActiveRideDashboard() {
       
       <div className="flex-1 p-4 md:p-6 space-y-6 overflow-y-auto relative z-10 custom-scrollbar">
        <DashboardHeader
-         isSimulating={isSimulating}
-         setIsSimulating={setIsSimulating}
          isRefreshing={isRefreshing}
          handleRefresh={() => { setIsRefreshing(true); setTimeout(() => setIsRefreshing(false), 500); }}
          statusFilter={statusFilter}
@@ -797,10 +882,15 @@ export default function ActiveRideDashboard() {
            ongoing: ongoingCount,
            dropped: droppedCount,
            closed: closedCount,
+           cancelled: cancelledCount,
            gpsOff: gpsOffCount,
            priority: priorityCount,
            lowSoc: lowSocCount,
          }}
+         lastAllocationTime={lastAllocationTime}
+         nextAllocationTime={nextAllocationTime}
+         isAutoAllocateOn={isAutoAllocateOn}
+         arrivalMetrics={arrivalMetrics}
        />
 
        {statusFilter === 'delayed' && (
@@ -818,9 +908,19 @@ export default function ActiveRideDashboard() {
        {statusFilter === 'pickup' && (
          <div className="flex items-center gap-2 mt-2 mb-4 overflow-x-auto pb-1 custom-scrollbar">
             <span className="text-xs font-bold text-slate-500 mr-1 uppercase tracking-wider">Ride Type:</span>
-            <Badge variant={ongoingSubFilter === 'all' ? 'default' : 'outline'} onClick={() => setOngoingSubFilter('all')} className={`cursor-pointer ${ongoingSubFilter === 'all' ? 'bg-slate-800' : 'bg-white hover:bg-slate-50'} shadow-sm`}>All On-going</Badge>
+            <Badge variant={ongoingSubFilter === 'all' ? 'default' : 'outline'} onClick={() => setOngoingSubFilter('all')} className={`cursor-pointer ${ongoingSubFilter === 'all' ? 'bg-slate-800' : 'bg-white hover:bg-slate-50'} shadow-sm`}>All In-Trip</Badge>
             <Badge variant={ongoingSubFilter === 'rental' ? 'default' : 'outline'} onClick={() => setOngoingSubFilter('rental')} className={`cursor-pointer ${ongoingSubFilter === 'rental' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200'} shadow-sm`}>Rental</Badge>
             <Badge variant={ongoingSubFilter === 'outstation' ? 'default' : 'outline'} onClick={() => setOngoingSubFilter('outstation')} className={`cursor-pointer ${ongoingSubFilter === 'outstation' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200'} shadow-sm`}>Outstation</Badge>
+         </div>
+       )}
+
+       {statusFilter === 'priority' && (
+         <div className="flex items-center gap-2 mt-2 mb-4 overflow-x-auto pb-1 custom-scrollbar">
+            <span className="text-xs font-bold text-slate-500 mr-1 uppercase tracking-wider">Priority Type:</span>
+            <Badge variant={prioritySubFilter === 'all' ? 'default' : 'outline'} onClick={() => setPrioritySubFilter('all')} className={`cursor-pointer ${prioritySubFilter === 'all' ? 'bg-slate-800' : 'bg-white hover:bg-slate-50'} shadow-sm`}>All Priority</Badge>
+            <Badge variant={prioritySubFilter === 'trev_biz' ? 'default' : 'outline'} onClick={() => setPrioritySubFilter('trev_biz')} className={`cursor-pointer ${prioritySubFilter === 'trev_biz' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200'} shadow-sm`}>Trev Biz (Corporate)</Badge>
+            <Badge variant={prioritySubFilter === 'airport' ? 'default' : 'outline'} onClick={() => setPrioritySubFilter('airport')} className={`cursor-pointer ${prioritySubFilter === 'airport' ? 'bg-teal-600 text-white' : 'bg-teal-50 text-teal-700 hover:bg-teal-100 border-teal-200'} shadow-sm`}>Airport Drops</Badge>
+            <Badge variant={prioritySubFilter === 'high_value' ? 'default' : 'outline'} onClick={() => setPrioritySubFilter('high_value')} className={`cursor-pointer ${prioritySubFilter === 'high_value' ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200'} shadow-sm`}>High Value (&gt; ₹3000)</Badge>
          </div>
        )}
 
@@ -859,7 +959,7 @@ export default function ActiveRideDashboard() {
             const isExpanded = expandedRideId === ride.id;
             const isDelayed = ride.status === 'Delayed';
             const isUnassigned = ride.driverName === 'Unassigned';
-            const isClosed = ['Completed', 'Dropped Off', 'Cancelled'].includes(ride.status);
+            const isClosed = ['closed', 'dropped'].includes(ride.originalBooking.status);
             
             const driver = ride.originalBooking.driverId ? getDriver(ride.originalBooking.driverId) : null;
             const b2bClient = ride.originalBooking.b2bClientId ? getB2BClient(ride.originalBooking.b2bClientId) : null;
@@ -906,6 +1006,25 @@ export default function ActiveRideDashboard() {
               status: stop.status,
             }));
 
+            let nextRide = null;
+            if (ride.originalBooking.driverId) {
+                const currentRideTime = new Date(`${ride.originalBooking.pickupDate}T${ride.originalBooking.pickupTime || '00:00'}`).getTime();
+                const driverRides = bookings.filter((b: any) =>
+                    b.driverId === ride.originalBooking.driverId &&
+                    b.id !== ride.originalBooking.id &&
+                    !['dropped', 'closed', 'cancelled'].includes(b.status)
+                ).sort((a: any, b: any) => {
+                    const timeA = new Date(`${a.pickupDate}T${a.pickupTime || '00:00'}`).getTime();
+                    const timeB = new Date(`${b.pickupDate}T${b.pickupTime || '00:00'}`).getTime();
+                    return timeA - timeB;
+                });
+                
+                nextRide = driverRides.find((b: any) => {
+                    const timeB = new Date(`${b.pickupDate}T${b.pickupTime || '00:00'}`).getTime();
+                    return timeB >= currentRideTime;
+                }) || driverRides[0];
+            }
+
             return (
               <div key={ride.id} className={`relative bg-white rounded-2xl border transition-all duration-300 overflow-hidden ${isExpanded ? borderExpanded : borderNormal}`}>
                 
@@ -927,42 +1046,43 @@ export default function ActiveRideDashboard() {
                        {isUnassigned && !isDelayed && !isClosed && <div className="absolute inset-0 bg-orange-500/10 animate-pulse pointer-events-none rounded-xl" />}
 
                        {/* Col 1: Status & Booking */}
-                       <div className="w-full md:w-[16%] flex flex-col gap-0.5 pr-2 border-b md:border-b-0 md:border-r border-slate-100 py-1 md:py-0 relative z-10">
+                       <div className="w-full md:w-[12%] flex flex-col gap-0.5 pr-2 border-b md:border-b-0 md:border-r border-slate-100 py-1 md:py-0 relative z-10">
                            <div className="flex justify-between items-center">
                                <span className="font-bold text-slate-800 tracking-tight text-[12px]">{ride.displayId}</span>
                                <div className="flex items-center gap-1">
-                                   {ride.delayMins > 0 && (
-                                       <Badge className="bg-red-600 text-white hover:bg-red-700 border-none text-[9px] font-bold h-4 py-0 px-1.5 rounded-sm shadow-sm animate-pulse">
-                                           {ride.delayMins}m Late
-                                       </Badge>
-                                   )}
                                    <Badge className={`bg-${ride.statusColor}-100 text-${ride.statusColor}-700 hover:bg-${ride.statusColor}-200 border-none text-[9px] font-bold h-4 py-0 px-1.5 rounded-sm shadow-sm`}>
                                        {ride.status}
                                    </Badge>
                                </div>
                            </div>
                            <div className="text-[10px] text-slate-500 font-medium leading-none">{ride.bookingId} • <span className="capitalize">{ride.rideType}</span></div>
-                           
-                           {/* DIAGNOSTIC DELAY INFO */}
-                           {ride.delayInfo && (
-                             <div className={`mt-0.5 px-1.5 py-0.5 rounded border shadow-sm flex items-center justify-between gap-1 w-full ${delayStyles[ride.delayInfo.color]?.badge || 'bg-red-50 border-red-200 text-red-700'}`}>
-                               <p className="text-[8px] font-bold uppercase tracking-wider whitespace-nowrap">{ride.delayInfo.label}</p>
-                               <p className="text-[9px] font-medium leading-none opacity-90 truncate max-w-[90px]">{ride.delayInfo.reason}</p>
-                             </div>
-                           )}
                        </div>
 
                        {/* Col 2: Customer */}
-                       <div className="w-full md:w-[14%] flex flex-col gap-0.5 px-0 md:px-2.5 border-b md:border-b-0 md:border-r border-slate-100 py-1 md:py-0">
+                       <div className="w-full md:w-[12%] flex flex-col gap-0.5 px-0 md:px-2.5 border-b md:border-b-0 md:border-r border-slate-100 py-1 md:py-0 relative group/cust">
                            <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Customer</div>
                            <div className="font-bold text-slate-800 truncate text-[12px] leading-tight" title={ride.customerName}>{ride.customerName}</div>
-                           <div className="text-[10px] text-slate-500 flex items-center gap-1 leading-none mb-1"><Phone className="h-2.5 w-2.5 text-slate-400" /> {ride.customerPhone}</div>
+                           <div className="text-[10px] text-slate-500 flex items-center gap-1 leading-none mb-1">
+                               {ride.customerPhone}
+                               {ride.customerPhone && (
+                                   <Button variant="ghost" size="icon" className="h-5 w-5 bg-green-50 hover:bg-green-100 text-green-600 rounded-full shrink-0 ml-auto" onClick={(e) => { e.stopPropagation(); window.open(`tel:${ride.customerPhone}`); }}>
+                                       <PhoneCall className="h-3 w-3" />
+                                   </Button>
+                               )}
+                           </div>
                            <div className="text-[9px] text-slate-500 leading-none">Src: <span className="font-bold text-slate-700">{b2bClient ? b2bClient.companyName : ride.walletBal}</span></div>
                            <div className="text-[9px] text-slate-500 leading-none mt-0.5">By: <span className="font-bold text-slate-700">{ride.originalBooking.createdBy || 'Admin'}</span></div>
                        </div>
+                       
+                       {/* Col 3: Pick Time & Car Booked */}
+                       <div className="w-full md:w-[12%] flex flex-col gap-0.5 px-0 md:px-2.5 border-b md:border-b-0 md:border-r border-slate-100 py-1 md:py-0">
+                           <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Pick Time / Car Booked</div>
+                           <div className="font-bold text-slate-800 truncate text-[12px] leading-tight" title={ride.time}>{ride.time}</div>
+                           <div className="text-[10px] text-slate-500 leading-none mt-1">Car: <span className="font-bold text-slate-700 capitalize">{ride.originalBooking?.carCategory?.replace('_', ' ') || 'BYD / MG ZS'}</span></div>
+                       </div>
 
-                       {/* Col 3: Route */}
-                       <div className="w-full md:w-[20%] flex flex-col justify-center gap-0.5 px-0 md:px-2.5 border-b md:border-b-0 md:border-r border-slate-100 py-1 md:py-0">
+                       {/* Col 4: Route */}
+                       <div className="w-full md:w-[18%] flex flex-col justify-center gap-0.5 px-0 md:px-2.5 border-b md:border-b-0 md:border-r border-slate-100 py-1 md:py-0">
                            <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none mb-0.5">Route</div>
                            <div className="text-[10px] text-slate-800 truncate flex items-center gap-1 leading-tight" title={ride.originalBooking.pickupLocation}>
                                <div className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
@@ -974,57 +1094,56 @@ export default function ActiveRideDashboard() {
                            </div>
                        </div>
 
-                       {/* Col 4: Driver */}
-                       <div className="w-full md:w-[16%] flex flex-col gap-0.5 px-0 md:px-2.5 border-b md:border-b-0 md:border-r border-slate-100 py-1 md:py-0">
-                           <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Driver</div>
-                           
-                           {!isClosed ? (
-                               <Popover>
-                                   <PopoverTrigger asChild>
-                                       <div 
-                                           className="flex items-center gap-1 font-bold text-slate-800 truncate cursor-pointer hover:text-blue-600 transition-colors group/driver p-0.5 -ml-0.5 rounded hover:bg-blue-50 w-fit text-[12px] leading-tight"
-                                           onClick={(e) => e.stopPropagation()}
-                                       >
-                                           <span className={`truncate ${ride.driverName === 'Unassigned' ? 'text-orange-600' : ''}`}>{ride.driverName}</span>
-                                           <ChevronDown className="h-3 w-3 shrink-0 text-slate-300 group-hover/driver:text-blue-500" />
-                                       </div>
-                                   </PopoverTrigger>
-                                   <PopoverContent className="w-72 p-3 shadow-xl border-slate-200 rounded-xl" align="start" side="bottom">
-                                       <DriverSearchDropdown ride={ride} />
-                                   </PopoverContent>
-                               </Popover>
-                           ) : (
-                               <div className="font-bold text-slate-800 truncate w-full p-0.5 -ml-0.5 text-[12px] leading-tight">{ride.driverName}</div>
-                           )}
-                           
-                           <div className="text-[10px] text-slate-500 flex items-center gap-1 leading-none">
-                               {ride.driverName !== 'Unassigned' ? ride.driverId : 'Awaiting Assignment'}
+                       {/* Col 5: Driver & Vehicle */}
+                       <div className="w-full md:w-[16%] flex flex-col gap-0.5 px-0 md:px-2.5 border-b md:border-b-0 md:border-r border-slate-100 py-1 md:py-0 relative group/driv">
+                           <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none flex justify-between items-center">
+                               Driver / Vehicle
                            </div>
-                       </div>
-
-                       {/* Col 5: Vehicle & EV Metrics */}
-                       <div className="w-full md:w-[14%] flex flex-col gap-0.5 px-0 md:px-2.5 border-b md:border-b-0 md:border-r border-slate-100 py-1 md:py-0">
-                           <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Vehicle</div>
-                           <div className="font-bold text-slate-800 truncate flex items-center gap-1 text-[12px] leading-tight">
+                           
+                           <div className="flex items-center gap-1">
+                               {!isClosed ? (
+                                   <Popover>
+                                       <PopoverTrigger asChild>
+                                           <div 
+                                               className="flex items-center gap-1 font-bold text-slate-800 truncate cursor-pointer hover:text-blue-600 transition-colors group/driver p-0.5 -ml-0.5 rounded hover:bg-blue-50 w-fit text-[12px] leading-tight"
+                                               onClick={(e) => e.stopPropagation()}
+                                           >
+                                               <span className={`truncate ${ride.driverName === 'Unassigned' ? 'text-orange-600' : ''}`}>{ride.driverName}</span>
+                                               <ChevronDown className="h-3 w-3 shrink-0 text-slate-300 group-hover/driver:text-blue-500" />
+                                           </div>
+                                       </PopoverTrigger>
+                                       <PopoverContent className="w-72 p-3 shadow-xl border-slate-200 rounded-xl" align="start" side="bottom">
+                                           <DriverSearchDropdown ride={ride} />
+                                       </PopoverContent>
+                                   </Popover>
+                               ) : (
+                                   <div className="font-bold text-slate-800 truncate p-0.5 -ml-0.5 text-[12px] leading-tight">{ride.driverName}</div>
+                               )}
+                               <span className="text-[10px] text-slate-400 font-medium">({ride.driverName !== 'Unassigned' ? ride.driverId : 'N/A'})</span>
+                           </div>
+                           
+                           <div className="text-[10px] text-slate-500 flex items-center gap-1 leading-none mb-0.5">
+                               {ride.driverName !== 'Unassigned' ? ride.driverPhone : 'N/A'}
+                               {ride.driverName !== 'Unassigned' && ride.driverPhone !== 'N/A' && (
+                                   <Button variant="ghost" size="icon" className="h-5 w-5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-full shrink-0" onClick={(e) => { e.stopPropagation(); window.open(`tel:${ride.driverPhone}`); }}>
+                                       <PhoneCall className="h-3 w-3" />
+                                   </Button>
+                               )}
+                           </div>
+                           <div className="font-bold text-slate-800 truncate flex items-center gap-1 text-[11px] leading-tight mt-0.5">
                                <span className="truncate">{ride.vehicleNo}</span>
                                {ride.isEV && <Badge variant="outline" className="text-[8px] bg-green-50 text-green-700 px-1 py-0 h-3.5 flex items-center rounded-sm border-green-200 shrink-0 leading-none"><Leaf className="h-2 w-2 mr-0.5" /> EV</Badge>}
                            </div>
-                           <div className="flex flex-col gap-1 mt-0.5">
-                               <span className="text-[10px] text-slate-500 truncate leading-none">{ride.vehicleType}</span>
-                               {ride.driverName !== 'Unassigned' && !isClosed && (
-                                   <div className={`flex items-center gap-1 text-[10px] font-medium leading-none ${rideMetrics.soc < 20 ? 'text-red-600' : 'text-green-600'}`}>
-                                       <BatteryCharging className="h-3 w-3" />
-                                       <span>{rideMetrics.soc.toFixed(0)}%</span>
-                                       <span className="text-slate-400 font-normal">({estRange}km)</span>
-                                   </div>
-                               )}
+                           <div className="text-[10px] text-slate-500 truncate leading-none">
+                               {ride.vehicleType}
                            </div>
                        </div>
 
                        {/* Col 6: Current Event */}
-                       <div className="w-full md:w-[10%] flex flex-col justify-center gap-0.5 px-0 md:px-2.5 border-b md:border-b-0 md:border-r border-slate-100 py-1 md:py-0">
-                           <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Event</div>
+                       <div className="w-full md:w-[9%] flex flex-col justify-center gap-0.5 px-0 md:px-2.5 border-b md:border-b-0 md:border-r border-slate-100 py-1 md:py-0">
+                           <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none mb-1">Event</div>
                            <Badge variant="outline" className={`w-fit border-none px-1.5 py-0 text-[9px] font-bold uppercase tracking-wider h-4 flex items-center ${
+                               ride.originalBooking.status === 'cancelled' ? 'bg-red-100 text-red-700' :
                                (!ride.originalBooking.driverId && ['pending', 'confirmed'].includes(ride.originalBooking.status)) ? 'bg-amber-100 text-amber-700' :
                                ride.originalBooking.status === 'assigned' ? 'bg-blue-100 text-blue-700' :
                                ride.originalBooking.status === 'dispatched' ? 'bg-indigo-100 text-indigo-700' :
@@ -1033,11 +1152,11 @@ export default function ActiveRideDashboard() {
                                ride.originalBooking.status === 'dropped' ? 'bg-teal-100 text-teal-700' :
                                'bg-slate-100 text-slate-700'
                            }`}>
-                               {(!ride.originalBooking.driverId && ['pending', 'confirmed'].includes(ride.originalBooking.status)) ? 'Unassigned' : ride.originalBooking.status.replace(/_/g, ' ')}
+                               {ride.originalBooking.status === 'cancelled' ? 'Cancelled' : (!ride.originalBooking.driverId && ['pending', 'confirmed'].includes(ride.originalBooking.status)) ? 'Unassigned' : ride.originalBooking.status.replace(/_/g, ' ')}
                            </Badge>
                        </div>
 
-                       {/* Col 7: Fare & Mode */}
+                       {/* Col 7: Fare & Actions */}
                        <div className="w-full md:flex-1 flex justify-between items-center pl-0 md:pl-2.5 py-1 md:py-0">
                            <div className="flex flex-col gap-0.5">
                                <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Fare</div>
@@ -1045,9 +1164,134 @@ export default function ActiveRideDashboard() {
                                <div className="text-[10px] text-slate-500 font-medium whitespace-nowrap leading-none">{ride.originalBooking.b2bClientId ? 'Corp.' : 'Direct'}</div>
                            </div>
 
-                           {/* Chevron */}
-                           <div className={`p-1 rounded-full transition-colors ${isExpanded ? 'bg-blue-100 text-blue-600' : 'bg-transparent text-slate-400 group-hover:bg-slate-100 group-hover:text-slate-600'}`}>
-                               {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                           <div className="flex items-center gap-2">
+                               {/* Actions Dropdown */}
+                               {!isClosed && (
+                                   <DropdownMenu>
+                                       <DropdownMenuTrigger asChild>
+                                           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => e.stopPropagation()}>
+                                               <MoreHorizontal className="h-4 w-4 text-slate-500" />
+                                           </Button>
+                                       </DropdownMenuTrigger>
+                                       <DropdownMenuContent align="end" className="w-48 shadow-lg border-slate-100 rounded-xl" onClick={(e) => e.stopPropagation()}>
+                                       {ride.originalBooking.status === 'cancelled' ? (
+                                           <>
+                                               <DropdownMenuItem className="cursor-pointer font-medium text-slate-700" onClick={(e) => { 
+                                                   e.stopPropagation(); 
+                                                   updateBooking(ride.originalBooking.id, { status: 'pending', cancellationReason: null, cancelledBy: null });
+                                                   toast.success("Booking reactivated to pending state.");
+                                               }}>
+                                                   <RefreshCw className="h-4 w-4 mr-2 text-slate-500" /> Reactivate Booking
+                                               </DropdownMenuItem>
+                                               <DropdownMenuItem className="cursor-pointer font-medium text-slate-700" onClick={(e) => { 
+                                                   e.stopPropagation(); 
+                                                   setDutySlipRide(ride);
+                                                   setIsDutySlipDialogOpen(true);
+                                               }}>
+                                                   <FileText className="h-4 w-4 mr-2 text-slate-500" /> View Duty Slip
+                                               </DropdownMenuItem>
+                                           </>
+                                       ) : (
+                                           <>
+                                       <DropdownMenuItem className="cursor-pointer font-medium text-slate-700" onClick={(e) => { 
+                                           e.stopPropagation(); 
+                                           setEditRideTarget(ride);
+                                           setEditRideData({ 
+                                              customerName: ride.originalBooking.customerName || '',
+                                              customerPhone: ride.originalBooking.customerPhone || '',
+                                              tripType: ride.originalBooking.tripType || '',
+                                              pickupLocation: ride.originalBooking.pickupLocation || '',
+                                              dropLocation: ride.originalBooking.dropLocation || '', 
+                                              pickupDate: ride.originalBooking.pickupDate || '',
+                                              pickupTime: ride.originalBooking.pickupTime || '',
+                                              remarks: ride.originalBooking.remarks || '',
+                                              estimatedFare: ride.originalBooking.estimatedFare || 0, 
+                                              tollCharges: ride.originalBooking.tollCharges || 0, 
+                                              parkingCharges: ride.originalBooking.parkingCharges || 0, 
+                                              promoDiscount: ride.originalBooking.promoDiscount || 0,
+                                              advancePaid: ride.originalBooking.advancePaid || 0
+                                           });
+                                           setIsEditDialogOpen(true); 
+                                       }}>
+                                                <Edit3 className="h-4 w-4 mr-2 text-slate-500" /> Booking Edit
+                                            </DropdownMenuItem>
+                                            {!ride.originalBooking.driverId ? (
+                                                <DropdownMenuItem className="cursor-not-allowed font-medium text-slate-400 opacity-80" onClick={(e) => { e.stopPropagation(); toast.error("Please assign a driver first"); }}>
+                                                    <Clock className="h-4 w-4 mr-2 text-slate-400" /> Assign Driver First
+                                                </DropdownMenuItem>
+                                            ) : (
+                                                <DropdownMenuItem className="cursor-pointer font-medium text-slate-700" onClick={(e) => { 
+                                                    e.stopPropagation(); 
+                                                    
+                                                    let nStatus = null;
+                                                    if (['pending', 'confirmed', 'assigned'].includes(ride.originalBooking.status)) {
+                                                        nStatus = 'dispatched';
+                                                    } else {
+                                                        const flow = ['dispatched', 'arrived', 'picked_up', 'dropped', 'closed'];
+                                                        const cIdx = flow.indexOf(ride.originalBooking.status);
+                                                        nStatus = cIdx >= 0 && cIdx < flow.length - 1 ? flow[cIdx + 1] : null;
+                                                    }
+                                                    
+                                                    if (nStatus) {
+                                                        setManualEventTarget(ride);
+                                                        setManualEventStatus(nStatus);
+                                                        setIsManualEventDialogOpen(true); 
+                                                    } else {
+                                                        toast.info("No further manual events available.");
+                                                    }
+                                                }}>
+                                                    <Clock className="h-4 w-4 mr-2 text-slate-500" /> Manual Event
+                                                </DropdownMenuItem>
+                                            )}
+                                            <DropdownMenuItem className="cursor-pointer font-medium text-slate-700" onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                setDutySlipRide(ride);
+                                                setIsDutySlipDialogOpen(true);
+                                            }}>
+                                                <FileText className="h-4 w-4 mr-2 text-slate-500" /> View Duty Slip
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem className="cursor-pointer font-medium text-slate-700" onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                setInvoiceRide(ride);
+                                                setIsInvoiceDialogOpen(true);
+                                            }}>
+                                                <Banknote className="h-4 w-4 mr-2 text-slate-500" /> View Invoice
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem className="text-red-600 focus:text-red-700 focus:bg-red-50 cursor-pointer font-medium" onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                setCancelRideTarget(ride);
+                                                setCancelReason("");
+                                                setIsCancelDialogOpen(true);
+                                            }}>
+                                                <XCircle className="h-4 w-4 mr-2" /> Cancel Booking
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator className="bg-slate-100" />
+                                            <DropdownMenuItem 
+                                                className="text-amber-700 focus:text-amber-700 focus:bg-amber-50 cursor-pointer font-medium"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const reason = window.prompt("Please enter the reason for breakdown:");
+                                                    if (reason) {
+                                                        toast.success(`Breakdown marked with reason: ${reason}`);
+                                                        updateBooking(ride.originalBooking.id, { 
+                                                            status: 'cancelled', 
+                                                            cancellationReason: `Breakdown: ${reason}`,
+                                                            cancelledBy: 'Admin'
+                                                        });
+                                                    }
+                                                }}
+                                            >
+                                                <AlertTriangle className="h-4 w-4 mr-2" /> Mark Breakdown
+                                            </DropdownMenuItem>
+                                           </>
+                                       )}
+                                       </DropdownMenuContent>
+                                   </DropdownMenu>
+                               )}
+                               {/* Chevron */}
+                               <div className={`p-1 rounded-full transition-colors ${isExpanded ? 'bg-blue-100 text-blue-600' : 'bg-transparent text-slate-400 group-hover:bg-slate-100 group-hover:text-slate-600'}`}>
+                                   {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                               </div>
                            </div>
                        </div>
                    </div>
@@ -1114,26 +1358,171 @@ export default function ActiveRideDashboard() {
                 {/* ========================================================= */}
                 {/* EXPANDED CONTENT AREA - ACTIVE RIDE */}
                 {/* ========================================================= */}
-                {isExpanded && !isClosed && (
+            {isExpanded && !isClosed && (() => {
+              const currentStatus = ride.originalBooking.status;
+              const cancelEvent = currentStatus === 'cancelled' 
+                  ? ride.originalBooking.eventLog?.slice().reverse().find((e: any) => e.event === 'cancelled' || e.toStatus === 'cancelled')
+                  : null;
+              const cancelFromStatus = cancelEvent?.fromStatus || 'pending';
+
+              let timelineSteps = [
+                  { 
+                     id: 'assigned', title: 'Assigned', color: 'bg-blue-500', lineColor: 'bg-blue-200',
+                     isActive: !!ride.originalBooking.driverId,
+                     fields: [
+                        { label: 'Created Time', value: new Date(ride.originalBooking.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) },
+                        { label: 'Actual Assign', value: (!ride.originalBooking.driverId && ['pending', 'confirmed'].includes(ride.originalBooking.status)) ? 'Pending' : '05:45 PM' }
+                     ]
+                  },
+                  { 
+                     id: 'dispatched', title: 'Dispatched', color: 'bg-indigo-500', lineColor: 'bg-indigo-200', 
+                     isActive: !['pending', 'confirmed', 'assigned'].includes(ride.originalBooking.status),
+                     fields: [
+                        { label: 'ETA Dispatch', value: '05:45 PM' },
+                        { label: 'Actual Dispatch', value: !['pending', 'confirmed', 'assigned'].includes(ride.originalBooking.status) ? '05:46 PM' : 'Pending' }
+                     ]
+                  },
+                  { 
+                     id: 'arrived', title: 'Arrived', color: 'bg-purple-500', lineColor: 'bg-purple-200',
+                     isActive: !['pending', 'confirmed', 'assigned', 'dispatched'].includes(ride.originalBooking.status),
+                     fields: [
+                        { label: 'Est. Arrival', value: '06:00 PM' },
+                        { label: 'Actual Arrival', value: !['pending', 'confirmed', 'assigned', 'dispatched'].includes(ride.originalBooking.status) ? '06:05 PM' : 'Pending' }
+                     ]
+                  },
+                  { 
+                     id: 'picked_up', title: 'Picked Up', color: 'bg-emerald-500', lineColor: 'bg-emerald-200',
+                     isActive: ['picked_up', 'dropped', 'closed', 'Completed'].includes(ride.originalBooking.status),
+                     fields: [
+                        { label: 'Est. Pickup', value: '06:10 PM' },
+                        { label: 'Actual Pickup', value: ['picked_up', 'dropped', 'closed', 'Completed'].includes(ride.originalBooking.status) ? '06:12 PM' : 'Pending' }
+                     ]
+                  },
+                  { 
+                     id: 'dropped', title: 'Ended', color: 'bg-teal-500', lineColor: 'bg-teal-200',
+                     isActive: ['dropped', 'closed', 'Completed'].includes(ride.originalBooking.status),
+                     fields: [
+                        { label: 'Est. Drop Off', value: '07:30 PM' },
+                        { label: 'Actual Drop Off', value: ['dropped', 'closed', 'Completed'].includes(ride.originalBooking.status) ? '07:45 PM' : 'Pending' }
+                     ]
+                  },
+                  { 
+                     id: 'closed', title: 'Closed', color: 'bg-slate-700', lineColor: 'bg-slate-200',
+                     isActive: ['closed', 'Completed'].includes(ride.originalBooking.status),
+                     fields: [
+                        { label: 'Expected Close', value: '07:50 PM' },
+                        { label: 'Actual Close', value: ['closed', 'Completed'].includes(ride.originalBooking.status) ? '07:55 PM' : 'Pending' }
+                     ]
+                  }
+              ];
+
+              if (currentStatus === 'cancelled') {
+                  const cancelIdx = timelineSteps.findIndex(s => s.id === cancelFromStatus);
+                  if (cancelIdx >= 0) {
+                      timelineSteps = timelineSteps.slice(0, cancelIdx + 1);
+                  } else {
+                      timelineSteps = [];
+                  }
+                  
+                  const cancelledBy = cancelEvent?.performedBy || ride.originalBooking.cancelledBy || 'System';
+                  const reason = ride.originalBooking.cancellationReason || cancelEvent?.notes?.replace('Cancelled: ', '') || 'No reason provided';
+                  
+                  timelineSteps.push({
+                      id: 'cancelled', title: 'Cancelled', color: 'bg-red-500', lineColor: 'bg-red-200',
+                      isActive: true,
+                      fields: [
+                          { label: 'Time', value: cancelEvent?.performedAt ? new Date(cancelEvent.performedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) },
+                          { label: 'By', value: cancelledBy.length > 15 ? cancelledBy.substring(0,15)+'...' : cancelledBy },
+                          { label: 'Reason', value: reason.length > 20 ? reason.substring(0,20)+'...' : reason }
+                      ]
+                  });
+              }
+
+              return (
                   <div className="border-t border-slate-100 bg-slate-50/50 p-3 md:p-4 animate-in fade-in slide-in-from-top-2 duration-300 relative z-10 rounded-b-2xl">
-                    
-                    {/* Ride specific action buttons */}
-                    <div className="flex justify-end items-center mb-4 gap-2 flex-wrap">
-                        <Button variant="outline" size="sm" className="bg-white rounded-xl shadow-sm border-slate-200 hover:bg-slate-50 hover:text-blue-700" onClick={() => ride.driverPhone !== 'N/A' ? window.open(`tel:${ride.driverPhone}`) : toast.error('No driver assigned')}><PhoneCall className="h-4 w-4 mr-2 text-blue-600" /> Call Driver</Button>
-                        <Button variant="outline" size="sm" className="bg-white rounded-xl shadow-sm border-slate-200 hover:bg-slate-50 hover:text-green-700" onClick={() => ride.customerPhone ? window.open(`tel:${ride.customerPhone}`) : toast.error('No customer phone')}><PhoneCall className="h-4 w-4 mr-2 text-green-600" /> Call Customer</Button>
-                        <Button variant="secondary" size="sm" className="bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200 border rounded-xl shadow-sm"><AlertTriangle className="h-4 w-4 mr-2" /> Mark Breakdown</Button>
-                    </div>
 
                     <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
                       
-                      {/* Main Content Column (Left - 8 columns) */}
-                      <div className="xl:col-span-8 space-y-4">
+                      {/* Main Content Column (Left - 12 columns) */}
+                      <div className="xl:col-span-12 space-y-4">
                          
+                         {/* ADAPEC Landscape Timeline */}
+                         <Card className="shadow-sm overflow-hidden rounded-2xl border-none">
+                            <CardContent className="p-4 bg-white">
+                               <h3 className="text-xs font-bold text-slate-800 flex items-center gap-2 mb-3"><History className="h-4 w-4 text-blue-500" /> ADAPEC Tracker</h3>
+                               <div className="flex w-full overflow-x-auto scrollbar-hide pb-2">
+                       {timelineSteps.map((step, idx, arr) => {
+                          const syncStatus = !['closed', 'cancelled'].includes(step.id) ? getEventSyncStatus(ride, step.id as any) : null;
+                                      const isSyncSuccess = syncStatus?.push.status === 'success';
+                                      
+                                      return (
+                                        <div key={step.id} className={`flex-1 min-w-[140px] relative ${!step.isActive ? 'opacity-50 grayscale' : ''}`}>
+                                           <div className="flex items-center mb-3">
+                                              <div className={`h-3.5 w-3.5 rounded-full ${step.color} border-2 border-white shadow-sm z-10 shrink-0`}></div>
+                                              {idx < arr.length - 1 && (
+                                                 <div className={`h-[2px] w-full ml-1 mr-1 ${step.isActive ? step.lineColor : 'bg-slate-100'}`}></div>
+                                              )}
+                                           </div>
+                                           <div className="pr-4">
+                                              <div className="flex items-center gap-1.5 mb-2">
+                                                <h4 className="text-[11px] font-extrabold text-slate-800 uppercase tracking-wide">{step.title}</h4>
+                                     {step.isActive && !['closed', 'cancelled'].includes(step.id) && (
+                                                  isSyncSuccess ? (
+                                                    <ThumbsUp className="h-3.5 w-3.5 text-green-500" />
+                                                  ) : (
+                                                    <ThumbsDown className="h-3.5 w-3.5 text-red-500" />
+                                                  )
+                                                )}
+                                              </div>
+                                              <div className="space-y-1.5">
+                                                 {step.fields.map((field, fIdx) => (
+                                                    <div key={fIdx} className="flex flex-col justify-between">
+                                                       <span className="text-[9px] text-slate-400 font-semibold">{field.label}</span>
+                                                       <span className={`text-[10px] font-bold ${field.value === 'Pending' ? 'text-slate-400' : 'text-slate-700'}`}>{field.value}</span>
+                                                    </div>
+                                                 ))}
+                                              </div>
+                                           </div>
+                                        </div>
+                                      );
+                                   })}
+                               </div>
+                            </CardContent>
+                         </Card>
+
+                         {/* Next Affected Ride Details */}
+                    {nextRide && currentStatus !== 'cancelled' && (
+                             <div className={`p-4 rounded-2xl border ${ride.isDelayed ? 'bg-amber-50 border-amber-200 shadow-sm' : 'bg-slate-50 border-slate-200'}`}>
+                                <div className="flex items-center gap-3">
+                                   <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${ride.isDelayed ? 'bg-amber-100' : 'bg-slate-200'}`}>
+                                       {ride.isDelayed ? <AlertTriangle className="h-5 w-5 text-amber-600" /> : <Clock className="h-5 w-5 text-slate-600" />}
+                                   </div>
+                                   <div className="flex-1 overflow-hidden">
+                                       <div className="flex justify-between items-start mb-0.5">
+                                           <p className={`text-[11px] font-bold uppercase tracking-wider ${ride.isDelayed ? 'text-amber-700' : 'text-slate-500'}`}>
+                                              {ride.isDelayed ? '⚠️ Delay May Affect Next Ride' : 'Next Assigned Ride'}
+                                           </p>
+                                           <Badge variant="outline" className={`text-[10px] py-0 h-5 ${ride.isDelayed ? 'bg-white border-amber-200 text-amber-700' : 'bg-white border-slate-200'}`}>
+                                               {formatStatus(nextRide.status)}
+                                           </Badge>
+                                       </div>
+                                       <div className="flex items-center gap-2 text-[13px] font-medium text-slate-800 truncate">
+                                          <span className="font-black text-blue-600">{(nextRide.bookingNumber || nextRide.id.substring(0,8)).toUpperCase()}</span>
+                                          <span className="text-slate-300">•</span>
+                                          <span className="flex items-center gap-1 font-bold whitespace-nowrap"><Clock className="h-3.5 w-3.5 text-slate-400" /> {nextRide.pickupDate} {nextRide.pickupTime}</span>
+                                          <span className="text-slate-300">•</span>
+                                          <span className="truncate">{nextRide.pickupLocation}</span>
+                                          <span className="text-slate-400">→</span>
+                                          <span className="truncate">{nextRide.dropLocation}</span>
+                                       </div>
+                                   </div>
+                                </div>
+                             </div>
+                        )}
+
                          {/* EV Ride Metrics / Live Analytics */}
-                         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2">
+                         <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-2">
                              {[
-                               { label: 'ETA', value: `${rideMetrics.eta}m`, valueClass: 'text-blue-700' },
-                               { label: 'AETA', value: `${rideMetrics.actualEta}m`, valueClass: 'text-slate-800' },
                                { label: 'Dist', value: `${rideMetrics.distance.toFixed(1)}km`, valueClass: 'text-blue-700' },
                                { label: 'Speed', value: `${ride.speed.toFixed(0)}km/h`, valueClass: 'text-amber-600' },
                                { label: 'SOC', value: `${rideMetrics.soc.toFixed(0)}%`, valueClass: 'text-green-700' },
@@ -1172,10 +1561,18 @@ export default function ActiveRideDashboard() {
                                    
                                    {/* Glassmorphism Badges */}
                                    <div className="absolute top-4 left-4 flex flex-col gap-2 z-[400] pointer-events-none">
-                                       <Badge className="bg-white/70 text-slate-800 shadow-sm backdrop-blur-md hover:bg-white/90 pointer-events-auto rounded-lg px-3 py-1.5"><MapPin className="h-3.5 w-3.5 mr-2 text-green-600" /> Live Vehicle Location</Badge>
-                                       <Badge className="bg-white/70 text-slate-800 shadow-sm backdrop-blur-md hover:bg-white/90 pointer-events-auto rounded-lg px-3 py-1.5"><Zap className="h-3.5 w-3.5 mr-2 text-blue-600" /> Route Polyline Active</Badge>
+                                       <div className="flex gap-2">
+                                           <Badge className="bg-white/70 text-slate-800 shadow-sm backdrop-blur-md hover:bg-white/90 pointer-events-auto rounded-lg px-3 py-1.5"><MapPin className="h-3.5 w-3.5 mr-2 text-green-600" /> Live Vehicle Location</Badge>
+                                           <Badge 
+                                              className={`cursor-pointer shadow-sm backdrop-blur-md pointer-events-auto rounded-lg px-3 py-1.5 transition-all ${isSimulating ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-white/70 text-slate-800 hover:bg-white/90'}`}
+                                              onClick={(e) => { e.stopPropagation(); setIsSimulating(!isSimulating); }}
+                                           >
+                                              <Zap className={`h-3.5 w-3.5 mr-2 ${isSimulating ? 'text-yellow-300' : 'text-blue-600'}`} /> {isSimulating ? 'Simulating...' : 'Simulate Movement'}
+                                           </Badge>
+                                       </div>
+                                       <Badge className="bg-white/70 text-slate-800 shadow-sm backdrop-blur-md hover:bg-white/90 pointer-events-auto rounded-lg px-3 py-1.5 w-fit"><Zap className="h-3.5 w-3.5 mr-2 text-blue-600" /> Route Polyline Active</Badge>
                                        {stopPoints.length > 0 && (
-                                         <Badge className="bg-amber-50/90 text-amber-700 shadow-sm backdrop-blur-md hover:bg-amber-50 pointer-events-auto rounded-lg px-3 py-1.5">
+                                         <Badge className="bg-amber-50/90 text-amber-700 shadow-sm backdrop-blur-md hover:bg-amber-50 pointer-events-auto rounded-lg px-3 py-1.5 w-fit">
                                            <MapPin className="h-3.5 w-3.5 mr-2 text-amber-600" /> {stopPoints.length} Stop{stopPoints.length > 1 ? 's' : ''}
                                          </Badge>
                                        )}
@@ -1214,78 +1611,89 @@ export default function ActiveRideDashboard() {
                                         <p className={`mt-1 text-lg font-black leading-none ${ride.originalBooking.paymentStatus === 'paid' ? 'text-blue-700' : 'text-red-600'}`}>₹ {(ride.originalBooking.grandTotal || ride.originalBooking.estimatedFare || 0).toFixed(2)}</p>
                                     </div>
                                 </div>
+
+                                {currentStatus === 'cancelled' && (
+                                    <div className="mt-4 pt-4 border-t border-slate-100">
+                                        <div className="bg-amber-50/50 p-4 border border-amber-100 rounded-xl">
+                                            <div className="flex justify-between items-center mb-3">
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-[11px] text-amber-800 uppercase font-bold tracking-wider">Refund Details</p>
+                                                    <Badge className="bg-amber-100 text-amber-800 border-none px-2 py-0 h-5 text-[10px] font-bold uppercase tracking-wider">Processing</Badge>
+                                                </div>
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="h-6 w-6 text-amber-700 hover:text-amber-900 hover:bg-amber-100/50 rounded-full"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const amt = (ride.originalBooking.grandTotal || ride.originalBooking.estimatedFare || 0).toFixed(2);
+                                                        const rsn = ride.originalBooking.cancellationReason?.replace('Breakdown: ', '')?.replace('Cancelled: ', '') || 'Customer Requested';
+                                                        const arn = `RFND-${ride.id.substring(0, 8).toUpperCase()}`;
+                                                        const rDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                                                        const estDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                                                        navigator.clipboard.writeText(`Refund Amount: ₹ ${amt}\nReason: ${rsn}\nARN Number: ${arn}\nRefund Date: ${rDate}\nEst. Credit Date: ${estDate}`);
+                                                        toast.success("Refund details copied!");
+                                                    }}
+                                                >
+                                                    <Copy className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </div>
+                                            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-1">
+                                                <div>
+                                                    <span className="text-[10px] text-slate-500 uppercase font-semibold">Refund Amount</span>
+                                                    <p className="font-bold text-slate-800 text-sm mt-0.5">₹ {(ride.originalBooking.grandTotal || ride.originalBooking.estimatedFare || 0).toFixed(2)}</p>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <span className="text-[10px] text-slate-500 uppercase font-semibold">Reason</span>
+                                                    <p className="font-medium text-slate-800 text-sm mt-0.5 truncate" title={ride.originalBooking.cancellationReason || 'Customer Requested'}>{ride.originalBooking.cancellationReason?.replace('Breakdown: ', '')?.replace('Cancelled: ', '') || 'Customer Requested'}</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] text-slate-500 uppercase font-semibold">ARN Number</span>
+                                                    <p className="font-mono text-slate-800 text-sm mt-0.5">RFND-{ride.id.substring(0, 8).toUpperCase()}</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] text-slate-500 uppercase font-semibold">Refund Date</span>
+                                                    <p className="font-medium text-slate-800 text-sm mt-0.5">{new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] text-slate-500 uppercase font-semibold">Est. Credit Date</span>
+                                                    <p className="font-bold text-green-600 text-sm mt-0.5">
+                                                        {new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </CardContent>
                          </Card>
 
-                      </div>
-
-                      {/* Sidebar Column (Right - 4 columns) */}
-                      <div className="xl:col-span-4 space-y-4">
-
-                         {/* ADAPDC Timeline Module */}
-                         <Card className="shadow-sm bg-white rounded-2xl border-slate-100">
-                            <CardHeader className="py-3 bg-slate-50/50 border-b border-slate-100 rounded-t-2xl px-4">
-                                <CardTitle className="text-sm flex items-center gap-2 text-slate-800"><History className="h-4 w-4 text-blue-500" /> ADAPDC</CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-4">
-                                <div className="relative border-l-2 border-slate-200 ml-2 space-y-4">
-                                    <div className="relative pl-5">
-                                        <div className="absolute -left-[25px] bg-blue-500 rounded-full h-3 w-3 border-2 border-white shadow-sm"></div>
-                                        <h4 className="text-[12px] font-bold text-slate-800">Assigned</h4>
-                                        <div className="flex items-center gap-2 mt-0.5">
-                                            <p className="text-[10px] text-slate-500">{(!ride.originalBooking.driverId && ['pending', 'confirmed'].includes(ride.originalBooking.status)) ? 'Pending' : '05:45 PM'}</p>
-                                            {ride.originalBooking.driverId && <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">By: System</span>}
-                                        </div>
-                                        <EventSyncLog ride={ride} eventType="assigned" compact />
-                                    </div>
-                                    <div className={`relative pl-5 ${['pending', 'confirmed', 'assigned'].includes(ride.originalBooking.status) ? 'opacity-50' : ''}`}>
-                                        <div className="absolute -left-[25px] bg-indigo-500 rounded-full h-3 w-3 border-2 border-white shadow-sm"></div>
-                                        <h4 className="text-[12px] font-bold text-slate-800">Dispatched</h4>
-                                        <div className="flex items-center gap-2 mt-0.5">
-                                            <p className="text-[10px] text-slate-500">{!['pending', 'confirmed', 'assigned'].includes(ride.originalBooking.status) ? '05:46 PM' : 'Pending'}</p>
-                                            {!['pending', 'confirmed', 'assigned'].includes(ride.originalBooking.status) && <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">By: {ride.driverName}</span>}
-                                        </div>
-                                        <EventSyncLog ride={ride} eventType="dispatched" compact />
-                                    </div>
-                                    <div className={`relative pl-5 ${['pending', 'confirmed', 'assigned', 'dispatched'].includes(ride.originalBooking.status) ? 'opacity-50' : ''}`}>
-                                        <div className="absolute -left-[25px] bg-purple-500 rounded-full h-3 w-3 border-2 border-white shadow-sm"></div>
-                                        <h4 className="text-[12px] font-bold text-slate-800">Arrived</h4>
-                                        <div className="flex items-center gap-2 mt-0.5">
-                                            <p className="text-[10px] text-slate-500">{!['pending', 'confirmed', 'assigned', 'dispatched'].includes(ride.originalBooking.status) ? '06:05 PM' : 'Pending'}</p>
-                                            {!['pending', 'confirmed', 'assigned', 'dispatched'].includes(ride.originalBooking.status) && <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">By: {ride.driverName}</span>}
-                                        </div>
-                                        <EventSyncLog ride={ride} eventType="arrived" compact />
-                                    </div>
-                                    <div className={`relative pl-5 ${!['picked_up', 'dropped', 'closed', 'Cancelled', 'Completed'].includes(ride.originalBooking.status) ? 'opacity-50' : ''}`}>
-                                        <div className="absolute -left-[25px] bg-emerald-500 rounded-full h-3 w-3 border-2 border-white shadow-sm"></div>
-                                        <h4 className="text-[12px] font-bold text-slate-800">Picked Up</h4>
-                                        <div className="flex items-center gap-2 mt-0.5">
-                                            <p className="text-[10px] text-slate-500">{['picked_up', 'dropped', 'closed', 'Completed'].includes(ride.originalBooking.status) ? '06:12 PM' : 'Pending'}</p>
-                                            {['picked_up', 'dropped', 'closed', 'Completed'].includes(ride.originalBooking.status) && <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">By: {ride.driverName}</span>}
-                                        </div>
-                                        <EventSyncLog ride={ride} eventType="picked_up" compact />
-                                    </div>
-                                    <div className={`relative pl-5 ${!['dropped', 'closed', 'Completed'].includes(ride.originalBooking.status) ? 'opacity-50' : ''}`}>
-                                        <div className="absolute -left-[25px] bg-teal-500 rounded-full h-3 w-3 border-2 border-white shadow-sm"></div>
-                                        <h4 className="text-[12px] font-bold text-slate-800">Dropped Off</h4>
-                                        <div className="flex items-center gap-2 mt-0.5">
-                                            <p className="text-[10px] text-slate-500">{['dropped', 'closed', 'Completed'].includes(ride.originalBooking.status) ? '07:45 PM' : 'Pending'}</p>
-                                            {['dropped', 'closed', 'Completed'].includes(ride.originalBooking.status) && <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">By: {ride.driverName}</span>}
-                                        </div>
-                                        <EventSyncLog ride={ride} eventType="dropped" compact />
-                                    </div>
-                                </div>
-                            </CardContent>
-                         </Card>
                       </div>
                     </div>
                   </div>
-                )}
+                  );
+                })()}
 
                 {/* ========================================================= */}
                 {/* EXPANDED CONTENT AREA - POST RIDE (CLOSED) */}
                 {/* ========================================================= */}
-                {isExpanded && isClosed && (
+                {isExpanded && isClosed && (() => {
+                  const currentStatus = ride.originalBooking.status;
+                  const cancelEvent = currentStatus === 'cancelled' 
+                      ? ride.originalBooking.eventLog?.slice().reverse().find((e: any) => e.event === 'cancelled' || e.toStatus === 'cancelled')
+                      : null;
+                  
+                  let lastValidStatusIndex = ['assigned', 'dispatched', 'arrived', 'picked_up', 'dropped', 'closed'].indexOf(
+                      currentStatus === 'cancelled' ? (cancelEvent?.fromStatus || 'pending') : currentStatus
+                  );
+                  if (lastValidStatusIndex === -1 && ['dropped', 'closed'].includes(currentStatus)) lastValidStatusIndex = 5;
+
+                  const showStep = (stepId: string) => {
+                      const stepIdx = ['assigned', 'dispatched', 'arrived', 'picked_up', 'dropped', 'closed'].indexOf(stepId);
+                      return stepIdx !== -1 && stepIdx <= lastValidStatusIndex;
+                  };
+
+                  return (
                   <div className="border-t border-slate-100/50 bg-slate-50/50 backdrop-blur-md p-4 md:p-6 animate-in fade-in slide-in-from-top-2 duration-300 relative z-10 rounded-b-3xl">
                     
                     {/* Post Ride Action Buttons */}
@@ -1343,7 +1751,7 @@ export default function ActiveRideDashboard() {
                     <Tabs defaultValue="overview" className="w-full">
                         <TabsList className="mb-6 bg-white border border-slate-200 shadow-sm rounded-xl p-1">
                             <TabsTrigger value="overview" className="rounded-lg data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:shadow-none">Overview</TabsTrigger>
-                            <TabsTrigger value="adapdc" className="rounded-lg data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:shadow-none">ADAPDC</TabsTrigger>
+                            <TabsTrigger value="adapec" className="rounded-lg data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:shadow-none">ADAPEC</TabsTrigger>
                             <TabsTrigger value="fare" className="rounded-lg data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:shadow-none">Fare Details</TabsTrigger>
                             <TabsTrigger value="tracking" className="rounded-lg data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:shadow-none">Tracking Replay</TabsTrigger>
                             <TabsTrigger value="audit" className="rounded-lg data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:shadow-none">Audit Logs</TabsTrigger>
@@ -1363,38 +1771,72 @@ export default function ActiveRideDashboard() {
                                                     <div className="absolute -left-[31px] bg-white border-4 border-slate-300 rounded-full h-4 w-4"></div>
                                                     <div className="flex justify-between items-start">
                                                         <div>
-                                                            <h4 className="text-[14px] font-bold text-slate-800">Terminal 3, IGI Airport, New Delhi</h4>
+                                                            <h4 className="text-[14px] font-bold text-slate-800">{ride.originalBooking.pickupLocation || 'Pickup Location'}</h4>
                                                             <p className="text-[11px] font-bold tracking-wider uppercase text-slate-400 mt-1">Pickup Location</p>
                                                         </div>
-                                                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 px-2 py-0.5 rounded-md"><CheckCircle className="h-3 w-3 mr-1.5" /> Reached</Badge>
+                                                        {showStep('arrived') ? (
+                                                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 px-2 py-0.5 rounded-md"><CheckCircle className="h-3 w-3 mr-1.5" /> Reached</Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="bg-slate-50 text-slate-500 border-slate-200 px-2 py-0.5 rounded-md"><Clock className="h-3 w-3 mr-1.5" /> Pending</Badge>
+                                                        )}
                                                     </div>
-                                                    <div className="flex gap-6 mt-4">
-                                                        <div className="bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-100">
-                                                            <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Driver Arrived</p>
-                                                            <p className="text-[13px] font-bold text-slate-700">06:05 PM</p>
-                                                        </div>
-                                                        <div className="bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-100">
-                                                            <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Ride Started</p>
-                                                            <p className="text-[13px] font-bold text-slate-700">06:12 PM</p>
-                                                        </div>
-                                                    </div>
+                                                    {showStep('arrived') && (
+                                                      <div className="flex gap-6 mt-4">
+                                                          <div className="bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-100">
+                                                              <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Driver Arrived</p>
+                                                              <p className="text-[13px] font-bold text-slate-700">06:05 PM</p>
+                                                          </div>
+                                                          {showStep('picked_up') && (
+                                                            <div className="bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-100">
+                                                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Ride Started</p>
+                                                                <p className="text-[13px] font-bold text-slate-700">06:12 PM</p>
+                                                            </div>
+                                                          )}
+                                                      </div>
+                                                    )}
                                                 </div>
-                                                <div className="relative">
-                                                    <div className="absolute -left-[31px] bg-white border-4 border-slate-800 rounded-full h-4 w-4"></div>
-                                                    <div className="flex justify-between items-start">
-                                                        <div>
-                                                            <h4 className="text-[14px] font-bold text-slate-800">Vasant Kunj Sector C, New Delhi</h4>
-                                                            <p className="text-[11px] font-bold tracking-wider uppercase text-slate-400 mt-1">Drop Location</p>
+                                                
+                                                {currentStatus === 'cancelled' ? (
+                                                    <div className="relative">
+                                                        <div className="absolute -left-[31px] bg-white border-4 border-red-500 rounded-full h-4 w-4"></div>
+                                                        <div className="flex justify-between items-start">
+                                                            <div>
+                                                                <h4 className="text-[14px] font-bold text-red-600">Ride Cancelled</h4>
+                                                                <p className="text-[11px] font-bold tracking-wider uppercase text-slate-400 mt-1">Status</p>
+                                                            </div>
+                                                            <Badge className="bg-red-100 text-red-700 hover:bg-red-200 border-none px-2 py-0.5 rounded-md"><XCircle className="h-3 w-3 mr-1.5" /> Cancelled</Badge>
                                                         </div>
-                                                        <Badge className="bg-slate-800 px-2 py-0.5 rounded-md"><MapPin className="h-3 w-3 mr-1.5" /> Dropped Off</Badge>
-                                                    </div>
-                                                    <div className="flex gap-6 mt-4">
-                                                        <div className="bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-100">
-                                                            <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Drop Time</p>
-                                                            <p className="text-[13px] font-bold text-slate-700">07:45 PM</p>
+                                                        <div className="flex gap-6 mt-4">
+                                                            <div className="bg-red-50 px-4 py-2.5 rounded-xl border border-red-100 flex-1">
+                                                                <p className="text-[10px] text-red-500 uppercase font-bold tracking-wider mb-0.5">Reason</p>
+                                                                <p className="text-[13px] font-bold text-red-900">{ride.originalBooking.cancellationReason || cancelEvent?.notes?.replace('Cancelled: ', '') || 'No reason provided'}</p>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
+                                                ) : (
+                                                    <div className="relative">
+                                                        <div className="absolute -left-[31px] bg-white border-4 border-slate-800 rounded-full h-4 w-4"></div>
+                                                        <div className="flex justify-between items-start">
+                                                            <div>
+                                                                <h4 className="text-[14px] font-bold text-slate-800">{ride.originalBooking.dropLocation || 'Drop Location'}</h4>
+                                                                <p className="text-[11px] font-bold tracking-wider uppercase text-slate-400 mt-1">Drop Location</p>
+                                                            </div>
+                                                            {showStep('dropped') ? (
+                                                                <Badge className="bg-slate-800 px-2 py-0.5 text-white rounded-md"><MapPin className="h-3 w-3 mr-1.5" /> Dropped Off</Badge>
+                                                            ) : (
+                                                                <Badge variant="outline" className="bg-slate-50 text-slate-500 border-slate-200 px-2 py-0.5 rounded-md"><Clock className="h-3 w-3 mr-1.5" /> Pending</Badge>
+                                                            )}
+                                                        </div>
+                                                        {showStep('dropped') && (
+                                                            <div className="flex gap-6 mt-4">
+                                                                <div className="bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-100">
+                                                                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Drop Time</p>
+                                                                    <p className="text-[13px] font-bold text-slate-700">07:45 PM</p>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         </CardContent>
                                     </Card>
@@ -1543,9 +1985,54 @@ export default function ActiveRideDashboard() {
                                                     }
                                                 </Badge>
                                             </div>
-                                            <div className="bg-white p-4 border border-slate-200 rounded-xl">
-                                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-2">Refund Status</p>
-                                                <p className="text-[13px] font-bold text-slate-500">Not Applicable</p>
+                                            <div className="bg-white p-4 border border-slate-200 rounded-xl flex flex-col justify-between">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Refund Details</p>
+                                                {ride.originalBooking.status === 'cancelled' && (
+                                                    <div className="flex items-center gap-2">
+                                                        <Badge className="bg-amber-100 text-amber-800 border-none px-2 py-0 h-5 text-[9px] font-bold">Processing</Badge>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-5 w-5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full -mr-1"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                const amt = (ride.originalBooking.grandTotal || ride.originalBooking.estimatedFare || 0).toFixed(2);
+                                                                const rsn = ride.originalBooking.cancellationReason?.replace('Breakdown: ', '')?.replace('Cancelled: ', '') || 'Customer Requested';
+                                                                const arn = `RFND-${ride.id.substring(0, 8).toUpperCase()}`;
+                                                                const rDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                                                                const estDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                                                                navigator.clipboard.writeText(`Refund Amount: ₹ ${amt}\nReason: ${rsn}\nARN Number: ${arn}\nRefund Date: ${rDate}\nEst. Credit Date: ${estDate}`);
+                                                                toast.success("Refund details copied!");
+                                                            }}
+                                                        >
+                                                            <Copy className="h-3 w-3" />
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                                </div>
+                                                {ride.originalBooking.status === 'cancelled' ? (
+                                                    <div className="space-y-1.5 mt-1">
+                                                        <div className="flex justify-between text-xs">
+                                                            <span className="text-slate-500">Refund Amount</span>
+                                                            <span className="font-bold text-slate-800">₹ {(ride.originalBooking.grandTotal || ride.originalBooking.estimatedFare || 0).toFixed(2)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-xs">
+                                                            <span className="text-slate-500">Reason</span>
+                                                            <span className="font-medium text-slate-800 text-right max-w-[120px] truncate" title={ride.originalBooking.cancellationReason || 'Customer Requested'}>{ride.originalBooking.cancellationReason?.replace('Breakdown: ', '')?.replace('Cancelled: ', '') || 'Customer Requested'}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-xs">
+                                                            <span className="text-slate-500">ARN Number</span>
+                                                            <span className="font-mono text-slate-700">RFND-{ride.id.substring(0, 8).toUpperCase()}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-xs">
+                                                            <span className="text-slate-500">Date</span>
+                                                            <span className="font-medium text-slate-700">{new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-[13px] font-bold text-slate-400 mt-1">Not Applicable</p>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -1553,10 +2040,10 @@ export default function ActiveRideDashboard() {
                             </Card>
                         </TabsContent>
 
-                        <TabsContent value="adapdc">
+                        <TabsContent value="adapec">
                              <Card className="shadow-sm border-slate-200 bg-white rounded-2xl max-w-3xl mx-auto">
                                 <CardHeader className="pb-4 border-b border-slate-100">
-                                    <CardTitle className="text-md flex items-center gap-2 text-slate-800"><History className="h-5 w-5 text-blue-500" /> ADAPDC</CardTitle>
+                                    <CardTitle className="text-md flex items-center gap-2 text-slate-800"><History className="h-5 w-5 text-blue-500" /> ADAPEC Tracker</CardTitle>
                                 </CardHeader>
                                 <CardContent className="p-6">
                                     <div className="relative border-l-2 border-slate-200 ml-4 space-y-10">
@@ -1574,55 +2061,93 @@ export default function ActiveRideDashboard() {
                                             </div>
                                         ))}
 
-                                        <div className="relative pl-6">
-                                            <div className="absolute -left-[9px] bg-slate-800 rounded-full h-4 w-4 border-4 border-white shadow-sm"></div>
-                                            <h4 className="text-[14px] font-bold text-slate-800">Ride Dropped Off</h4>
-                                            <div className="flex items-center gap-2 mt-1.5">
-                                                <Badge variant="outline" className="text-[10px] border-slate-200 py-0.5">07:45 PM</Badge>
-                                                <span className="text-[11px] text-slate-500 font-medium">By: <span className="font-bold text-slate-700">{ride.driverName}</span> (Driver App)</span>
+                                        {currentStatus === 'cancelled' && (
+                                            <div className="relative pl-6">
+                                                <div className="absolute -left-[9px] bg-red-600 rounded-full h-4 w-4 border-4 border-white shadow-sm"></div>
+                                                <h4 className="text-[14px] font-bold text-red-600">Booking Cancelled</h4>
+                                                <div className="flex items-center gap-2 mt-1.5">
+                                                    <Badge variant="outline" className="text-[10px] border-slate-200 py-0.5">
+                                                        {cancelEvent?.performedAt ? new Date(cancelEvent.performedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                    </Badge>
+                                                    <span className="text-[11px] text-slate-500 font-medium">By: <span className="font-bold text-slate-700">{cancelEvent?.performedBy || ride.originalBooking.cancelledBy || 'System'}</span></span>
+                                                </div>
+                                                <div className="mt-2 bg-red-50 p-3 rounded-xl border border-red-100">
+                                                    <p className="text-[10px] text-red-500 uppercase font-bold tracking-wider mb-0.5">Cancellation Reason</p>
+                                                    <p className="text-[12px] text-red-900 font-medium">{ride.originalBooking.cancellationReason || cancelEvent?.notes?.replace('Cancelled: ', '') || 'No reason provided'}</p>
+                                                </div>
                                             </div>
-                                            <EventSyncLog ride={ride} eventType="dropped" />
-                                        </div>
+                                        )}
 
-                                        <div className="relative pl-6">
-                                            <div className="absolute -left-[9px] bg-green-500 rounded-full h-4 w-4 border-4 border-white shadow-sm"></div>
-                                            <h4 className="text-[14px] font-bold text-slate-800">Ride Started</h4>
-                                            <div className="flex items-center gap-2 mt-1.5">
-                                                <Badge variant="outline" className="text-[10px] border-slate-200 py-0.5">06:12 PM</Badge>
-                                                <span className="text-[11px] text-slate-500 font-medium">By: <span className="font-bold text-slate-700">{ride.driverName}</span> (OTP Verified)</span>
+                                        {showStep('closed') && currentStatus !== 'cancelled' && (
+                                            <div className="relative pl-6">
+                                                <div className="absolute -left-[9px] bg-slate-700 rounded-full h-4 w-4 border-4 border-white shadow-sm"></div>
+                                                <h4 className="text-[14px] font-bold text-slate-800">Ride Closed</h4>
+                                                <div className="flex items-center gap-2 mt-1.5">
+                                                    <Badge variant="outline" className="text-[10px] border-slate-200 py-0.5">07:55 PM</Badge>
+                                                    <span className="text-[11px] text-slate-500 font-medium">By: <span className="font-bold text-slate-700">System / Admin</span></span>
+                                                </div>
                                             </div>
-                                            <EventSyncLog ride={ride} eventType="picked_up" />
-                                        </div>
+                                        )}
 
-                                        <div className="relative pl-6">
-                                            <div className="absolute -left-[9px] bg-blue-500 rounded-full h-4 w-4 border-4 border-white shadow-sm"></div>
-                                            <h4 className="text-[14px] font-bold text-slate-800">Driver Arrived at Pickup</h4>
-                                            <div className="flex items-center gap-2 mt-1.5">
-                                                <Badge variant="outline" className="text-[10px] border-slate-200 py-0.5">06:05 PM</Badge>
-                                                <span className="text-[11px] text-slate-500 font-medium">By: <span className="font-bold text-slate-700">{ride.driverName}</span> (GPS Geofence)</span>
+                                        {showStep('dropped') && (
+                                            <div className="relative pl-6">
+                                                <div className="absolute -left-[9px] bg-teal-500 rounded-full h-4 w-4 border-4 border-white shadow-sm"></div>
+                                                <h4 className="text-[14px] font-bold text-slate-800">Ride Dropped Off</h4>
+                                                <div className="flex items-center gap-2 mt-1.5">
+                                                    <Badge variant="outline" className="text-[10px] border-slate-200 py-0.5">07:45 PM</Badge>
+                                                    <span className="text-[11px] text-slate-500 font-medium">By: <span className="font-bold text-slate-700">{ride.driverName}</span> (Driver App)</span>
+                                                </div>
+                                                <EventSyncLog ride={ride} eventType="dropped" />
                                             </div>
-                                            <EventSyncLog ride={ride} eventType="arrived" />
-                                        </div>
+                                        )}
+
+                                        {showStep('picked_up') && (
+                                            <div className="relative pl-6">
+                                                <div className="absolute -left-[9px] bg-emerald-500 rounded-full h-4 w-4 border-4 border-white shadow-sm"></div>
+                                                <h4 className="text-[14px] font-bold text-slate-800">Ride Started</h4>
+                                                <div className="flex items-center gap-2 mt-1.5">
+                                                    <Badge variant="outline" className="text-[10px] border-slate-200 py-0.5">06:12 PM</Badge>
+                                                    <span className="text-[11px] text-slate-500 font-medium">By: <span className="font-bold text-slate-700">{ride.driverName}</span> (OTP Verified)</span>
+                                                </div>
+                                                <EventSyncLog ride={ride} eventType="picked_up" />
+                                            </div>
+                                        )}
+
+                                        {showStep('arrived') && (
+                                            <div className="relative pl-6">
+                                                <div className="absolute -left-[9px] bg-blue-500 rounded-full h-4 w-4 border-4 border-white shadow-sm"></div>
+                                                <h4 className="text-[14px] font-bold text-slate-800">Driver Arrived at Pickup</h4>
+                                                <div className="flex items-center gap-2 mt-1.5">
+                                                    <Badge variant="outline" className="text-[10px] border-slate-200 py-0.5">06:05 PM</Badge>
+                                                    <span className="text-[11px] text-slate-500 font-medium">By: <span className="font-bold text-slate-700">{ride.driverName}</span> (GPS Geofence)</span>
+                                                </div>
+                                                <EventSyncLog ride={ride} eventType="arrived" />
+                                            </div>
+                                        )}
                                         
-                                        <div className="relative pl-6">
-                                            <div className="absolute -left-[9px] bg-amber-500 rounded-full h-4 w-4 border-4 border-white shadow-sm"></div>
-                                            <h4 className="text-[14px] font-bold text-slate-800">Driver Enroute</h4>
-                                            <div className="flex items-center gap-2 mt-1.5">
-                                                <Badge variant="outline" className="text-[10px] border-slate-200 py-0.5">05:46 PM</Badge>
-                                                <span className="text-[11px] text-slate-500 font-medium">By: <span className="font-bold text-slate-700">{ride.driverName}</span> (Driver App)</span>
+                                        {showStep('dispatched') && (
+                                            <div className="relative pl-6">
+                                                <div className="absolute -left-[9px] bg-amber-500 rounded-full h-4 w-4 border-4 border-white shadow-sm"></div>
+                                                <h4 className="text-[14px] font-bold text-slate-800">Driver Enroute</h4>
+                                                <div className="flex items-center gap-2 mt-1.5">
+                                                    <Badge variant="outline" className="text-[10px] border-slate-200 py-0.5">05:46 PM</Badge>
+                                                    <span className="text-[11px] text-slate-500 font-medium">By: <span className="font-bold text-slate-700">{ride.driverName}</span> (Driver App)</span>
+                                                </div>
+                                                <EventSyncLog ride={ride} eventType="dispatched" />
                                             </div>
-                                            <EventSyncLog ride={ride} eventType="dispatched" />
-                                        </div>
+                                        )}
 
-                                        <div className="relative pl-6">
-                                            <div className="absolute -left-[9px] bg-slate-300 rounded-full h-4 w-4 border-4 border-white shadow-sm"></div>
-                                            <h4 className="text-[14px] font-bold text-slate-800">Driver Assigned</h4>
-                                            <div className="flex items-center gap-2 mt-1.5">
-                                                <Badge variant="outline" className="text-[10px] border-slate-200 py-0.5">05:45 PM</Badge>
-                                                <span className="text-[11px] text-slate-500 font-medium">By: <span className="font-bold text-slate-700">System Auto-Assign</span></span>
+                                        {showStep('assigned') && (
+                                            <div className="relative pl-6">
+                                                <div className="absolute -left-[9px] bg-slate-300 rounded-full h-4 w-4 border-4 border-white shadow-sm"></div>
+                                                <h4 className="text-[14px] font-bold text-slate-800">Driver Assigned</h4>
+                                                <div className="flex items-center gap-2 mt-1.5">
+                                                    <Badge variant="outline" className="text-[10px] border-slate-200 py-0.5">05:45 PM</Badge>
+                                                    <span className="text-[11px] text-slate-500 font-medium">By: <span className="font-bold text-slate-700">System Auto-Assign</span></span>
+                                                </div>
+                                                <EventSyncLog ride={ride} eventType="assigned" />
                                             </div>
-                                            <EventSyncLog ride={ride} eventType="assigned" />
-                                        </div>
+                                        )}
                                         
                                     </div>
                                 </CardContent>
@@ -1708,7 +2233,8 @@ export default function ActiveRideDashboard() {
                     </Tabs>
 
                   </div>
-                )}
+                  );
+                })()}
 
               </div>
             );
@@ -1875,20 +2401,326 @@ export default function ActiveRideDashboard() {
            </DialogFooter>
          </DialogContent>
        </Dialog>
+
+       {/* Cancel Booking Dialog */}
+       <Dialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+         <DialogContent className="sm:max-w-md rounded-2xl">
+           <DialogHeader>
+             <DialogTitle className="text-xl text-slate-800">Cancel Booking</DialogTitle>
+             <DialogDescription className="text-slate-500">
+               Select a reason to cancel booking <strong className="text-slate-700">{cancelRideTarget?.bookingId}</strong>
+             </DialogDescription>
+           </DialogHeader>
+           <div className="grid gap-5 py-4">
+             <div className="space-y-2">
+               <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Cancellation Reason</Label>
+               <Select value={cancelReason} onValueChange={setCancelReason}>
+                 <SelectTrigger className="h-10 rounded-xl"><SelectValue placeholder="Select reason" /></SelectTrigger>
+                 <SelectContent className="rounded-xl">
+                   <SelectItem value="Customer Requested">Customer Requested</SelectItem>
+                   <SelectItem value="Driver Not Available">Driver Not Available</SelectItem>
+                   <SelectItem value="Vehicle Breakdown">Vehicle Breakdown</SelectItem>
+                   <SelectItem value="Delayed Pickup">Delayed Pickup</SelectItem>
+                   <SelectItem value="Customer No Show">Customer No Show</SelectItem>
+                   <SelectItem value="Other">Other</SelectItem>
+                 </SelectContent>
+               </Select>
+             </div>
+           </div>
+           <DialogFooter>
+             <Button variant="outline" onClick={() => setIsCancelDialogOpen(false)} className="rounded-xl">Back</Button>
+             <Button variant="destructive" className="rounded-xl bg-red-600 hover:bg-red-700" onClick={() => { 
+                 if (!cancelReason) { toast.error("Please select a cancellation reason"); return; } 
+                 updateBooking(cancelRideTarget.originalBooking.id, { 
+                     status: 'cancelled', 
+                     cancellationReason: cancelReason,
+                     cancelledBy: 'Admin' 
+                 }); 
+                 toast.success(`Booking cancelled: ${cancelReason}`); 
+                 setIsCancelDialogOpen(false); 
+                 setCancelRideTarget(null); 
+             }}>Confirm Cancellation</Button>
+           </DialogFooter>
+         </DialogContent>
+       </Dialog>
+
+      {/* Edit Booking Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col rounded-2xl p-0">
+          <DialogHeader className="px-6 py-4 border-b">
+            <DialogTitle className="text-xl text-slate-800">Edit Booking - {editRideTarget?.bookingId}</DialogTitle>
+            <DialogDescription className="text-slate-500">
+              Update booking information. Fare and tax recalculations happen automatically.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
+             <Tabs defaultValue="trip" className="w-full">
+                <TabsList className="grid w-full grid-cols-3 mb-6 bg-slate-100/50 p-1 rounded-xl">
+                    <TabsTrigger value="trip" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">Trip Details</TabsTrigger>
+                    <TabsTrigger value="customer" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">Customer Info</TabsTrigger>
+                    <TabsTrigger value="fare" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">Fare & Payment</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="trip" className="space-y-4 mt-0">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Pickup Location</Label>
+                          <Input value={editRideData.pickupLocation} onChange={(e) => setEditRideData({ ...editRideData, pickupLocation: e.target.value })} className="rounded-xl" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Drop Location</Label>
+                          <Input value={editRideData.dropLocation} onChange={(e) => setEditRideData({ ...editRideData, dropLocation: e.target.value })} className="rounded-xl" />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Pickup Date</Label>
+                          <Input type="date" value={editRideData.pickupDate} onChange={(e) => setEditRideData({ ...editRideData, pickupDate: e.target.value })} className="rounded-xl" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Pickup Time</Label>
+                          <Input type="time" value={editRideData.pickupTime} onChange={(e) => setEditRideData({ ...editRideData, pickupTime: e.target.value })} className="rounded-xl" />
+                        </div>
+                        <div className="space-y-2 col-span-2 md:col-span-1">
+                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Trip Type</Label>
+                          <Select value={editRideData.tripType} onValueChange={(v) => setEditRideData({ ...editRideData, tripType: v })}>
+                             <SelectTrigger className="rounded-xl"><SelectValue placeholder="Trip Type" /></SelectTrigger>
+                             <SelectContent className="rounded-xl">
+                                <SelectItem value="city_ride">City Ride</SelectItem>
+                                <SelectItem value="airport_pickup">Airport Pickup</SelectItem>
+                                <SelectItem value="airport_drop">Airport Drop</SelectItem>
+                                <SelectItem value="rental">Rental</SelectItem>
+                                <SelectItem value="outstation">Outstation</SelectItem>
+                             </SelectContent>
+                          </Select>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Remarks / Notes</Label>
+                      <Textarea rows={2} value={editRideData.remarks} onChange={(e) => setEditRideData({ ...editRideData, remarks: e.target.value })} className="rounded-xl resize-none" placeholder="Any special instructions..." />
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="customer" className="space-y-4 mt-0">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Customer Name</Label>
+                          <Input value={editRideData.customerName} onChange={(e) => setEditRideData({ ...editRideData, customerName: e.target.value })} className="rounded-xl" placeholder="Full name" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Customer Phone</Label>
+                          <Input value={editRideData.customerPhone} onChange={(e) => setEditRideData({ ...editRideData, customerPhone: e.target.value })} className="rounded-xl" placeholder="+91..." />
+                        </div>
+                    </div>
+                    <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 flex items-start gap-2 mt-4">
+                        <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                        <p className="text-xs text-amber-800 font-medium">Changing customer details here will only update this specific booking. The master customer profile will remain unchanged.</p>
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="fare" className="space-y-4 mt-0">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Base Fare (₹)</Label>
+                          <Input type="number" value={editRideData.estimatedFare === 0 ? "" : editRideData.estimatedFare} onChange={(e) => setEditRideData({ ...editRideData, estimatedFare: parseFloat(e.target.value) || 0 })} className="rounded-xl font-bold" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Discount (₹)</Label>
+                          <Input type="number" value={editRideData.promoDiscount === 0 ? "" : editRideData.promoDiscount} onChange={(e) => setEditRideData({ ...editRideData, promoDiscount: parseFloat(e.target.value) || 0 })} className="rounded-xl text-green-600 font-bold" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Toll Charges (₹)</Label>
+                          <Input type="number" value={editRideData.tollCharges === 0 ? "" : editRideData.tollCharges} onChange={(e) => setEditRideData({ ...editRideData, tollCharges: parseFloat(e.target.value) || 0 })} className="rounded-xl" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Parking Charges (₹)</Label>
+                          <Input type="number" value={editRideData.parkingCharges === 0 ? "" : editRideData.parkingCharges} onChange={(e) => setEditRideData({ ...editRideData, parkingCharges: parseFloat(e.target.value) || 0 })} className="rounded-xl" />
+                        </div>
+                        <div className="space-y-2 col-span-2">
+                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Advance Paid (₹)</Label>
+                          <Input type="number" value={editRideData.advancePaid === 0 ? "" : editRideData.advancePaid} onChange={(e) => setEditRideData({ ...editRideData, advancePaid: parseFloat(e.target.value) || 0 })} className="rounded-xl" />
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mt-4 shadow-sm">
+                       <h4 className="font-bold text-slate-800 text-sm mb-3 border-b border-slate-200 pb-2 flex items-center gap-2"><Banknote className="h-4 w-4 text-blue-500" /> Live Fare Calculation</h4>
+                       <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                              <span className="text-slate-500">Base Fare</span>
+                              <span className="font-medium">₹ {editRideData.estimatedFare.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                              <span className="text-slate-500">Toll & Parking</span>
+                              <span className="font-medium">+ ₹ {(editRideData.tollCharges + editRideData.parkingCharges).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between text-green-600">
+                              <span>Discount</span>
+                              <span>- ₹ {editRideData.promoDiscount.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                              <span className="text-slate-500">Taxes ({gstConfig ? gstConfig.cgstRate + gstConfig.sgstRate : 5}% GST)</span>
+                              <span className="font-medium">+ ₹ {((Math.max(0, editRideData.estimatedFare + editRideData.tollCharges + editRideData.parkingCharges - editRideData.promoDiscount)) * ((gstConfig ? gstConfig.cgstRate + gstConfig.sgstRate : 5) / 100)).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between font-black text-lg pt-2 border-t border-slate-200 mt-2">
+                              <span>Grand Total</span>
+                              <span className="text-blue-700">₹ {((Math.max(0, editRideData.estimatedFare + editRideData.tollCharges + editRideData.parkingCharges - editRideData.promoDiscount)) * (1 + (gstConfig ? gstConfig.cgstRate + gstConfig.sgstRate : 5) / 100)).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between font-bold text-sm pt-2 text-destructive">
+                              <span>Balance Due</span>
+                              <span>₹ {Math.max(0, ((Math.max(0, editRideData.estimatedFare + editRideData.tollCharges + editRideData.parkingCharges - editRideData.promoDiscount)) * (1 + (gstConfig ? gstConfig.cgstRate + gstConfig.sgstRate : 5) / 100)) - editRideData.advancePaid).toFixed(2)}</span>
+                          </div>
+                       </div>
+                    </div>
+                </TabsContent>
+             </Tabs>
+          </div>
+          
+          <DialogFooter className="px-6 py-4 border-t bg-slate-50 mt-auto">
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="rounded-xl">Cancel</Button>
+            <Button onClick={() => {
+                if (editRideTarget) {
+                    const taxable = Math.max(0, editRideData.estimatedFare + editRideData.tollCharges + editRideData.parkingCharges - editRideData.promoDiscount);
+                    const gstRate = gstConfig ? gstConfig.cgstRate + gstConfig.sgstRate : 5;
+                    const newGst = (taxable * gstRate) / 100;
+                    const newGrandTotal = taxable + newGst;
+
+                    updateBooking(editRideTarget.originalBooking.id, {
+                        customerName: editRideData.customerName,
+                        customerPhone: editRideData.customerPhone,
+                        tripType: editRideData.tripType,
+                        pickupLocation: editRideData.pickupLocation,
+                        dropLocation: editRideData.dropLocation,
+                        pickupDate: editRideData.pickupDate,
+                        pickupTime: editRideData.pickupTime,
+                        remarks: editRideData.remarks,
+                        estimatedFare: editRideData.estimatedFare,
+                        tollCharges: editRideData.tollCharges,
+                        parkingCharges: editRideData.parkingCharges,
+                        promoDiscount: editRideData.promoDiscount,
+                        advancePaid: editRideData.advancePaid,
+                        gstAmount: newGst,
+                        grandTotal: newGrandTotal
+                    });
+                    toast.success("Booking details and fare updated successfully!");
+                    setIsEditDialogOpen(false);
+                    setEditRideTarget(null);
+                }
+            }} className="rounded-xl bg-blue-600 hover:bg-blue-700"><Save className="h-4 w-4 mr-2" /> Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manual Event Dialog */}
+      <Dialog open={isManualEventDialogOpen} onOpenChange={setIsManualEventDialogOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl p-0 overflow-hidden">
+          <DialogHeader className="px-6 py-4 border-b">
+            <DialogTitle className="text-xl text-slate-800">Advance Ride Event</DialogTitle>
+            <DialogDescription className="text-slate-500">
+              Move booking <strong className="text-slate-700">{manualEventTarget?.bookingId}</strong> to the next event step.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-5 px-6 py-4">
+            <div className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <div className="flex flex-col">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Current Status</span>
+                    <span className="font-bold text-slate-700 capitalize">{formatStatus(manualEventTarget?.originalBooking?.status || '')}</span>
+                </div>
+                <div className="text-slate-300">→</div>
+                <div className="flex flex-col text-right">
+                    <span className="text-[10px] text-blue-400 uppercase font-bold tracking-wider">Next Status</span>
+                    <span className="font-bold text-blue-700 capitalize">{formatStatus(manualEventStatus || '')}</span>
+                </div>
+            </div>
+            <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                <p className="text-xs text-amber-800 font-medium">Manually advancing the event will bypass standard driver app checks (like OTP or GPS verification).</p>
+            </div>
+          </div>
+          <DialogFooter className="px-6 py-4 border-t bg-slate-50 mt-auto">
+            <Button variant="outline" onClick={() => setIsManualEventDialogOpen(false)} className="rounded-xl">Cancel</Button>
+            <Button onClick={() => {
+                if (manualEventTarget && manualEventStatus) {
+                    updateBooking(manualEventTarget.originalBooking.id, { status: manualEventStatus });
+                    toast.success(`Status updated to ${formatStatus(manualEventStatus)} manually.`);
+                    setIsManualEventDialogOpen(false);
+                    setManualEventTarget(null);
+                }
+            }} className="rounded-xl bg-blue-600 hover:bg-blue-700">Confirm {formatStatus(manualEventStatus)}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Duty Slip Dialog */}
+      <Dialog open={isDutySlipDialogOpen} onOpenChange={setIsDutySlipDialogOpen}>
+        <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-slate-100">
+          <DialogHeader className="flex-shrink-0 px-6 py-4 bg-white border-b">
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle>Duty Slip Preview</DialogTitle>
+                <DialogDescription>Duty slip for booking {dutySlipRide?.bookingId}</DialogDescription>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => {
+                setTimeout(() => { window.print() }, 500);
+              }}>
+                <Printer className="mr-2 h-4 w-4" /> Print Slip
+              </Button>
+            </div>
+          </DialogHeader>
+          <ScrollArea className="flex-grow p-6">
+            {dutySlipRide && (
+              <div className="flex justify-center pb-8">
+                <div className="shadow-lg rounded-xl overflow-hidden bg-white print:shadow-none print:rounded-none">
+                  <PrintableDutySlip 
+                    booking={dutySlipRide.originalBooking} 
+                    dutySlip={dutySlips?.find((ds: any) => ds.bookingId === dutySlipRide.originalBooking.id) || { id: "temp", dutySlipNumber: "DS-TBD", bookingId: dutySlipRide.originalBooking.id, driverId: dutySlipRide.originalBooking.driverId || "", carId: dutySlipRide.originalBooking.carId || "", startTime: "", startKm: 0, status: "active", createdAt: dutySlipRide.originalBooking.createdAt }}
+                    driver={getDriver(dutySlipRide.originalBooking.driverId)}
+                    car={getCar(dutySlipRide.originalBooking.carId)}
+                    city={getCity(dutySlipRide.originalBooking.cityId)}
+                    b2bEmployee={dutySlipRide.originalBooking.b2bEmployeeId ? getB2BEmployee(dutySlipRide.originalBooking.b2bEmployeeId) : undefined}
+                    b2bClient={dutySlipRide.originalBooking.b2bClientId ? getB2BClient(dutySlipRide.originalBooking.b2bClientId) : undefined}
+                  />
+                </div>
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invoice Dialog */}
+      <Dialog open={isInvoiceDialogOpen} onOpenChange={setIsInvoiceDialogOpen}>
+        <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-slate-100">
+          <DialogHeader className="flex-shrink-0 px-6 py-4 bg-white border-b">
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle>Invoice Preview</DialogTitle>
+                <DialogDescription>Invoice for booking {invoiceRide?.bookingId}</DialogDescription>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => {
+                setTimeout(() => { window.print() }, 500);
+              }}>
+                <Printer className="mr-2 h-4 w-4" /> Print Invoice
+              </Button>
+            </div>
+          </DialogHeader>
+          <ScrollArea className="flex-grow p-6">
+            {invoiceRide && (
+              <div className="flex justify-center pb-8">
+                <div className="shadow-lg rounded-xl overflow-hidden bg-white print:shadow-none print:rounded-none">
+                  <PrintableInvoice 
+                    booking={invoiceRide.originalBooking} 
+                    invoice={invoices?.find((inv: any) => inv.bookingId === invoiceRide.originalBooking.id) || { id: "temp", invoiceNumber: "INV-TBD", bookingId: invoiceRide.originalBooking.id, dutySlipId: "", clientType: invoiceRide.originalBooking.b2bClientId ? "b2b" : "b2c", customerName: invoiceRide.customerName, customerPhone: invoiceRide.customerPhone, customerEmail: invoiceRide.originalBooking.customerEmail, customerAddress: invoiceRide.originalBooking.customerAddress, customerGst: invoiceRide.originalBooking.b2bClientId ? getB2BClient(invoiceRide.originalBooking.b2bClientId)?.gstNumber : undefined, invoiceDate: new Date().toISOString(), dueDate: new Date().toISOString(), subtotal: invoiceRide.originalBooking.estimatedFare || 0, gstRate: gstConfig ? gstConfig.cgstRate + gstConfig.sgstRate : 5, gstAmount: invoiceRide.originalBooking.gstAmount || 0, cgst: (invoiceRide.originalBooking.gstAmount || 0) / 2, sgst: (invoiceRide.originalBooking.gstAmount || 0) / 2, totalAmount: invoiceRide.originalBooking.grandTotal || invoiceRide.originalBooking.estimatedFare || 0, status: invoiceRide.originalBooking.paymentStatus || "pending", paidAmount: invoiceRide.originalBooking.advancePaid || 0, balanceAmount: Math.max((invoiceRide.originalBooking.grandTotal || invoiceRide.originalBooking.estimatedFare || 0) - (invoiceRide.originalBooking.advancePaid || 0), 0), createdAt: invoiceRide.originalBooking.createdAt }}
+                    driver={getDriver(invoiceRide.originalBooking.driverId)}
+                    car={getCar(invoiceRide.originalBooking.carId)}
+                    gstConfig={gstConfig}
+                  />
+                </div>
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
       </div>
-      <FreeDriversSidebar 
-        freeDrivers={freeDrivers}
-        isAutoAllocateOn={isAutoAllocateOn}
-        setIsAutoAllocateOn={setIsAutoAllocateOn}
-        autoAllocationRadius={autoAllocationRadius}
-        setAutoAllocationRadius={setAutoAllocationRadius}
-        autoAllocationDelay={autoAllocationDelay}
-        setAutoAllocationDelay={setAutoAllocationDelay}
-        minSocThreshold={minSocThreshold}
-        setMinSocThreshold={setMinSocThreshold}
-        setHoveredDriverId={setHoveredDriverId}
-        assigningRideId={assigningRideId}
-      />
     </div>
   );
 }

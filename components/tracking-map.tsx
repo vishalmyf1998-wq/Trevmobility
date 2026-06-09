@@ -46,7 +46,8 @@ const statusColors: Record<string, string> = {
   dispatched: '#3b82f6', // blue
   arrived: '#eab308', // yellow
   picked_up: '#22c55e', // green
-  dropped: '#a855f7', // purple
+  dropped: '#14b8a6', // teal (Ended but not closed)
+  cancelled: '#ef4444', // red
 }
 
 interface MapUpdaterProps {
@@ -73,23 +74,31 @@ function MapReadyGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let frameId = 0
+    let mounted = true;
 
-    const markReady = () => {
-      frameId = window.requestAnimationFrame(() => {
-        if (map.getPane('tilePane')) {
+    const checkAndReady = () => {
+      if (!mounted) return;
+      if (map && map.getPane('tilePane') && map.getPane('markerPane') && map.getPane('popupPane')) {
+        frameId = window.requestAnimationFrame(() => {
+          if (!mounted) return;
           map.invalidateSize()
           setIsReady(true)
-        }
-      })
+        })
+      } else {
+        setTimeout(checkAndReady, 50);
+      }
     }
 
-    if (map.getPane('tilePane')) {
-      markReady()
-    } else {
-      map.whenReady(markReady)
+    if (map) {
+      if (map.getPane('tilePane') && map.getPane('markerPane')) {
+         checkAndReady();
+      } else {
+         map.whenReady(checkAndReady);
+      }
     }
 
     return () => {
+      mounted = false;
       if (frameId) window.cancelAnimationFrame(frameId)
     }
   }, [map])
@@ -261,9 +270,13 @@ export default function TrackingMap({
             }
 
             const path = carPaths[location.carId] || []
+            
+            const soc = (car as any)?.soc ?? 82;
+            const range = (car as any)?.range ?? 210;
+            const shiftRides = (driver as any)?.shiftRides ?? 3;
 
             return (
-              <React.Fragment key={location.carId}>
+              <React.Fragment key={`${location.carId}-${isAssigningMode ? 'assign' : 'normal'}`}>
                 {/* Draw Route Line */}
                 {(isSelected || showAllRoutes) && path.length > 1 && (
                   <Polyline positions={path} color={isSelected ? '#ef4444' : color} weight={4} opacity={0.7} />
@@ -286,14 +299,36 @@ export default function TrackingMap({
                   zIndexOffset={isHovered || isSelected ? 1000 : (isFreeDriver && isAssigningMode ? 500 : 0)}
                 >
                   {/* Hover Tooltip (dikhega jab cursor upar hoga) */}
-                  <Tooltip direction="top" offset={[0, -20]} opacity={1} permanent={isFreeDriver && isAssigningMode}>
-                    <div className="text-center px-1">
-                      <div className="font-semibold">{driver?.name || 'No Driver'}</div>
-                      <div className="text-xs">{car.registrationNumber}</div>
-                      {!trip && <div className="text-[10px] text-gray-500 mt-0.5 tracking-wider uppercase">{statusText}</div>}
-                      {delayText && <div className="text-[10px] text-red-500 font-bold mt-0.5">{delayText}</div>}
+                  <Tooltip key={`tt-${isFreeDriver && isAssigningMode}`} direction="top" offset={[0, -20]} opacity={1} permanent={isFreeDriver && isAssigningMode}>
+                    <div className="flex flex-col gap-1 p-1 min-w-[150px]">
+                      <div className="font-bold text-sm border-b pb-1 mb-1 text-slate-800 text-center">
+                        {driver?.name || 'Unassigned Driver'}
+                      </div>
+                      
+                      <div className="flex justify-between items-center gap-4">
+                        <span className="text-slate-500 text-xs font-medium">Vehicle</span>
+                        <span className="font-bold text-xs text-slate-700">{car.registrationNumber}</span>
+                      </div>
+                      
+                      <div className="flex justify-between items-center gap-4">
+                        <span className="text-slate-500 text-xs font-medium">Current SOC</span>
+                        <span className={`font-bold text-xs ${soc > 20 ? 'text-green-600' : 'text-red-600'}`}>{soc}%</span>
+                      </div>
+                      
+                      <div className="flex justify-between items-center gap-4">
+                        <span className="text-slate-500 text-xs font-medium">Range</span>
+                        <span className="font-bold text-xs text-slate-700">{range} km</span>
+                      </div>
+                      
+                      <div className="flex justify-between items-center gap-4 mt-1 pt-1 border-t border-slate-100">
+                        <span className="text-slate-500 text-xs font-medium">Rides in Shift</span>
+                        <span className="font-bold text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{shiftRides}</span>
+                      </div>
+
+                      {!trip && <div className="text-[10px] text-center text-gray-500 mt-1 tracking-wider uppercase">{statusText}</div>}
+                      {delayText && <div className="text-[10px] text-center text-red-500 font-bold mt-0.5">{delayText}</div>}
                       {isFreeDriver && isAssigningMode && (
-                        <div className="text-xs font-bold text-emerald-600 mt-1 p-1 bg-emerald-100 rounded-md">
+                        <div className="text-xs text-center font-bold text-emerald-600 mt-1 p-1 bg-emerald-100 rounded-md">
                           Click marker to assign
                         </div>
                       )}

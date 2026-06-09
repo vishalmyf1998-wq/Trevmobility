@@ -38,7 +38,33 @@ export async function POST(req: Request) {
         baseFare = 500;
     }
 
-    const estimatedFare = baseFare + (estimatedKm * perKmRate);
+    const regularFare = baseFare + (estimatedKm * perKmRate);
+    let estimatedFare = regularFare;
+    let returnDiscountAmount = 0;
+    let returnDiscountLabel = '';
+
+    if (body.tripType === 'outstation' && (body.isAutoSlotReturn || body.autoSlotReturn)) {
+      const discountType = body.returnDiscountType || 'percentage';
+      const discountValue = Number(body.returnDiscountValue ?? 0);
+      const maxDiscount = Number(body.maxReturnDiscount ?? 0);
+
+      if (discountValue > 0) {
+        if (discountType === 'flat') {
+          returnDiscountAmount = discountValue;
+          returnDiscountLabel = `Auto return discount Rs. ${discountValue}`;
+        } else {
+          returnDiscountAmount = (regularFare * discountValue) / 100;
+          returnDiscountLabel = `Auto return discount ${discountValue}%`;
+        }
+
+        if (maxDiscount > 0 && returnDiscountAmount > maxDiscount) {
+          returnDiscountAmount = maxDiscount;
+        }
+
+        returnDiscountAmount = Math.min(returnDiscountAmount, regularFare);
+        estimatedFare = Math.max(regularFare - returnDiscountAmount, 0);
+      }
+    }
 
     // Provide a quote ID for the client to use when creating the booking
     const quoteId = `QUOTE-${Date.now().toString().slice(-6)}${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
@@ -48,8 +74,13 @@ export async function POST(req: Request) {
       quoteId,
       estimatedKm,
       estimatedFare,
+      regularFare,
+      returnDiscountAmount,
+      returnDiscountLabel,
       currency: 'INR',
-      notes: 'This is an estimated fare based on standard rates. Final fare may vary based on actual distance and tolls.'
+      notes: returnDiscountAmount > 0
+        ? 'Auto slot return discount applied. Final fare may vary based on actual distance and tolls.'
+        : 'This is an estimated fare based on standard rates. Final fare may vary based on actual distance and tolls.'
     }, { status: 200 });
 
   } catch (err: any) {

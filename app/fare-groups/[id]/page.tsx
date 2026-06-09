@@ -962,6 +962,7 @@ function FareConfigDialog({
               slabs: (editingFare as OutstationFareConfig).slabs || [],
               shortNoticeCharge: (editingFare as any).shortNoticeCharge || { ...defaultShortNoticeCharge },
               minAdvanceBookingHours: (editingFare as any).minAdvanceBookingHours,
+              autoSlotReturn: (editingFare as OutstationFareConfig).autoSlotReturn || { enabled: false, bufferMinutes: 60, discountEnabled: false, discountType: 'percentage', discountValue: 15, maxDiscount: 0 },
             })
             break
         }
@@ -1039,6 +1040,7 @@ function FareConfigDialog({
           slabs: [],
           preBookingCharges: { ...defaultPreBookingCharges },
           minAdvanceBookingHours: undefined,
+          autoSlotReturn: { enabled: false, bufferMinutes: 60, discountEnabled: false, discountType: 'percentage', discountValue: 15, maxDiscount: 0 },
         })
       }
     }
@@ -1277,6 +1279,113 @@ function FareConfigDialog({
       )}
     </div>
   )
+
+  // Auto Slot Return helper
+  type AutoSlotReturnConfig = {
+    enabled: boolean
+    bufferMinutes: number
+    discountEnabled?: boolean
+    discountType?: ChargeType
+    discountValue?: number
+    maxDiscount?: number
+  }
+
+  const renderAutoSlotReturnConfig = (
+    config: AutoSlotReturnConfig | undefined,
+    onChange: (config: AutoSlotReturnConfig) => void
+  ) => {
+    const currentConfig = {
+      enabled: false,
+      bufferMinutes: 60,
+      discountEnabled: false,
+      discountType: 'percentage' as ChargeType,
+      discountValue: 15,
+      maxDiscount: 0,
+      ...config,
+    }
+    return (
+      <div className="rounded-lg border p-4 bg-blue-50/30">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="font-medium text-sm text-blue-900">Auto Slot for Return Trips</p>
+            <p className="text-xs text-blue-700">Automatically open slots for cars returning from this outstation trip</p>
+          </div>
+          <Switch
+            checked={currentConfig.enabled}
+            onCheckedChange={(checked) => onChange({ ...currentConfig, enabled: checked })}
+          />
+        </div>
+        {currentConfig.enabled && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <p className="text-sm font-medium">Slot Open Buffer (min)</p>
+                <p className="text-xs text-muted-foreground">Time after drop when the return slot opens</p>
+              </div>
+              <Input
+                type="number"
+                className="w-24"
+                value={currentConfig.bufferMinutes}
+                onChange={(e) => onChange({ ...currentConfig, bufferMinutes: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+
+            <div className="rounded-lg border bg-white p-3">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium">Return Fare Discount</p>
+                  <p className="text-xs text-muted-foreground">Lower fare for this generated return slot to improve booking chances</p>
+                </div>
+                <Switch
+                  checked={!!currentConfig.discountEnabled}
+                  onCheckedChange={(checked) => onChange({ ...currentConfig, discountEnabled: checked })}
+                />
+              </div>
+
+              {currentConfig.discountEnabled && (
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <Field>
+                    <FieldLabel>Discount Type</FieldLabel>
+                    <Select
+                      value={currentConfig.discountType || 'percentage'}
+                      onValueChange={(value: ChargeType) => onChange({ ...currentConfig, discountType: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percentage">Percentage</SelectItem>
+                        <SelectItem value="flat">Flat amount</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field>
+                    <FieldLabel>{currentConfig.discountType === 'flat' ? 'Amount (Rs.)' : 'Discount (%)'}</FieldLabel>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={currentConfig.discountValue ?? 0}
+                      onChange={(e) => onChange({ ...currentConfig, discountValue: parseFloat(e.target.value) || 0 })}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Max Discount (Rs.)</FieldLabel>
+                    <Input
+                      type="number"
+                      min={0}
+                      placeholder="No cap"
+                      value={currentConfig.maxDiscount || ''}
+                      onChange={(e) => onChange({ ...currentConfig, maxDiscount: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
+                    />
+                  </Field>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // Pre-booking charges helper
   const renderPreBookingCharges = (
@@ -2068,6 +2177,10 @@ function FareConfigDialog({
                     />
                   </Field>
                 </FieldGroup>
+
+                {(outstationForm.outstationType === 'one_way' || outstationForm.outstationType === 'route_wise') && (
+                  renderAutoSlotReturnConfig(outstationForm.autoSlotReturn, (config) => setOutstationForm(f => ({ ...f, autoSlotReturn: config })))
+                )}
 
                 {renderPreBookingCharges(outstationForm.preBookingCharges!, (charges) => setOutstationForm(f => ({ ...f, preBookingCharges: charges })))}
                 {renderPeakHourConfig(outstationForm.peakHour!, (config) => setOutstationForm(f => ({ ...f, peakHour: config })))}

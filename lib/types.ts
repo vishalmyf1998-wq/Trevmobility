@@ -366,10 +366,17 @@ export interface OutstationFareConfig {
   nightCharge: NightChargeConfig
   urgentBooking?: UrgentBookingConfig
   shortNoticeCharge?: ShortNoticeChargeConfig
-  minAdvanceBookingHours?: number
   minimumKmPerDay: number
   freeWaitingMinutes: number
   preBookingCharges?: PreBookingCharges
+  autoSlotReturn?: {
+    enabled: boolean
+    bufferMinutes: number
+    discountEnabled?: boolean
+    discountType?: ChargeType
+    discountValue?: number
+    maxDiscount?: number
+  }
 }
 
 // Fare Group
@@ -474,6 +481,9 @@ export interface Booking {
   pickupDate: string
   pickupTime: string
   returnDate?: string
+  isAutoSlotReturn?: boolean
+  returnDiscountAmount?: number
+  returnDiscountLabel?: string
   estimatedKm: number
   estimatedFare: number
   actualKm?: number
