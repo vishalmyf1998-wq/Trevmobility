@@ -9,6 +9,7 @@
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
   import { Input } from "@/components/ui/input"
   import { Badge } from "@/components/ui/badge"
+  import { CityBadge } from "@/components/city-badge"
   import { Textarea } from "@/components/ui/textarea"
   import { Label } from "@/components/ui/label"
   import { ScrollArea } from "@/components/ui/scroll-area"
@@ -2029,7 +2030,11 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
                           <Badge variant="secondary" className="whitespace-nowrap">{getTripTypeLabel(booking.tripType)}</Badge>
                         </TableCell>
                         <TableCell className="align-top">
-                          <span className="text-sm font-medium whitespace-nowrap">{city?.name || "-"}</span>
+                          <CityBadge
+                            operatingCity={booking.operatingCity}
+                            pickupCity={booking.pickupCity}
+                            cityId={booking.cityId}
+                          />
                         </TableCell>
                         <TableCell className="align-top">
                           <div className="flex flex-col max-w-[180px]">

@@ -159,6 +159,8 @@ interface TrackingMapProps {
   pickupPoint?: [number, number] | null;
   dropPoint?: [number, number] | null;
   stopPoints?: { position: [number, number]; label?: string; status?: string }[];
+  plannedRoute?: [number, number][];
+  showPlannedRoute?: boolean;
 }
 
 export default function TrackingMap({
@@ -176,6 +178,8 @@ export default function TrackingMap({
   pickupPoint = null,
   dropPoint = null,
   stopPoints = [],
+  plannedRoute = [],
+  showPlannedRoute = false,
 }: TrackingMapProps) {
   const [isMounted, setIsMounted] = useState(false);
 
@@ -380,8 +384,8 @@ export default function TrackingMap({
           })}
 
           {/* Draw the Pickup/Drop Route */}
-          {pathPoints.length >= 2 && (
-            <Polyline positions={pathPoints} color="#0ea5e9" weight={4} opacity={0.6} dashArray="8, 8" />
+          {(showPlannedRoute ? plannedRoute : pathPoints).length >= 2 && (
+            <Polyline positions={showPlannedRoute ? plannedRoute : pathPoints} color="#0ea5e9" weight={4} opacity={0.6} dashArray="8, 8" />
           )}
           {pickupPoint && (
             <CircleMarker center={pickupPoint} radius={7} color="white" weight={2} fillColor="#10b981" fillOpacity={1}>

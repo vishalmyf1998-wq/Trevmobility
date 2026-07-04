@@ -23,6 +23,8 @@ import { DashboardHeader } from "./components/DashboardHeader";
 import { FreeDriversSidebar } from "./components/FreeDriversSidebar";
 import { PrintableDutySlip } from "@/components/DutySlipPrint";
 import { PrintableInvoice } from "@/components/InvoicePrint";
+import { CityBadge } from "@/components/city-badge";
+import { cityIdToScope, resolveFleetScope, scopeToCityId } from "@/lib/city-scope";
 
 const MapComponent = dynamic(() => import('@/components/tracking-map'), {
   ssr: false,
@@ -50,6 +52,39 @@ function distanceKm(a?: { latitude: number; longitude: number } | null, b?: { la
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
   return earthRadiusKm * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function getSmartFleetSuggestion(booking: any, hubs: any[], cities: any[]) {
+  if (booking.tripType !== 'outstation') return null;
+
+  const pickupCity = cities.find((city) => city.id === booking.cityId);
+  const pickupPoint = getEstimatedPickupPoint(booking) ||
+    (pickupCity?.latitude && pickupCity?.longitude
+      ? { latitude: pickupCity.latitude, longitude: pickupCity.longitude }
+      : null);
+  if (!pickupPoint) return null;
+
+  const getFleetEta = (scope: 'ncr' | 'jpr') => {
+    const distances = hubs
+      .filter((hub) => resolveFleetScope({ cityId: hub.cityId }) === scope)
+      .map((hub) => distanceKm(hub, pickupPoint))
+      .filter((distance): distance is number => distance !== null);
+    if (!distances.length) return null;
+    return Math.max(1, Math.round((Math.min(...distances) / 45) * 60));
+  };
+
+  const ncrEta = getFleetEta('ncr');
+  const jprEta = getFleetEta('jpr');
+  if (ncrEta === null || jprEta === null || ncrEta === jprEta) return null;
+
+  const preferredCity: 'ncr' | 'jpr' = ncrEta < jprEta ? 'ncr' : 'jpr';
+  return {
+    preferredCity,
+    preferredLabel: preferredCity === 'ncr' ? 'Delhi-NCR' : 'Jaipur',
+    minutesCloser: Math.abs(ncrEta - jprEta),
+    ncrEta,
+    jprEta,
+  };
 }
 
 // Ray-casting algorithm for Point in Polygon
@@ -117,7 +152,7 @@ function getEstimatedStopPoints(ride: any) {
 }
 
 const DriverSearchDropdown = ({ ride }: { ride: any }) => {
-    const { drivers, cars, carLocations, updateBooking, getAirportTerminal, getRailwayStationTerminal } = useAdmin();
+    const { drivers, cars, carLocations, updateBooking, getAirportTerminal, getRailwayStationTerminal, hubs } = useAdmin();
     const [search, setSearch] = useState("");
     
     let pickupPoint = getEstimatedPickupPoint(ride);
@@ -130,7 +165,10 @@ const DriverSearchDropdown = ({ ride }: { ride: any }) => {
     }
 
     const availableDrivers = drivers
-      .filter((d: any) => d.status === 'active')
+      .filter((d: any) =>
+        d.status === 'active' &&
+        resolveFleetScope(d, hubs) === resolveFleetScope(ride.originalBooking, hubs)
+      )
       .map((d: any) => {
         const car = cars.find((c: any) => c.assignedDriverId === d.id || c.id === d.assignedCarId);
         const loc = car ? carLocations.find((l: any) => l.carId === car.id) : null;
@@ -374,13 +412,15 @@ export default function ActiveRideDashboard() {
     carCategories = [],
     tollLocations = [],
     getAirportTerminal,
-    getRailwayStationTerminal
+    getRailwayStationTerminal,
+    selectedCity,
+    setSelectedCity
   } = useAdmin();
 
   const [expandedRideId, setExpandedRideId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'delayed' | 'unassigned' | 'dispatched' | 'arrived' | 'pickup' | 'dropped' | 'closed' | 'cancelled' | 'gps_off' | 'priority' | 'low_soc' | 'login_delay'>('all');
-  const [cityFilter, setCityFilter] = useState('all');
+  const cityFilter = selectedCity === 'all' ? 'all' : scopeToCityId(selectedCity);
   const [hubFilter, setHubFilter] = useState('all');
   const [delaySubFilter, setDelaySubFilter] = useState('all');
   const [ongoingSubFilter, setOngoingSubFilter] = useState('all');
@@ -410,6 +450,16 @@ export default function ActiveRideDashboard() {
   const [refundAmount, setRefundAmount] = useState<number>(0);
   const [refundReason, setRefundReason] = useState("");
   const [replayState, setReplayState] = useState<Record<string, any>>({});
+
+  const handleCityFilterChange = useCallback((value: string) => {
+    setHubFilter('all');
+    if (value === 'all') {
+      setSelectedCity('all');
+      return;
+    }
+    const scope = cityIdToScope(value);
+    if (scope) setSelectedCity(scope);
+  }, [setSelectedCity]);
 
   // Manual Adjustment State
   const [isManualAdjDialogOpen, setIsManualAdjDialogOpen] = useState(false);
@@ -468,8 +518,6 @@ export default function ActiveRideDashboard() {
         const newLng = baseLng + (Math.random() - 0.2) * 0.003 * (newSpeed / 40);
 
         updateCarLocation(trip.carId, {
-          latitude: baseLat + (Math.random() - 0.2) * 0.003 * (newSpeed / 40),
-          longitude: baseLng + (Math.random() - 0.2) * 0.003 * (newSpeed / 40),
           latitude: newLat,
           longitude: newLng,
           heading: (loc?.heading || 90) + (Math.random() * 20 - 10),
@@ -561,7 +609,10 @@ export default function ActiveRideDashboard() {
       
       // 3. Find active (logged in) drivers who are completely free
       const availableDrivers = currentDrivers
-        .filter((d: any) => d.status === 'active' && !busyDriverIds.includes(d.id))
+        .filter((d: any) =>
+          d.status === 'active' &&
+          !busyDriverIds.includes(d.id)
+        )
         .map((driver: any) => {
           // NOTE: In a real app, SOC would come from live car telematics data.
           // Here we are mocking it for demonstration.
@@ -584,6 +635,7 @@ export default function ActiveRideDashboard() {
         availableDrivers.forEach((driver: any) => {
           // Agar is loop me driver already kisi ride ko assign ho chuka hai, to skip karein
           if (busyDriverIds.includes(driver.id)) return;
+          if (resolveFleetScope(driver, hubs) !== resolveFleetScope(booking, hubs)) return;
 
           const car = currentCars.find((c: any) => c.assignedDriverId === driver.id || c.id === driver.assignedCarId);
           const loc = car ? currentLocations.find((l: any) => l.carId === car.id) : null;
@@ -606,7 +658,7 @@ export default function ActiveRideDashboard() {
     }, 2000); // Engine ticks every 2 seconds
 
     return () => clearInterval(interval);
-  }, [isAutoAllocateOn, autoAllocationDelay, autoAllocationRadius, minSocThreshold, updateBooking]);
+  }, [isAutoAllocateOn, autoAllocationDelay, autoAllocationRadius, minSocThreshold, updateBooking, hubs]);
 
   const handleAssignDriverFromMap = (driverId: string, carId: string) => {
     if (!assigningRideId) {
@@ -958,8 +1010,11 @@ export default function ActiveRideDashboard() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
+    link.style.visibility = 'hidden';
     link.download = `active-rides-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
     URL.revokeObjectURL(url);
     toast.success("Active rides exported");
   };
@@ -987,15 +1042,9 @@ export default function ActiveRideDashboard() {
          statusFilter={statusFilter}
          setStatusFilter={setStatusFilter}
          cityFilter={cityFilter}
-         setCityFilter={setCityFilter}
+         setCityFilter={handleCityFilterChange}
          hubFilter={hubFilter}
          setHubFilter={setHubFilter}
-         delaySubFilter={delaySubFilter}
-         setDelaySubFilter={setDelaySubFilter}
-         ongoingSubFilter={ongoingSubFilter}
-         setOngoingSubFilter={setOngoingSubFilter}
-         prioritySubFilter={prioritySubFilter}
-         setPrioritySubFilter={setPrioritySubFilter}
          cities={cities}
          hubs={hubs}
          dateFrom={dateFrom}
@@ -1193,6 +1242,19 @@ export default function ActiveRideDashboard() {
                 }) || driverRides[0];
             }
 
+            const smartSuggestion = getSmartFleetSuggestion(
+              ride.originalBooking,
+              hubs,
+              cities,
+            );
+            const currentFleet = resolveFleetScope(ride.originalBooking, hubs);
+            const routeCityName =
+              getCity(ride.originalBooking.cityId)?.name ||
+              (currentFleet === 'jpr' ? 'Jaipur' : currentFleet === 'ncr' ? 'Delhi-NCR' : 'Unassigned');
+            const routeHub =
+              hubs.find((hub) => hub.id === ride.originalBooking.hubId) ||
+              hubs.find((hub) => resolveFleetScope({ cityId: hub.cityId }) === currentFleet);
+
             return (
               <div key={ride.id} className={`relative bg-white rounded-2xl border transition-all duration-300 overflow-hidden ${isExpanded ? borderExpanded : borderNormal}`}>
                 
@@ -1218,6 +1280,12 @@ export default function ActiveRideDashboard() {
                            <div className="flex justify-between items-center">
                                <span className="font-bold text-slate-800 tracking-tight text-[12px]">{ride.displayId}</span>
                                <div className="flex items-center gap-1">
+                                   <CityBadge
+                                     operatingCity={ride.originalBooking.operatingCity}
+                                     pickupCity={ride.originalBooking.pickupCity}
+                                     cityId={ride.originalBooking.cityId}
+                                     className="h-4 px-1.5 py-0 text-[9px]"
+                                   />
                                    <Badge className={`bg-${ride.statusColor}-100 text-${ride.statusColor}-700 hover:bg-${ride.statusColor}-200 border-none text-[9px] font-bold h-4 py-0 px-1.5 rounded-sm shadow-sm`}>
                                        {ride.status}
                                    </Badge>
@@ -1269,12 +1337,86 @@ export default function ActiveRideDashboard() {
                            </div>
                            <div className="text-[10px] text-slate-800 truncate flex items-center gap-1 leading-tight" title={ride.originalBooking.pickupLocation}>
                                <div className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
+                               <span className="font-medium shrink-0">Pickup:</span>
                                <span className="truncate">{ride.originalBooking.pickupLocation || 'N/A'}</span>
                            </div>
+                           {(ride.originalBooking.stops || []).length > 0 && (
+                               <div className="pl-2.5 space-y-1 my-0.5">
+                                   {(ride.originalBooking.stops || []).map((stop: any, index: number) => (
+                                       <div
+                                           key={stop.id || index}
+                                           className="text-[10px] text-slate-600 truncate flex items-center gap-1 leading-tight"
+                                           title={stop.location || stop.address}
+                                       >
+                                           <div className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+                                           <span className="font-medium shrink-0">Stop {index + 1}:</span>
+                                           <span className="truncate">{stop.location || stop.address || 'N/A'}</span>
+                                       </div>
+                                   ))}
+                               </div>
+                           )}
                            <div className="text-[10px] text-slate-800 truncate flex items-center gap-1 leading-tight" title={ride.originalBooking.dropLocation}>
                                <div className="h-1.5 w-1.5 rounded-full bg-blue-600 shrink-0" />
+                               <span className="font-medium shrink-0">Drop:</span>
                                <span className="truncate">{ride.originalBooking.dropLocation || 'N/A'}</span>
                            </div>
+                           <div className="mt-1 grid gap-1 text-[10px] leading-tight">
+                               <div
+                                 className="flex min-w-0 items-center gap-1.5 rounded-md border border-indigo-100 bg-indigo-50/80 px-1.5 py-1"
+                                 title={routeCityName}
+                               >
+                                   <Map className="h-3 w-3 shrink-0 text-indigo-600" />
+                                   <span className="shrink-0 font-semibold text-indigo-500">City</span>
+                                   <span className="truncate font-bold text-indigo-800">{routeCityName}</span>
+                               </div>
+                               <div
+                                 className="flex min-w-0 items-center gap-1.5 rounded-md border border-emerald-100 bg-emerald-50/80 px-1.5 py-1"
+                                 title={routeHub?.name || 'Hub not assigned'}
+                               >
+                                   <MapPin className="h-3 w-3 shrink-0 text-emerald-600" />
+                                   <span className="shrink-0 font-semibold text-emerald-500">Hub</span>
+                                   <span className="truncate font-bold text-emerald-800">
+                                     {routeHub?.name || 'Not assigned'}
+                                   </span>
+                               </div>
+                           </div>
+                           {smartSuggestion && (
+                             <div
+                               className="mt-1 flex items-center justify-between gap-1 rounded-md border border-indigo-100 bg-indigo-50 px-1.5 py-1"
+                               onClick={(event) => event.stopPropagation()}
+                             >
+                               <span className="min-w-0 truncate text-[9px] font-bold text-indigo-700">
+                                 <Zap className="mr-0.5 inline h-2.5 w-2.5" />
+                                 {smartSuggestion.preferredLabel} fleet is {smartSuggestion.minutesCloser} min closer
+                               </span>
+                               <Button
+                                 size="sm"
+                                 variant="ghost"
+                                 disabled={currentFleet === smartSuggestion.preferredCity}
+                                 className="h-5 shrink-0 rounded px-1.5 text-[9px] font-bold text-indigo-700 hover:bg-indigo-100"
+                                 onClick={() => {
+                                   const preferredHub = hubs.find(
+                                     (hub) =>
+                                       resolveFleetScope({ cityId: hub.cityId }) ===
+                                       smartSuggestion.preferredCity,
+                                   );
+                                   const reassignment = ride.originalBooking.driverId
+                                     ? { driverId: undefined, carId: undefined, status: 'confirmed' as const }
+                                     : {};
+                                   updateBooking(ride.originalBooking.id, {
+                                     ...reassignment,
+                                     operatingCity: smartSuggestion.preferredCity,
+                                     hubId: preferredHub?.id,
+                                   });
+                                   toast.success(
+                                     `${ride.displayId} tagged to ${smartSuggestion.preferredLabel} fleet`,
+                                   );
+                                 }}
+                               >
+                                 {currentFleet === smartSuggestion.preferredCity ? 'Tagged' : 'Use fleet'}
+                               </Button>
+                             </div>
+                           )}
                        </div>
 
                        {/* Col 5: Driver & Vehicle */}
@@ -2766,7 +2908,7 @@ export default function ActiveRideDashboard() {
             <Button variant="outline" onClick={() => setIsManualEventDialogOpen(false)} className="rounded-xl">Cancel</Button>
             <Button onClick={() => {
                 if (manualEventTarget && manualEventStatus) {
-                    updateBooking(manualEventTarget.originalBooking.id, { status: manualEventStatus });
+                    updateBooking(manualEventTarget.originalBooking.id, { status: manualEventStatus as any });
                     toast.success(`Status updated to ${formatStatus(manualEventStatus)} manually.`);
                     setIsManualEventDialogOpen(false);
                     setManualEventTarget(null);
@@ -2849,6 +2991,11 @@ export default function ActiveRideDashboard() {
       {/* Variation Dialog */}
       <Dialog open={isVariationDialogOpen} onOpenChange={setIsVariationDialogOpen}>
         <DialogContent className="sm:max-w-2xl rounded-2xl">
+          <style>{`
+            .grid-cols-var { grid-template-columns: 1fr 1fr 1fr 0.7fr; }
+            .grid-cols-var > div { padding: 0.75rem 0.5rem; }
+            .grid-cols-var > div:nth-child(4n) { text-align: right; }
+          `}</style>
           <DialogHeader>
             <DialogTitle className="text-xl text-slate-800">Trip Variations</DialogTitle>
             <DialogDescription className="text-slate-500">
@@ -2856,42 +3003,88 @@ export default function ActiveRideDashboard() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 text-sm">
-                  <div className="font-bold text-slate-500 uppercase text-[10px]">Parameter</div>
-                  <div className="font-bold text-slate-500 uppercase text-[10px]">Estimated (At Booking)</div>
-                  <div className="font-bold text-slate-500 uppercase text-[10px]">Actual (At Closing)</div>
-                  <div className="font-bold text-slate-500 uppercase text-[10px]">Variation</div>
+              <div className="bg-slate-50 rounded-xl border border-slate-100 text-sm">
+                  <div className="grid grid-cols-var gap-x-2 p-2">
+                      <div className="font-bold text-slate-500 uppercase text-[10px]">Parameter</div>
+                      <div className="font-bold text-slate-500 uppercase text-[10px]">Booked</div>
+                      <div className="font-bold text-slate-500 uppercase text-[10px]">Served</div>
+                      <div className="font-bold text-slate-500 uppercase text-[10px]">Variation</div>
+                  </div>
+                  <div className="grid grid-cols-var gap-x-2 divide-y divide-slate-100">
+                      {(() => {
+                          const booking = variationRideTarget?.originalBooking;
+                          if (!booking) return null;
 
-                  {/* KM */}
-                  <div className="font-bold text-slate-700">Distance (KM)</div>
-                  <div>{variationRideTarget?.originalBooking?.estimatedKm || 0} km</div>
-                  <div>{variationRideTarget?.originalBooking?.actualKm || variationRideTarget?.originalBooking?.estimatedKm || 0} km</div>
-                  <div className="text-blue-600 font-bold">
-                      {((variationRideTarget?.originalBooking?.actualKm || variationRideTarget?.originalBooking?.estimatedKm || 0) - (variationRideTarget?.originalBooking?.estimatedKm || 0))} km
+                          const bookedCarCategory = carCategories.find(c => c.id === booking.carCategoryId)?.name || 'N/A';
+                          const servedCar = booking.carId ? getCar(booking.carId) : null;
+                          const servedCarCategory = carCategories.find(c => c.id === servedCar?.categoryId)?.name || 'N/A';
+
+                          const pickupTime = booking.pickupTime;
+                          const actualPickupTime = booking.eventLog?.find((e: any) => e.toStatus === 'picked_up')?.performedAt;
+                          const pickupTimeDiff = actualPickupTime ? (new Date(actualPickupTime).getTime() - new Date(`${booking.pickupDate}T${booking.pickupTime}`).getTime()) / 60000 : 0;
+
+                          const bookedPackage = booking.tripType === 'rental' ? `${booking.packageHours}h / ${booking.packageKm}km` : booking.tripType === 'outstation' ? `${booking.days} Days` : 'N/A';
+                          const servedPackage = booking.tripType === 'rental' ? `${booking.actualHours || booking.packageHours}h / ${booking.actualKm || booking.packageKm}km` : booking.tripType === 'outstation' ? `${booking.actualDays || booking.days} Days` : 'N/A';
+
+                          const durationDiff = booking.tripType === 'rental' ? (booking.actualHours || 0) - (booking.packageHours || 0) : (booking.actualDays || 0) - (booking.days || 0);
+                          const kmDiff = (booking.actualKm || 0) - (booking.estimatedKm || 0);
+
+                          const rows = [
+                              { param: 'Pickup Time', booked: pickupTime, served: actualPickupTime ? new Date(actualPickupTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A', variation: `${pickupTimeDiff > 0 ? '+' : ''}${pickupTimeDiff.toFixed(0)} min`, color: pickupTimeDiff > 5 ? 'text-red-600' : 'text-green-600' },
+                              { param: 'Car Category', booked: bookedCarCategory, served: servedCarCategory, variation: bookedCarCategory !== servedCarCategory ? 'Changed' : 'Same', color: bookedCarCategory !== servedCarCategory ? 'text-amber-600' : 'text-slate-500' },
+                          ];
+
+                          if (booking.tripType === 'rental') {
+                              rows.push(
+                                  { param: 'Package', booked: bookedPackage, served: servedPackage, variation: durationDiff !== 0 ? 'Changed' : 'Same', color: durationDiff !== 0 ? 'text-amber-600' : 'text-slate-500' },
+                                  { param: 'Duration', booked: `${booking.packageHours} hrs`, served: `${booking.actualHours || booking.packageHours} hrs`, variation: `${durationDiff > 0 ? '+' : ''}${durationDiff} hrs`, color: durationDiff > 0 ? 'text-red-600' : 'text-slate-500' }
+                              );
+                          }
+
+                          if (booking.tripType === 'outstation') {
+                              rows.push(
+                                  { param: 'Package', booked: bookedPackage, served: servedPackage, variation: durationDiff !== 0 ? 'Changed' : 'Same', color: durationDiff !== 0 ? 'text-amber-600' : 'text-slate-500' },
+                                  { param: 'Duration', booked: `${booking.days} Days`, served: `${booking.actualDays || booking.days} Days`, variation: `${durationDiff > 0 ? '+' : ''}${durationDiff} Days`, color: durationDiff > 0 ? 'text-red-600' : 'text-slate-500' }
+                              );
+                          }
+
+                          rows.push(
+                              { param: 'Distance', booked: `${booking.estimatedKm || 0} km`, served: `${booking.actualKm || booking.estimatedKm || 0} km`, variation: `${kmDiff > 0 ? '+' : ''}${kmDiff.toFixed(1)} km`, color: kmDiff > 0 ? 'text-red-600' : 'text-slate-500' }
+                          );
+
+                          return rows.map((row, i) => (
+                              <div key={i} className="contents">
+                                  <div className="font-bold text-slate-700">{row.param}</div>
+                                  <div className="font-medium">{row.booked}</div>
+                                  <div className="font-medium">{row.served}</div>
+                                  <div className={`font-bold ${row.color}`}>{row.variation}</div>
+                              </div>
+                          ));
+                      })()}
                   </div>
 
-                  {/* Fare */}
-                  <div className="font-bold text-slate-700">Base Fare</div>
-                  <div>₹ {variationRideTarget?.originalBooking?.estimatedFare || 0}</div>
-                  <div>₹ {variationRideTarget?.originalBooking?.actualFare || variationRideTarget?.originalBooking?.estimatedFare || 0}</div>
-                  <div className="text-blue-600 font-bold">
-                      ₹ {((variationRideTarget?.originalBooking?.actualFare || variationRideTarget?.originalBooking?.estimatedFare || 0) - (variationRideTarget?.originalBooking?.estimatedFare || 0))}
-                  </div>
+                  <div className="grid grid-cols-var gap-x-2 divide-y divide-slate-100 border-t border-slate-200 mt-4">
+                      {(() => {
+                          const booking = variationRideTarget?.originalBooking;
+                          if (!booking) return null;
 
-                  {/* Extras */}
-                  <div className="font-bold text-slate-700">Extra Charges</div>
-                  <div>₹ 0</div>
-                  <div>₹ {variationRideTarget?.originalBooking?.extraCharges || 0}</div>
-                  <div className="text-amber-600 font-bold">
-                      + ₹ {variationRideTarget?.originalBooking?.extraCharges || 0}
-                  </div>
-                  
-                  {/* Tolls & Parking */}
-                  <div className="font-bold text-slate-700">Tolls & Parking</div>
-                  <div>₹ 0</div>
-                  <div>₹ {(variationRideTarget?.originalBooking?.tollCharges || 0) + (variationRideTarget?.originalBooking?.parkingCharges || 0)}</div>
-                  <div className="text-amber-600 font-bold">
-                      + ₹ {(variationRideTarget?.originalBooking?.tollCharges || 0) + (variationRideTarget?.originalBooking?.parkingCharges || 0)}
+                          const baseFareDiff = (booking.actualFare || booking.estimatedFare || 0) - (booking.estimatedFare || 0);
+                          const extraChargesValue = (booking.extraCharges || 0) + (booking.tollCharges || 0) + (booking.parkingCharges || 0);
+
+                          const rows = [
+                              { param: 'Base Fare', booked: `₹ ${booking.estimatedFare || 0}`, served: `₹ ${booking.actualFare || booking.estimatedFare || 0}`, variation: `${baseFareDiff >= 0 ? '+' : '-'} ₹ ${Math.abs(baseFareDiff)}`, color: baseFareDiff > 0 ? 'text-red-600' : 'text-green-600' },
+                              { param: 'Extra Charges', booked: '₹ 0', served: `₹ ${extraChargesValue}`, variation: `+ ₹ ${extraChargesValue}`, color: 'text-amber-600' },
+                          ];
+
+                          return rows.map((row, i) => (
+                              <div key={i} className="contents">
+                                  <div className="font-bold text-slate-700">{row.param}</div>
+                                  <div className="font-medium">{row.booked}</div>
+                                  <div className="font-medium">{row.served}</div>
+                                  <div className={`font-bold ${row.color}`}>{row.variation}</div>
+                              </div>
+                          ));
+                      })()}
                   </div>
               </div>
               

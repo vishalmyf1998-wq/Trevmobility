@@ -146,6 +146,7 @@ export interface Driver {
   status: 'active' | 'inactive' | 'suspended'
   assignedCarId?: string
   hubId?: string
+  operatingCity?: 'ncr' | 'jpr'
   rating?: number
   createdAt: string
   joiningDate?: string
@@ -166,6 +167,7 @@ export interface Car {
   status: 'available' | 'on_trip' | 'maintenance' | 'inactive'
   assignedDriverId?: string
   hubId?: string
+  operatingCity?: 'ncr' | 'jpr'
   createdAt: string
 }
 
@@ -531,6 +533,13 @@ export interface Booking {
   driverId?: string
   carId?: string
   cityId: string
+  hubId?: string
+  pickupCity?: 'ncr' | 'jpr'
+  operatingCity?: 'ncr' | 'jpr'
+  pickupLatitude?: number
+  pickupLongitude?: number
+  dropLatitude?: number
+  dropLongitude?: number
   carCategoryId: string
   tripType: 'airport_pickup' | 'airport_drop' | 'rental' | 'city_ride' | 'outstation' | 'railway_pickup' | 'railway_drop'
   airportId?: string
@@ -568,6 +577,8 @@ export interface Booking {
   status: 'pending' | 'confirmed' | 'assigned' | 'dispatched' | 'arrived' | 'picked_up' | 'dropped' | 'closed' | 'cancelled' | 'pending_edit_approval' | 'completed' | 'edit_approved' | 'rejected' | 'status_reverted' | 'created' | 'reassigned'
   paymentStatus: 'pending' | 'paid' | 'partial'
   remarks?: string
+  cancellationReason?: string | null
+  cancelledBy?: string | null
   tags?: string[]
   b2bEmployeeId?: string
   eventLog: BookingEventLog[]

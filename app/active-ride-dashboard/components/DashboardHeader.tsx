@@ -129,7 +129,7 @@ export function DashboardHeader({
                 placeholder="Search ID, Customer, Location..." 
                 className="w-full pl-11 h-11 bg-white/50 hover:bg-white/80 focus:bg-white border-white/60 shadow-inner rounded-[1.5rem] text-[13px] font-medium transition-all duration-300 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-indigo-500/20"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => setSearchQuery?.(e.target.value)}
               />
             </div>
             <div className="flex gap-3">

@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { CityBadge } from '@/components/city-badge'
 import {
   Table,
   TableBody,
@@ -335,6 +336,7 @@ export default function DriversPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead>License</TableHead>
+                <TableHead>City</TableHead>
                 <TableHead>Hub</TableHead>
                 <TableHead>Assigned Car</TableHead>
                 <TableHead>Status</TableHead>
@@ -344,7 +346,7 @@ export default function DriversPage() {
             <TableBody>
               {filteredDrivers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     {searchQuery ? 'No drivers found matching your search' : 'No drivers added yet'}
                   </TableCell>
                 </TableRow>
@@ -370,6 +372,9 @@ export default function DriversPage() {
                             Exp: {new Date(driver.licenseExpiry).toLocaleDateString()}
                           </p>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <CityBadge operatingCity={driver.operatingCity} hubId={driver.hubId} hubs={hubs} />
                       </TableCell>
                       <TableCell>
                         {driver.hubId ? (

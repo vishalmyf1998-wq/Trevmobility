@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { CityBadge } from '@/components/city-badge'
 import {
   Table,
   TableBody,
@@ -410,6 +411,7 @@ export default function CarsPage() {
                 <TableHead>Registration</TableHead>
                 <TableHead>Vehicle</TableHead>
                 <TableHead>Category</TableHead>
+                <TableHead>City</TableHead>
                 <TableHead>Hub</TableHead>
                 <TableHead>Assigned Driver</TableHead>
                 <TableHead>Status</TableHead>
@@ -419,7 +421,7 @@ export default function CarsPage() {
             <TableBody>
               {filteredCars.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     {searchQuery ? 'No cars found matching your search' : 'No cars added yet'}
                   </TableCell>
                 </TableRow>
@@ -446,6 +448,9 @@ export default function CarsPage() {
                         ) : (
                           <span className="text-muted-foreground">-</span>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <CityBadge operatingCity={car.operatingCity} hubId={car.hubId} hubs={hubs} />
                       </TableCell>
                       <TableCell>
                         {car.hubId ? (

@@ -4,6 +4,7 @@ import { ReactNode } from 'react'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/app-sidebar'
 import { usePathname } from 'next/navigation'
+import { CitySelector } from '@/components/city-selector'
 
 export function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname()
@@ -29,9 +30,12 @@ export function AdminLayout({ children }: { children: ReactNode }) {
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-300/20 rounded-full blur-[120px] pointer-events-none mix-blend-multiply fixed" />
 
         {/* Minimal Transparent Header */}
-        <header className="flex h-14 shrink-0 items-center gap-4 px-4 md:px-6 sticky top-0 z-50 w-full pointer-events-none">
+        <header className="flex h-14 shrink-0 items-center justify-between gap-4 px-4 md:px-6 sticky top-0 z-50 w-full pointer-events-none">
           <div className="pointer-events-auto">
             <SidebarTrigger className="-ml-1 bg-white/70 backdrop-blur-2xl hover:bg-white shadow-[0_8px_16px_-6px_rgba(0,0,0,0.1)] border border-white/80 h-10 w-10 rounded-[1rem] text-slate-700 transition-all duration-300 hover:scale-105 active:scale-95 flex items-center justify-center" />
+          </div>
+          <div className="pointer-events-auto">
+            <CitySelector />
           </div>
         </header>
         

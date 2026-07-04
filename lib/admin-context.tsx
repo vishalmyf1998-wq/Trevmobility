@@ -1,7 +1,7 @@
 // @ts-nocheck
 'use client'
 
-import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react'
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useMemo } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { toast } from 'sonner'
 import { supabase } from '../supabaseClient'
@@ -13,6 +13,7 @@ import {
   B2BEmployee, B2BApprovalRule, CommunicationTemplate, AdminRole, AdminUser, BookingTag, CancellationPolicy, WalletTransaction, TollLocation,
   UserType
 } from './types'
+import { isCityScope, matchesCityScope, type CityScope } from './city-scope'
 
 export interface DriverPayout {
   id: string
@@ -123,6 +124,7 @@ const initialCities: City[] = [
   { id: 'demo-city-mumbai', name: 'Mumbai', state: 'Maharashtra', isActive: true, boundaryType: 'latlong', coverageArea: 95, latitude: 19.076, longitude: 72.8777, createdAt: demoNow },
   { id: 'demo-city-delhi', name: 'Delhi NCR', state: 'Delhi', isActive: true, boundaryType: 'latlong', coverageArea: 120, latitude: 28.6139, longitude: 77.209, createdAt: demoNow },
   { id: 'demo-city-bengaluru', name: 'Bengaluru', state: 'Karnataka', isActive: true, boundaryType: 'polygon', coverageArea: 110, latitude: 12.9716, longitude: 77.5946, createdAt: demoNow },
+  { id: 'demo-city-jaipur', name: 'Jaipur', state: 'Rajasthan', isActive: true, boundaryType: 'latlong', coverageArea: 90, latitude: 26.9124, longitude: 75.7873, createdAt: demoNow },
 ]
 
 const initialAirports: Airport[] = [
@@ -208,7 +210,8 @@ const generateMockDrivers = (): Driver[] => {
       address: 'Delhi NCR',
       status: i % 5 === 0 ? 'inactive' : 'active',
       assignedCarId: `demo-car-${i}`,
-      hubId: 'demo-hub-delhi-ncr',
+      hubId: i >= 16 ? 'demo-hub-jaipur-main' : 'demo-hub-delhi-ncr',
+      operatingCity: i >= 16 ? 'jpr' : 'ncr',
       joiningDate: demoToday,
       monthlySalary: 25000 + (i * 500),
       password: 'test123',
@@ -242,7 +245,8 @@ const generateMockCars = (): Car[] => {
       seatingCapacity: t.cap,
       status: i % 4 === 0 ? 'maintenance' : (i % 3 === 0 ? 'on_trip' : 'available'),
       assignedDriverId: `demo-driver-${i}`,
-      hubId: 'demo-hub-delhi-ncr',
+      hubId: i >= 16 ? 'demo-hub-jaipur-main' : 'demo-hub-delhi-ncr',
+      operatingCity: i >= 16 ? 'jpr' : 'ncr',
       createdAt: demoNow
     })
   }
@@ -293,6 +297,7 @@ const initialHubs: Hub[] = [
   { id: 'demo-hub-mumbai-airport', name: 'Mumbai Airport Hub', address: 'Near T2 Parking, Andheri East', cityId: 'demo-city-mumbai', latitude: 19.0896, longitude: 72.8656, contactPerson: 'Neha Sharma', contactPhone: '9100000001', isActive: true, createdAt: demoNow },
   { id: 'demo-hub-delhi-ncr', name: 'Delhi NCR Dispatch Hub', address: 'Aerocity, New Delhi', cityId: 'demo-city-delhi', latitude: 28.5562, longitude: 77.1, contactPerson: 'Vikram Singh', contactPhone: '9100000002', isActive: true, createdAt: demoNow },
   { id: 'demo-hub-bengaluru', name: 'Bengaluru North Hub', address: 'Hebbal Service Road, Bengaluru', cityId: 'demo-city-bengaluru', latitude: 13.0358, longitude: 77.597, contactPerson: 'Anita Rao', contactPhone: '9100000003', isActive: true, createdAt: demoNow },
+  { id: 'demo-hub-jaipur-main', name: 'Jaipur City Hub', address: 'Civil Lines, Jaipur', cityId: 'demo-city-jaipur', latitude: 26.9124, longitude: 75.7873, contactPerson: 'Rohan Meena', contactPhone: '9100000004', isActive: true, createdAt: demoNow },
 ]
 
 const initialBookingTags: BookingTag[] = [
@@ -417,7 +422,11 @@ const generateMockBookings = (): Booking[] => {
       remarks: Math.random() > 0.8 ? 'VIP Guest - Please arrive 10 mins early' : '',
       createdBy: isB2B ? 'Corporate Admin' : 'System',
       createdAt: new Date(Date.now() - Math.random() * 10000000000).toISOString(),
-      cityId: 'demo-city-delhi',
+      // Assign some bookings to Jaipur
+      cityId: i % 5 === 0 ? 'demo-city-jaipur' : 'demo-city-delhi',
+      pickupCity: i % 5 === 0 ? 'jpr' : 'ncr',
+      operatingCity: i % 5 === 0 ? 'jpr' : 'ncr',
+      hubId: i % 5 === 0 ? 'demo-hub-jaipur-main' : 'demo-hub-delhi-ncr',
       carCategoryId: 'demo-cat-sedan',
       eventLog: []
     })
@@ -637,6 +646,8 @@ const dummyBookings: Booking[] = [
 interface AdminContextType {
   userType: UserType
   setUserType: (type: UserType) => void
+  selectedCity: CityScope
+  setSelectedCity: (city: CityScope) => void
   
   // Data
   drivers: Driver[]
@@ -899,6 +910,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   const [b2bClients, setB2BClients] = useState<B2BClient[]>(() => loadState('b2bClients', initialB2BClients))
   const [gstConfig, setGstConfig] = useState<GSTConfig>(initialGstConfig)
   const [bookings, setBookings] = useState<Booking[]>(() => loadState('bookings', initialBookings))
+  const [selectedCity, setSelectedCityState] = useState<CityScope>('all')
   const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>(() => loadState('walletTransactions', initialWalletTransactions))
   const [dutySlips, setDutySlips] = useState<DutySlip[]>(() => loadState('dutySlips', initialDutySlips))
   const [invoices, setInvoices] = useState<Invoice[]>(() => loadState('invoices', initialInvoices))
@@ -916,6 +928,16 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   const [driverPayouts, setDriverPayouts] = useState<DriverPayout[]>(() => loadState('driverPayouts', initialDriverPayouts))
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>(() => loadState('supportTickets', initialSupportTickets))
   const [tollLocations, setTollLocations] = useState<TollLocation[]>(() => loadState('tollLocations', initialTollLocations))
+
+  useEffect(() => {
+    const savedCity = localStorage.getItem('operations_selected_city')
+    if (isCityScope(savedCity)) setSelectedCityState(savedCity)
+  }, [])
+
+  const setSelectedCity = useCallback((city: CityScope) => {
+    setSelectedCityState(city)
+    localStorage.setItem('operations_selected_city', city)
+  }, [])
 
   // UserType state
   const loadUserType = (): UserType => {
@@ -1052,6 +1074,20 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     setTollLocations((prev) => mergeById(prev, initialTollLocations))
 
     localStorage.setItem('dummy_sidebar_data_v3', 'true')
+
+    // Assign some drivers and cars to Jaipur
+    setDrivers(prev => prev.map((driver, index) => {
+      if (index >= 15) { // Assign last 5 drivers to Jaipur
+        return { ...driver, hubId: 'demo-hub-jaipur-main' };
+      }
+      return driver;
+    }));
+    setCars(prev => prev.map((car, index) => {
+      if (index >= 15) { // Assign last 5 cars to Jaipur
+        return { ...car, hubId: 'demo-hub-jaipur-main' };
+      }
+      return car;
+    }));
   }, [])
 
   // Inject Dummy Bookings
@@ -2230,6 +2266,19 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
   const getBookingTag = useCallback((id: string) => bookingTags.find(t => t.id === id), [bookingTags])
   const getCancellationPolicy = useCallback((id: string) => cancellationPolicies.find(p => p.id === id), [cancellationPolicies])
 
+  const scopedBookings = useMemo(
+    () => bookings.filter((booking) => matchesCityScope(selectedCity, booking, hubs)),
+    [bookings, hubs, selectedCity],
+  )
+  const scopedCars = useMemo(
+    () => cars.filter((car) => matchesCityScope(selectedCity, car, hubs)),
+    [cars, hubs, selectedCity],
+  )
+  const scopedDrivers = useMemo(
+    () => drivers.filter((driver) => matchesCityScope(selectedCity, driver, hubs)),
+    [drivers, hubs, selectedCity],
+  )
+
   if (isLoadingAuth) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center space-y-4">
@@ -2241,7 +2290,7 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
 
   return (
     <AdminContext.Provider value={{
-      drivers, cars, carCategories, cities, b2cCustomers, airports, railwayStations, fareGroups, b2bClients, gstConfig, bookings, walletTransactions, dutySlips, invoices,
+      drivers: scopedDrivers, cars: scopedCars, carCategories, cities, b2cCustomers, airports, railwayStations, fareGroups, b2bClients, gstConfig, bookings: scopedBookings, walletTransactions, dutySlips, invoices,
       hubs, promoCodes, cityPolygons, carLocations, driverPayouts, supportTickets, tollLocations,
       b2bEmployees, b2bApprovalRules, communicationTemplates, adminRoles, adminUsers, bookingTags, cancellationPolicies,
       addDriver, updateDriver, deleteDriver,
@@ -2278,6 +2327,7 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
       getHub, getPromoCode, getPromoCodeByCode, getB2BEmployee, getB2BApprovalRule, getAdminRole, getBookingTag,
       getCancellationPolicy,
       userType, setUserType,
+      selectedCity, setSelectedCity,
       currentUser, logout
     }}>
       {children}
