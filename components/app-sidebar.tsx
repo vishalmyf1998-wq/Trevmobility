@@ -230,6 +230,7 @@ export function AppSidebar() {
           { title: 'Cancellation Policy', href: '/cancellation-policy' },
           { title: 'Cancellation Reasons', href: '/cancellation-reasons' },
           { title: 'Booking Tags', href: '/booking-tags' },
+          { title: 'Toll Plazas', href: '/tolls' },
         ],
       },
       {

@@ -210,6 +210,8 @@ export interface AirportTerminal {
   name: string
   code: string
   isActive: boolean
+  latitude?: number
+  longitude?: number
   createdAt: string
 }
 
@@ -221,6 +223,38 @@ export interface Airport {
   address: string
   isActive: boolean
   terminals: AirportTerminal[]
+  createdAt: string
+}
+
+export interface RailwayStationTerminal {
+  id: string
+  railwayStationId: string
+  name: string
+  code: string
+  isActive: boolean
+  latitude?: number
+  longitude?: number
+  createdAt: string
+}
+
+export interface RailwayStation {
+  id: string
+  cityId: string
+  name: string
+  code: string
+  address: string
+  isActive: boolean
+  terminals: RailwayStationTerminal[]
+  createdAt: string
+}
+
+// Toll Location (Geofence based Tolls)
+export interface TollLocation {
+  id: string
+  name: string
+  amount: number
+  coordinates: { lat: number; lng: number }[]
+  isActive: boolean
   createdAt: string
 }
 
@@ -283,6 +317,30 @@ export interface AirportFareConfig {
   airportId?: string
   airportTerminalId?: string
   airportTerminalIds?: string[]
+  carCategoryId: string
+  type: 'pickup' | 'drop' | 'both'
+  calculationType: FareCalculationType
+  fixedFare?: number
+  perKmRate?: number
+  slabs?: SlabConfig[]
+  peakHour: PeakHourConfig
+  nightCharge: NightChargeConfig
+  urgentBooking?: UrgentBookingConfig
+  shortNoticeCharge?: ShortNoticeChargeConfig
+  minAdvanceBookingHours?: number
+  waitingChargePerMin: number
+  freeWaitingMinutes: number
+  baseFare: number
+  minimumFare: number
+  preBookingCharges?: PreBookingCharges
+}
+
+export interface RailwayFareConfig {
+  id: string
+  cityId: string
+  railwayStationId?: string
+  railwayStationTerminalId?: string
+  railwayStationTerminalIds?: string[]
   carCategoryId: string
   type: 'pickup' | 'drop' | 'both'
   calculationType: FareCalculationType
@@ -387,6 +445,7 @@ export interface FareGroup {
   type: 'B2C' | 'B2B'
   isDefault: boolean
   airportFares: AirportFareConfig[]
+  railwayFares: RailwayFareConfig[]
   rentalFares: RentalFareConfig[]
   cityRideFares: CityRideFareConfig[]
   outstationFares: OutstationFareConfig[]
@@ -473,9 +532,13 @@ export interface Booking {
   carId?: string
   cityId: string
   carCategoryId: string
-  tripType: 'airport_pickup' | 'airport_drop' | 'rental' | 'city_ride' | 'outstation'
+  tripType: 'airport_pickup' | 'airport_drop' | 'rental' | 'city_ride' | 'outstation' | 'railway_pickup' | 'railway_drop'
   airportId?: string
   airportTerminalId?: string
+  railwayStationId?: string
+  railwayStationTerminalId?: string
+  flightNumber?: string
+  trainNumber?: string
   pickupLocation: string
   dropLocation: string
   pickupDate: string

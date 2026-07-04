@@ -75,6 +75,7 @@ export default function FareGroupsPage() {
         rentalFares: [],
         cityRideFares: [],
         outstationFares: [],
+        railwayFares: [],
       })
       toast.success('Fare group created successfully')
     }
@@ -117,7 +118,8 @@ export default function FareGroupsPage() {
       group.airportFares.length +
       group.rentalFares.length +
       group.cityRideFares.length +
-      group.outstationFares.length
+      group.outstationFares.length +
+      (group.railwayFares?.length || 0)
     )
   }
 

@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { MapPin, RefreshCw, Zap, Leaf, Clock, Phone, ChevronDown, BatteryCharging, ChevronUp, AlertCircle, AlertTriangle, PhoneCall, ShieldAlert, History, Map, ClipboardList, Banknote, Download, FileText, Edit3, XCircle, CheckCircle, Gauge, User, Headset, Car, Wallet, Copy, MessageCircle, MoreHorizontal, ThumbsUp, ThumbsDown, Target, Tag, Save, Printer } from 'lucide-react';
+import { MapPin, RefreshCw, Zap, Leaf, Clock, Phone, ChevronDown, BatteryCharging, ChevronUp, AlertCircle, AlertTriangle, PhoneCall, ShieldAlert, History, Map, ClipboardList, Banknote, Download, FileText, Edit3, XCircle, CheckCircle, Gauge, User, Headset, Car, Wallet, Copy, MessageCircle, MoreHorizontal, ThumbsUp, ThumbsDown, Target, Tag, Save, Printer, Trash2, Plane, Train, GitCompare, Paperclip, FileImage, Plus } from 'lucide-react';
 import { useAdmin } from "@/lib/admin-context";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -52,33 +52,49 @@ function distanceKm(a?: { latitude: number; longitude: number } | null, b?: { la
   return earthRadiusKm * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
-function getEstimatedPickupPoint(ride: any) {
+// Ray-casting algorithm for Point in Polygon
+function isPointInPolygon(point: { lat: number; lng: number }, polygon: { lat: number; lng: number }[]) {
+  let isInside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].lat, yi = polygon[i].lng;
+    const xj = polygon[j].lat, yj = polygon[j].lng;
+    const intersect = ((yi > point.lng) !== (yj > point.lng)) && (point.lat < (xj - xi) * (point.lng - yi) / (yj - yi) + xi);
+    if (intersect) isInside = !isInside;
+  }
+  return isInside;
+}
+
+function getEstimatedPickupPoint(ride: any): { latitude: number; longitude: number } | null {
   const booking = ride.originalBooking || ride;
   if (booking.pickupLatitude && booking.pickupLongitude) {
     return { latitude: booking.pickupLatitude, longitude: booking.pickupLongitude };
   }
-  const seed = `${booking.id || ""}${booking.pickupLocation || ""}`;
-  return {
-    latitude: 19.076 + hashToOffset(seed),
-    longitude: 72.8777 + hashToOffset(seed.split("").reverse().join("")),
-  };
+  // If coordinates are missing, do NOT show a Mumbai-based fake point.
+  // This prevents Delhi/NCR bookings from appearing at Mumbai.
+  return null;
 }
 
-function getEstimatedDropPoint(ride: any) {
+function getEstimatedDropPoint(ride: any): { latitude: number; longitude: number } | null {
   const booking = ride.originalBooking || ride;
   if (booking.dropLatitude && booking.dropLongitude) {
     return { latitude: booking.dropLatitude, longitude: booking.dropLongitude };
   }
-  const seed = `${booking.id || ""}${booking.dropLocation || "drop"}`;
-  return {
-    latitude: 19.076 + hashToOffset(seed, 0.15),
-    longitude: 72.8777 + hashToOffset(seed.split("").reverse().join(""), 0.15),
-  };
+  // If coordinates are missing, do NOT show a Mumbai-based fake point.
+  return null;
 }
 
 function getEstimatedStopPoints(ride: any) {
   const booking = ride.originalBooking || ride;
-  const stops = Array.isArray(booking.stops) ? booking.stops : [];
+  let stops = Array.isArray(booking.stops) ? [...booking.stops] : [];
+
+  // Agar rental ride hai aur actual stops nahi hain, toh dummy stops add karo map pe dikhane ke liye
+  if (stops.length === 0 && booking.tripType === 'rental') {
+    stops = [
+      { address: 'Meeting Point (Stop 1)' },
+      { address: 'Site Visit (Stop 2)' },
+      { address: 'Lunch (Stop 3)' }
+    ];
+  }
 
   return stops.map((stop: any, index: number) => {
     if (stop.latitude && stop.longitude) {
@@ -101,9 +117,18 @@ function getEstimatedStopPoints(ride: any) {
 }
 
 const DriverSearchDropdown = ({ ride }: { ride: any }) => {
-    const { drivers, cars, carLocations, updateBooking } = useAdmin();
+    const { drivers, cars, carLocations, updateBooking, getAirportTerminal, getRailwayStationTerminal } = useAdmin();
     const [search, setSearch] = useState("");
-    const pickupPoint = getEstimatedPickupPoint(ride);
+    
+    let pickupPoint = getEstimatedPickupPoint(ride);
+    if (ride.originalBooking?.tripType === 'airport_pickup' && ride.originalBooking?.airportId && ride.originalBooking?.airportTerminalId) {
+        const terminal = getAirportTerminal(ride.originalBooking.airportId, ride.originalBooking.airportTerminalId);
+        if (terminal?.latitude && terminal?.longitude) pickupPoint = { latitude: terminal.latitude, longitude: terminal.longitude };
+    } else if (ride.originalBooking?.tripType === 'railway_pickup' && ride.originalBooking?.railwayStationId && ride.originalBooking?.railwayStationTerminalId) {
+        const terminal = getRailwayStationTerminal(ride.originalBooking.railwayStationId, ride.originalBooking.railwayStationTerminalId);
+        if (terminal?.latitude && terminal?.longitude) pickupPoint = { latitude: terminal.latitude, longitude: terminal.longitude };
+    }
+
     const availableDrivers = drivers
       .filter((d: any) => d.status === 'active')
       .map((d: any) => {
@@ -340,12 +365,23 @@ export default function ActiveRideDashboard() {
     dutySlips = [],
     invoices = [],
     getCity,
-    getB2BEmployee
+    getB2BEmployee,
+    addBooking,
+    deleteBooking,
+    b2bClients = [],
+    cities = [],
+    hubs = [],
+    carCategories = [],
+    tollLocations = [],
+    getAirportTerminal,
+    getRailwayStationTerminal
   } = useAdmin();
 
   const [expandedRideId, setExpandedRideId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'delayed' | 'unassigned' | 'dispatched' | 'arrived' | 'pickup' | 'dropped' | 'closed' | 'cancelled' | 'gps_off' | 'priority' | 'low_soc'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'delayed' | 'unassigned' | 'dispatched' | 'arrived' | 'pickup' | 'dropped' | 'closed' | 'cancelled' | 'gps_off' | 'priority' | 'low_soc' | 'login_delay'>('all');
+  const [cityFilter, setCityFilter] = useState('all');
+  const [hubFilter, setHubFilter] = useState('all');
   const [delaySubFilter, setDelaySubFilter] = useState('all');
   const [ongoingSubFilter, setOngoingSubFilter] = useState('all');
   const [prioritySubFilter, setPrioritySubFilter] = useState('all');
@@ -363,7 +399,8 @@ export default function ActiveRideDashboard() {
   const [nextAllocationTime, setNextAllocationTime] = useState<Date | null>(null);
 
   const [liveMetrics, setLiveMetrics] = useState<Record<string, { distance: number; eta: number; soc: number; actualEta: number }>>({});
-  const stateRef = useRef({ bookings, carLocations, drivers, cars });
+  const stateRef = useRef({ bookings, carLocations, drivers, cars, tollLocations, gstConfig });
+  const appliedTollsRef = useRef<Record<string, string[]>>({});
 
   const [isTicketDialogOpen, setIsTicketDialogOpen] = useState(false);
   const [ticketRide, setTicketRide] = useState<any>(null);
@@ -388,9 +425,7 @@ export default function ActiveRideDashboard() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editRideTarget, setEditRideTarget] = useState<any>(null);
   const [editRideData, setEditRideData] = useState({ 
-    customerName: '', customerPhone: '', tripType: '', 
-    pickupLocation: '', dropLocation: '', pickupDate: '', pickupTime: '', remarks: '',
-    estimatedFare: 0, tollCharges: 0, parkingCharges: 0, promoDiscount: 0, advancePaid: 0 
+    pickupDate: '', pickupTime: '', remarks: ''
   });
 
   // Manual Event State
@@ -404,9 +439,17 @@ export default function ActiveRideDashboard() {
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
   const [invoiceRide, setInvoiceRide] = useState<any>(null);
 
+  // Variations State
+  const [isVariationDialogOpen, setIsVariationDialogOpen] = useState(false);
+  const [variationRideTarget, setVariationRideTarget] = useState<any>(null);
+
+  // Documents State
+  const [isDocsDialogOpen, setIsDocsDialogOpen] = useState(false);
+  const [docsRideTarget, setDocsRideTarget] = useState<any>(null);
+
   useEffect(() => {
-    stateRef.current = { bookings, carLocations, drivers, cars };
-  }, [bookings, carLocations, drivers, cars]);
+    stateRef.current = { bookings, carLocations, drivers, cars, tollLocations, gstConfig };
+  }, [bookings, carLocations, drivers, cars, tollLocations, gstConfig]);
 
   useEffect(() => {
     if (!isSimulating) return;
@@ -421,13 +464,43 @@ export default function ActiveRideDashboard() {
         const baseLat = loc?.latitude || 19.0760;
         const baseLng = loc?.longitude || 72.8777;
         const newSpeed = Math.max(10, (loc?.speed || 40) + (Math.random() * 10 - 5));
+        const newLat = baseLat + (Math.random() - 0.2) * 0.003 * (newSpeed / 40);
+        const newLng = baseLng + (Math.random() - 0.2) * 0.003 * (newSpeed / 40);
 
         updateCarLocation(trip.carId, {
-          latitude: baseLat + (Math.random() - 0.2) * 0.001 * (newSpeed / 40),
-          longitude: baseLng + (Math.random() - 0.2) * 0.001 * (newSpeed / 40),
+          latitude: baseLat + (Math.random() - 0.2) * 0.003 * (newSpeed / 40),
+          longitude: baseLng + (Math.random() - 0.2) * 0.003 * (newSpeed / 40),
+          latitude: newLat,
+          longitude: newLng,
           heading: (loc?.heading || 90) + (Math.random() * 20 - 10),
           speed: newSpeed,
           lastUpdated: new Date().toISOString(),
+        });
+        
+        // Auto-Toll Logic: Check if car coordinates fall inside any toll polygon
+        const { tollLocations: currentTolls, gstConfig: currentGst } = stateRef.current;
+        currentTolls?.filter((t: any) => t.isActive && t.coordinates?.length >= 3).forEach((toll: any) => {
+            if (isPointInPolygon({ lat: newLat, lng: newLng }, toll.coordinates)) {
+                if (!appliedTollsRef.current[trip.id]?.includes(toll.id)) {
+                    if (!appliedTollsRef.current[trip.id]) appliedTollsRef.current[trip.id] = [];
+                    appliedTollsRef.current[trip.id].push(toll.id);
+
+                    const currentTollCharges = trip.tollCharges || 0;
+                    const newTollCharges = currentTollCharges + toll.amount;
+                    
+                    const taxable = Math.max(0, (trip.estimatedFare || 0) + newTollCharges + (trip.parkingCharges || 0) - (trip.promoDiscount || 0));
+                    const gstRate = currentGst ? currentGst.cgstRate + currentGst.sgstRate : 5;
+                    const newGst = (taxable * gstRate) / 100;
+                    const newGrandTotal = taxable + newGst;
+
+                    updateBooking(trip.id, { 
+                        tollCharges: newTollCharges,
+                        gstAmount: newGst,
+                        grandTotal: newGrandTotal 
+                    });
+                    toast.info(`📍 Auto-Toll: ₹${toll.amount} (${toll.name}) applied to ${trip.bookingNumber}`);
+                }
+            }
         });
 
         setLiveMetrics((prev) => {
@@ -445,7 +518,7 @@ export default function ActiveRideDashboard() {
           };
         });
       });
-    }, 3000);
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [isSimulating, updateCarLocation]);
@@ -594,6 +667,14 @@ export default function ActiveRideDashboard() {
       const metrics = liveMetrics[b.id];
       return metrics && metrics.soc < 20;
   }).length, [bookings, liveMetrics]);
+  const loginDelayCount = useMemo(() => drivers.filter((d: any) => {
+      if (d.status === 'active' || !d.thirdPartyLoginAt) return false;
+      const loginTime = new Date(d.thirdPartyLoginAt).getTime();
+      const now = Date.now();
+      // Driver has logged into 3rd party app, but not our app within 5 minutes
+      return (now - loginTime) > 5 * 60 * 1000;
+  }).length, [drivers]);
+
 
   const filteredBookings = useMemo(() => {
     const activeStatuses = ['confirmed', 'assigned', 'dispatched', 'arrived', 'picked_up', 'dropped'];
@@ -646,6 +727,15 @@ export default function ActiveRideDashboard() {
             return activeStatuses.includes(b.status) && metrics && metrics.soc < 20;
         });
         break;
+      case 'login_delay':
+        const delayedDriverIds = drivers.filter((d: any) => {
+            if (d.status === 'active' || !d.thirdPartyLoginAt) return false;
+            const loginTime = new Date(d.thirdPartyLoginAt).getTime();
+            const now = Date.now();
+            return (now - loginTime) > 5 * 60 * 1000;
+        }).map((d: any) => d.id);
+        statusFiltered = bookings.filter((b: any) => b.driverId && delayedDriverIds.includes(b.driverId) && activeStatuses.includes(b.status));
+        break;
       case 'delayed':
         statusFiltered = bookings.filter((b: any) => {
             const info = getDelayInfo(b, liveMetrics[b.id]);
@@ -661,19 +751,19 @@ export default function ActiveRideDashboard() {
     const query = searchQuery.trim().toLowerCase();
     return statusFiltered.filter((b: any) => {
       const pickupDate = b.pickupDate || "";
+      const matchesCity = cityFilter === 'all' || b.cityId === cityFilter;
+      const matchesHub = hubFilter === 'all' || b.hubId === hubFilter;
       const matchesSearch = !query || [
         b.bookingNumber,
         b.id,
         b.customerName,
         b.customerPhone,
-        b.pickupLocation,
-        b.dropLocation,
       ].some((value) => String(value || "").toLowerCase().includes(query));
       const matchesFrom = !dateFrom || pickupDate >= dateFrom;
       const matchesTo = !dateTo || pickupDate <= dateTo;
-      return matchesSearch && matchesFrom && matchesTo;
+      return matchesCity && matchesHub && matchesSearch && matchesFrom && matchesTo;
     });
-  }, [bookings, statusFilter, delaySubFilter, liveMetrics, searchQuery, dateFrom, dateTo]);
+  }, [bookings, statusFilter, cityFilter, hubFilter, delaySubFilter, ongoingSubFilter, prioritySubFilter, liveMetrics, searchQuery, dateFrom, dateTo, isGpsOff, isPriority]);
 
   const sortedRides = useMemo(() => {
     const liveRides = filteredBookings.map((b: any) => {
@@ -823,6 +913,26 @@ export default function ActiveRideDashboard() {
       setTicketRide(null);
   };
 
+  const handleExotelCall = async (phoneNumber: string, type: string) => {
+    try {
+      toast.info(`Initiating call to ${type} (${phoneNumber})...`);
+      const res = await fetch('/api/exotel/call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: phoneNumber, type })
+      });
+      
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(`Call connecting! Your phone will ring shortly.`);
+      } else {
+        toast.error(`Call failed: ${data.error || 'Check Exotel configuration.'}`);
+      }
+    } catch (error) {
+      toast.error("Failed to connect to call server.");
+    }
+  };
+
   const handleExport = () => {
     if (sortedRides.length === 0) {
       toast.error("No rides available to export");
@@ -854,6 +964,16 @@ export default function ActiveRideDashboard() {
     toast.success("Active rides exported");
   };
 
+    const formatEventTime = (isoString: string) => {
+      return new Date(isoString).toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    }
+
   return (
     <div className="flex flex-col xl:flex-row h-screen bg-slate-50 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-100/40 via-purple-50/20 to-emerald-50/30 overflow-hidden relative">
       {/* Decorative Blur Orbs */}
@@ -866,8 +986,18 @@ export default function ActiveRideDashboard() {
          handleRefresh={() => { setIsRefreshing(true); setTimeout(() => setIsRefreshing(false), 500); }}
          statusFilter={statusFilter}
          setStatusFilter={setStatusFilter}
-         searchQuery={searchQuery}
-         setSearchQuery={setSearchQuery}
+         cityFilter={cityFilter}
+         setCityFilter={setCityFilter}
+         hubFilter={hubFilter}
+         setHubFilter={setHubFilter}
+         delaySubFilter={delaySubFilter}
+         setDelaySubFilter={setDelaySubFilter}
+         ongoingSubFilter={ongoingSubFilter}
+         setOngoingSubFilter={setOngoingSubFilter}
+         prioritySubFilter={prioritySubFilter}
+         setPrioritySubFilter={setPrioritySubFilter}
+         cities={cities}
+         hubs={hubs}
          dateFrom={dateFrom}
          setDateFrom={setDateFrom}
          dateTo={dateTo}
@@ -886,7 +1016,10 @@ export default function ActiveRideDashboard() {
            gpsOff: gpsOffCount,
            priority: priorityCount,
            lowSoc: lowSocCount,
+           loginDelay: loginDelayCount,
          }}
+         searchQuery={searchQuery}
+         setSearchQuery={setSearchQuery}
          lastAllocationTime={lastAllocationTime}
          nextAllocationTime={nextAllocationTime}
          isAutoAllocateOn={isAutoAllocateOn}
@@ -967,6 +1100,11 @@ export default function ActiveRideDashboard() {
             const activeTickets = rideTickets.filter((t: any) => t.status !== 'resolved');
 
             const currentReplay = replayState[ride.id];
+            const isPostDispatch = ['dispatched', 'arrived', 'picked_up', 'dropped', 'closed', 'Completed'].includes(ride.originalBooking.status);
+            const liveCarLocations = (isPostDispatch && ride.originalBooking.carId)
+                ? carLocations.filter((loc: any) => loc.carId === ride.originalBooking.carId)
+                : carLocations;
+
             const displayCarLocations = currentReplay?.active ? [{
                 carId: ride.originalBooking.carId || 'mock-car',
                 latitude: currentReplay.lat,
@@ -974,7 +1112,7 @@ export default function ActiveRideDashboard() {
                 heading: (currentReplay.progress * 15) % 360,
                 speed: 40 + (Math.random() * 10),
                 lastUpdated: new Date().toISOString()
-            }] : carLocations;
+            }] : liveCarLocations;
 
             // Spatial Glassmorphism styling
             let borderNormal = 'border-white/60 bg-white/40 backdrop-blur-2xl shadow-[0_8px_32px_-12px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 hover:shadow-[0_12px_40px_-12px_rgba(0,0,0,0.2)] transition-all duration-500 ease-out z-10';
@@ -998,13 +1136,43 @@ export default function ActiveRideDashboard() {
             const rideMetrics = liveMetrics[ride.originalBooking.id] || { distance: 4.2, eta: 12, actualEta: 14, soc: 68 + Math.random() * 20 };
             const estRange = Math.floor((rideMetrics.soc / 100) * 250);
 
-            const pickupPoint = getEstimatedPickupPoint(ride.originalBooking);
-            const dropPoint = getEstimatedDropPoint(ride.originalBooking);
+            let pickupPoint = getEstimatedPickupPoint(ride.originalBooking);
+            let dropPoint = getEstimatedDropPoint(ride.originalBooking);
+
+            if (ride.originalBooking.tripType === 'airport_pickup' && ride.originalBooking.airportId && ride.originalBooking.airportTerminalId) {
+                const terminal = getAirportTerminal(ride.originalBooking.airportId, ride.originalBooking.airportTerminalId);
+                if (terminal?.latitude && terminal?.longitude) {
+                    pickupPoint = { latitude: terminal.latitude, longitude: terminal.longitude };
+                }
+            } else if (ride.originalBooking.tripType === 'airport_drop' && ride.originalBooking.airportId && ride.originalBooking.airportTerminalId) {
+                const terminal = getAirportTerminal(ride.originalBooking.airportId, ride.originalBooking.airportTerminalId);
+                if (terminal?.latitude && terminal?.longitude) {
+                    dropPoint = { latitude: terminal.latitude, longitude: terminal.longitude };
+                }
+            } else if (ride.originalBooking.tripType === 'railway_pickup' && ride.originalBooking.railwayStationId && ride.originalBooking.railwayStationTerminalId) {
+                const terminal = getRailwayStationTerminal(ride.originalBooking.railwayStationId, ride.originalBooking.railwayStationTerminalId);
+                if (terminal?.latitude && terminal?.longitude) {
+                    pickupPoint = { latitude: terminal.latitude, longitude: terminal.longitude };
+                }
+            } else if (ride.originalBooking.tripType === 'railway_drop' && ride.originalBooking.railwayStationId && ride.originalBooking.railwayStationTerminalId) {
+                const terminal = getRailwayStationTerminal(ride.originalBooking.railwayStationId, ride.originalBooking.railwayStationTerminalId);
+                if (terminal?.latitude && terminal?.longitude) {
+                    dropPoint = { latitude: terminal.latitude, longitude: terminal.longitude };
+                }
+            }
+
             const stopPoints = getEstimatedStopPoints(ride.originalBooking).map((stop: any) => ({
               position: [stop.latitude, stop.longitude] as [number, number],
               label: stop.label,
               status: stop.status,
             }));
+
+            // Planned route connecting pickup -> stops -> drop
+            const plannedRoute = [
+              ...(pickupPoint ? [[pickupPoint.latitude, pickupPoint.longitude]] : []),
+              ...stopPoints.map((sp: any) => sp.position),
+              ...(dropPoint ? [[dropPoint.latitude, dropPoint.longitude]] : [])
+            ];
 
             let nextRide = null;
             if (ride.originalBooking.driverId) {
@@ -1083,7 +1251,22 @@ export default function ActiveRideDashboard() {
 
                        {/* Col 4: Route */}
                        <div className="w-full md:w-[18%] flex flex-col justify-center gap-0.5 px-0 md:px-2.5 border-b md:border-b-0 md:border-r border-slate-100 py-1 md:py-0">
-                           <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none mb-0.5">Route</div>
+                           <div className="flex items-center justify-between mb-0.5">
+                               <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Route</div>
+                               <div className="flex items-center gap-1">
+                                   {(ride.originalBooking.tollCharges && ride.originalBooking.tollCharges > 0) ? (
+                                       <div className="text-[8px] font-bold text-orange-600 bg-orange-50 px-1 py-0.5 rounded flex items-center leading-none border border-orange-100" title={`Toll Included: ₹${ride.originalBooking.tollCharges}`}>
+                                           <MapPin className="h-2 w-2 mr-0.5" /> Toll Route
+                                       </div>
+                                   ) : null}
+                                   {(ride.originalBooking.flightNumber || ride.originalBooking.trainNumber) && (
+                                       <div className="text-[9px] font-bold text-slate-600 bg-slate-100 px-1 py-0.5 rounded flex items-center leading-none">
+                                           {ride.originalBooking.tripType?.includes('airport') ? <Plane className="h-2.5 w-2.5 mr-1 text-blue-500" /> : ride.originalBooking.tripType?.includes('railway') ? <Train className="h-2.5 w-2.5 mr-1 text-emerald-500" /> : null}
+                                           {ride.originalBooking.flightNumber || ride.originalBooking.trainNumber}
+                                       </div>
+                                   )}
+                               </div>
+                           </div>
                            <div className="text-[10px] text-slate-800 truncate flex items-center gap-1 leading-tight" title={ride.originalBooking.pickupLocation}>
                                <div className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
                                <span className="truncate">{ride.originalBooking.pickupLocation || 'N/A'}</span>
@@ -1125,7 +1308,7 @@ export default function ActiveRideDashboard() {
                            <div className="text-[10px] text-slate-500 flex items-center gap-1 leading-none mb-0.5">
                                {ride.driverName !== 'Unassigned' ? ride.driverPhone : 'N/A'}
                                {ride.driverName !== 'Unassigned' && ride.driverPhone !== 'N/A' && (
-                                   <Button variant="ghost" size="icon" className="h-5 w-5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-full shrink-0" onClick={(e) => { e.stopPropagation(); window.open(`tel:${ride.driverPhone}`); }}>
+                                   <Button variant="ghost" size="icon" className="h-5 w-5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-full shrink-0" onClick={(e) => { e.stopPropagation(); handleExotelCall(ride.driverPhone, 'Driver'); }}>
                                        <PhoneCall className="h-3 w-3" />
                                    </Button>
                                )}
@@ -1197,19 +1380,9 @@ export default function ActiveRideDashboard() {
                                            e.stopPropagation(); 
                                            setEditRideTarget(ride);
                                            setEditRideData({ 
-                                              customerName: ride.originalBooking.customerName || '',
-                                              customerPhone: ride.originalBooking.customerPhone || '',
-                                              tripType: ride.originalBooking.tripType || '',
-                                              pickupLocation: ride.originalBooking.pickupLocation || '',
-                                              dropLocation: ride.originalBooking.dropLocation || '', 
                                               pickupDate: ride.originalBooking.pickupDate || '',
                                               pickupTime: ride.originalBooking.pickupTime || '',
-                                              remarks: ride.originalBooking.remarks || '',
-                                              estimatedFare: ride.originalBooking.estimatedFare || 0, 
-                                              tollCharges: ride.originalBooking.tollCharges || 0, 
-                                              parkingCharges: ride.originalBooking.parkingCharges || 0, 
-                                              promoDiscount: ride.originalBooking.promoDiscount || 0,
-                                              advancePaid: ride.originalBooking.advancePaid || 0
+                                              remarks: ride.originalBooking.remarks || ''
                                            });
                                            setIsEditDialogOpen(true); 
                                        }}>
@@ -1256,6 +1429,21 @@ export default function ActiveRideDashboard() {
                                                 setIsInvoiceDialogOpen(true);
                                             }}>
                                                 <Banknote className="h-4 w-4 mr-2 text-slate-500" /> View Invoice
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator className="bg-slate-100" />
+                                            <DropdownMenuItem className="cursor-pointer font-medium text-slate-700" onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                setVariationRideTarget(ride);
+                                                setIsVariationDialogOpen(true);
+                                            }}>
+                                                <GitCompare className="h-4 w-4 mr-2 text-slate-500" /> Change & Variations
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem className="cursor-pointer font-medium text-slate-700" onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                setDocsRideTarget(ride);
+                                                setIsDocsDialogOpen(true);
+                                            }}>
+                                                <Paperclip className="h-4 w-4 mr-2 text-slate-500" /> View Documents
                                             </DropdownMenuItem>
                                             <DropdownMenuItem className="text-red-600 focus:text-red-700 focus:bg-red-50 cursor-pointer font-medium" onClick={(e) => { 
                                                 e.stopPropagation(); 
@@ -1544,7 +1732,7 @@ export default function ActiveRideDashboard() {
                                      <MapComponent
                                        key={`map-active-${ride.id}`}
                                        trips={[ride.originalBooking]}
-                                       carLocations={carLocations}
+                                       carLocations={liveCarLocations}
                                        selectedTrip={ride.originalBooking.id}
                                        onSelectTrip={() => {}}
                                        getDriver={getDriver}
@@ -1553,9 +1741,11 @@ export default function ActiveRideDashboard() {
                                        hoveredDriverId={hoveredDriverId}
                                        assigningRideId={assigningRideId}
                                        onAssignDriver={handleAssignDriverFromMap}
-                                       pickupPoint={[pickupPoint.latitude, pickupPoint.longitude]}
-                                       dropPoint={[dropPoint.latitude, dropPoint.longitude]}
+                                       pickupPoint={pickupPoint ? [pickupPoint.latitude, pickupPoint.longitude] : null}
+                                       dropPoint={dropPoint ? [dropPoint.latitude, dropPoint.longitude] : null}
                                        stopPoints={stopPoints}
+                                         plannedRoute={plannedRoute}
+                                         showPlannedRoute={true}
                                      />
                                    </div>
                                    
@@ -1593,8 +1783,12 @@ export default function ActiveRideDashboard() {
                                         <p className="mt-1 font-bold text-slate-800">₹ {(ride.originalBooking.estimatedFare || 0).toFixed(2)}</p>
                                     </div>
                                     <div>
-                                        <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Toll/Parking</p>
-                                        <p className="mt-1 font-bold text-slate-800">+ ₹ {((ride.originalBooking.tollCharges || 0) + (ride.originalBooking.parkingCharges || 0)).toFixed(2)}</p>
+                                        <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Tolls</p>
+                                        <p className="mt-1 font-bold text-orange-600">+ ₹ {(ride.originalBooking.tollCharges || 0).toFixed(2)}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Parking</p>
+                                        <p className="mt-1 font-bold text-slate-800">+ ₹ {(ride.originalBooking.parkingCharges || 0).toFixed(2)}</p>
                                     </div>
                                     <div>
                                         <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">GST</p>
@@ -2174,9 +2368,11 @@ export default function ActiveRideDashboard() {
                                              assigningRideId={assigningRideId}
                                              onAssignDriver={handleAssignDriverFromMap}
                                              hoveredDriverId={hoveredDriverId}
-                                             pickupPoint={[pickupPoint.latitude, pickupPoint.longitude]}
-                                             dropPoint={[dropPoint.latitude, dropPoint.longitude]}
+                                             pickupPoint={pickupPoint ? [pickupPoint.latitude, pickupPoint.longitude] : null}
+                                             dropPoint={dropPoint ? [dropPoint.latitude, dropPoint.longitude] : null}
                                              stopPoints={stopPoints}
+                                             plannedRoute={plannedRoute}
+                                             showPlannedRoute={true}
                                            />
                                        </div>
                                    </div>
@@ -2455,25 +2651,8 @@ export default function ActiveRideDashboard() {
           </DialogHeader>
           
           <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
-             <Tabs defaultValue="trip" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 mb-6 bg-slate-100/50 p-1 rounded-xl">
-                    <TabsTrigger value="trip" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">Trip Details</TabsTrigger>
-                    <TabsTrigger value="customer" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">Customer Info</TabsTrigger>
-                    <TabsTrigger value="fare" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">Fare & Payment</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="trip" className="space-y-4 mt-0">
+             <div className="space-y-4 mt-0">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Pickup Location</Label>
-                          <Input value={editRideData.pickupLocation} onChange={(e) => setEditRideData({ ...editRideData, pickupLocation: e.target.value })} className="rounded-xl" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Drop Location</Label>
-                          <Input value={editRideData.dropLocation} onChange={(e) => setEditRideData({ ...editRideData, dropLocation: e.target.value })} className="rounded-xl" />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                         <div className="space-y-2">
                           <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Pickup Date</Label>
                           <Input type="date" value={editRideData.pickupDate} onChange={(e) => setEditRideData({ ...editRideData, pickupDate: e.target.value })} className="rounded-xl" />
@@ -2482,127 +2661,73 @@ export default function ActiveRideDashboard() {
                           <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Pickup Time</Label>
                           <Input type="time" value={editRideData.pickupTime} onChange={(e) => setEditRideData({ ...editRideData, pickupTime: e.target.value })} className="rounded-xl" />
                         </div>
-                        <div className="space-y-2 col-span-2 md:col-span-1">
-                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Trip Type</Label>
-                          <Select value={editRideData.tripType} onValueChange={(v) => setEditRideData({ ...editRideData, tripType: v })}>
-                             <SelectTrigger className="rounded-xl"><SelectValue placeholder="Trip Type" /></SelectTrigger>
-                             <SelectContent className="rounded-xl">
-                                <SelectItem value="city_ride">City Ride</SelectItem>
-                                <SelectItem value="airport_pickup">Airport Pickup</SelectItem>
-                                <SelectItem value="airport_drop">Airport Drop</SelectItem>
-                                <SelectItem value="rental">Rental</SelectItem>
-                                <SelectItem value="outstation">Outstation</SelectItem>
-                             </SelectContent>
-                          </Select>
-                        </div>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Remarks / Notes</Label>
                       <Textarea rows={2} value={editRideData.remarks} onChange={(e) => setEditRideData({ ...editRideData, remarks: e.target.value })} className="rounded-xl resize-none" placeholder="Any special instructions..." />
                     </div>
-                </TabsContent>
-
-                <TabsContent value="customer" className="space-y-4 mt-0">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Customer Name</Label>
-                          <Input value={editRideData.customerName} onChange={(e) => setEditRideData({ ...editRideData, customerName: e.target.value })} className="rounded-xl" placeholder="Full name" />
+                    <div className="space-y-2">
+                      <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Booking Edit History</Label>
+                      <ScrollArea className="h-48 rounded-xl border p-3">
+                        <div className="space-y-4">
+                          {(editRideTarget?.originalBooking?.eventLog || []).length === 0 ? (
+                            <p className="text-center text-slate-500 py-8 text-sm">No history found</p>
+                          ) : (
+                            [...(editRideTarget?.originalBooking?.eventLog || [])].reverse().map((event: any, index: number) => (
+                              <div key={event.id} className="flex gap-3 relative">
+                                {index < (editRideTarget?.originalBooking?.eventLog || []).length - 1 && (
+                                  <div className="absolute left-[11px] top-6 w-0.5 h-full bg-slate-200" />
+                                )}
+                                <div className="relative z-10">
+                                  <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center">
+                                    <Clock className="h-3 w-3 text-slate-500" />
+                                  </div>
+                                </div>
+                                <div className="flex-1 pb-4">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-medium text-sm capitalize text-slate-700">
+                                      {event.event.replace(/_/g, " ")}
+                                    </span>
+                                    <span className="text-xs text-slate-400">
+                                      {formatEventTime(event.performedAt)}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-slate-500 mt-1">
+                                    {event.fromStatus && (
+                                      <span>
+                                        {event.fromStatus.replace(/_/g, " ")} → {event.toStatus.replace(/_/g, " ")}
+                                      </span>
+                                    )}
+                                    {!event.fromStatus && <span>Status: {event.toStatus.replace(/_/g, " ")}</span>}
+                                  </p>
+                                  <p className="text-xs text-slate-500 mt-1">
+                                    By: <span className="font-medium text-slate-600">{event.performedBy}</span>
+                                  </p>
+                                  {event.notes && (
+                                    <p className="text-xs text-slate-500 mt-1 bg-slate-100 rounded p-2">
+                                      {event.notes}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ))
+                          )}
                         </div>
-                        <div className="space-y-2">
-                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Customer Phone</Label>
-                          <Input value={editRideData.customerPhone} onChange={(e) => setEditRideData({ ...editRideData, customerPhone: e.target.value })} className="rounded-xl" placeholder="+91..." />
-                        </div>
+                      </ScrollArea>
                     </div>
-                    <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 flex items-start gap-2 mt-4">
-                        <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                        <p className="text-xs text-amber-800 font-medium">Changing customer details here will only update this specific booking. The master customer profile will remain unchanged.</p>
-                    </div>
-                </TabsContent>
-
-                <TabsContent value="fare" className="space-y-4 mt-0">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Base Fare (₹)</Label>
-                          <Input type="number" value={editRideData.estimatedFare === 0 ? "" : editRideData.estimatedFare} onChange={(e) => setEditRideData({ ...editRideData, estimatedFare: parseFloat(e.target.value) || 0 })} className="rounded-xl font-bold" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Discount (₹)</Label>
-                          <Input type="number" value={editRideData.promoDiscount === 0 ? "" : editRideData.promoDiscount} onChange={(e) => setEditRideData({ ...editRideData, promoDiscount: parseFloat(e.target.value) || 0 })} className="rounded-xl text-green-600 font-bold" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Toll Charges (₹)</Label>
-                          <Input type="number" value={editRideData.tollCharges === 0 ? "" : editRideData.tollCharges} onChange={(e) => setEditRideData({ ...editRideData, tollCharges: parseFloat(e.target.value) || 0 })} className="rounded-xl" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Parking Charges (₹)</Label>
-                          <Input type="number" value={editRideData.parkingCharges === 0 ? "" : editRideData.parkingCharges} onChange={(e) => setEditRideData({ ...editRideData, parkingCharges: parseFloat(e.target.value) || 0 })} className="rounded-xl" />
-                        </div>
-                        <div className="space-y-2 col-span-2">
-                          <Label className="text-slate-700 font-bold text-xs uppercase tracking-wider">Advance Paid (₹)</Label>
-                          <Input type="number" value={editRideData.advancePaid === 0 ? "" : editRideData.advancePaid} onChange={(e) => setEditRideData({ ...editRideData, advancePaid: parseFloat(e.target.value) || 0 })} className="rounded-xl" />
-                        </div>
-                    </div>
-
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mt-4 shadow-sm">
-                       <h4 className="font-bold text-slate-800 text-sm mb-3 border-b border-slate-200 pb-2 flex items-center gap-2"><Banknote className="h-4 w-4 text-blue-500" /> Live Fare Calculation</h4>
-                       <div className="space-y-2 text-sm">
-                          <div className="flex justify-between">
-                              <span className="text-slate-500">Base Fare</span>
-                              <span className="font-medium">₹ {editRideData.estimatedFare.toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                              <span className="text-slate-500">Toll & Parking</span>
-                              <span className="font-medium">+ ₹ {(editRideData.tollCharges + editRideData.parkingCharges).toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between text-green-600">
-                              <span>Discount</span>
-                              <span>- ₹ {editRideData.promoDiscount.toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                              <span className="text-slate-500">Taxes ({gstConfig ? gstConfig.cgstRate + gstConfig.sgstRate : 5}% GST)</span>
-                              <span className="font-medium">+ ₹ {((Math.max(0, editRideData.estimatedFare + editRideData.tollCharges + editRideData.parkingCharges - editRideData.promoDiscount)) * ((gstConfig ? gstConfig.cgstRate + gstConfig.sgstRate : 5) / 100)).toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between font-black text-lg pt-2 border-t border-slate-200 mt-2">
-                              <span>Grand Total</span>
-                              <span className="text-blue-700">₹ {((Math.max(0, editRideData.estimatedFare + editRideData.tollCharges + editRideData.parkingCharges - editRideData.promoDiscount)) * (1 + (gstConfig ? gstConfig.cgstRate + gstConfig.sgstRate : 5) / 100)).toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between font-bold text-sm pt-2 text-destructive">
-                              <span>Balance Due</span>
-                              <span>₹ {Math.max(0, ((Math.max(0, editRideData.estimatedFare + editRideData.tollCharges + editRideData.parkingCharges - editRideData.promoDiscount)) * (1 + (gstConfig ? gstConfig.cgstRate + gstConfig.sgstRate : 5) / 100)) - editRideData.advancePaid).toFixed(2)}</span>
-                          </div>
-                       </div>
-                    </div>
-                </TabsContent>
-             </Tabs>
+                </div>
           </div>
           
           <DialogFooter className="px-6 py-4 border-t bg-slate-50 mt-auto">
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="rounded-xl">Cancel</Button>
             <Button onClick={() => {
                 if (editRideTarget) {
-                    const taxable = Math.max(0, editRideData.estimatedFare + editRideData.tollCharges + editRideData.parkingCharges - editRideData.promoDiscount);
-                    const gstRate = gstConfig ? gstConfig.cgstRate + gstConfig.sgstRate : 5;
-                    const newGst = (taxable * gstRate) / 100;
-                    const newGrandTotal = taxable + newGst;
-
                     updateBooking(editRideTarget.originalBooking.id, {
-                        customerName: editRideData.customerName,
-                        customerPhone: editRideData.customerPhone,
-                        tripType: editRideData.tripType,
-                        pickupLocation: editRideData.pickupLocation,
-                        dropLocation: editRideData.dropLocation,
                         pickupDate: editRideData.pickupDate,
                         pickupTime: editRideData.pickupTime,
                         remarks: editRideData.remarks,
-                        estimatedFare: editRideData.estimatedFare,
-                        tollCharges: editRideData.tollCharges,
-                        parkingCharges: editRideData.parkingCharges,
-                        promoDiscount: editRideData.promoDiscount,
-                        advancePaid: editRideData.advancePaid,
-                        gstAmount: newGst,
-                        grandTotal: newGrandTotal
                     });
-                    toast.success("Booking details and fare updated successfully!");
+                    toast.success("Booking details updated successfully!");
                     setIsEditDialogOpen(false);
                     setEditRideTarget(null);
                 }
@@ -2718,6 +2843,104 @@ export default function ActiveRideDashboard() {
               </div>
             )}
           </ScrollArea>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Variation Dialog */}
+      <Dialog open={isVariationDialogOpen} onOpenChange={setIsVariationDialogOpen}>
+        <DialogContent className="sm:max-w-2xl rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-slate-800">Trip Variations</DialogTitle>
+            <DialogDescription className="text-slate-500">
+              Estimated vs Actuals for booking <strong className="text-slate-700">{variationRideTarget?.bookingId}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 text-sm">
+                  <div className="font-bold text-slate-500 uppercase text-[10px]">Parameter</div>
+                  <div className="font-bold text-slate-500 uppercase text-[10px]">Estimated (At Booking)</div>
+                  <div className="font-bold text-slate-500 uppercase text-[10px]">Actual (At Closing)</div>
+                  <div className="font-bold text-slate-500 uppercase text-[10px]">Variation</div>
+
+                  {/* KM */}
+                  <div className="font-bold text-slate-700">Distance (KM)</div>
+                  <div>{variationRideTarget?.originalBooking?.estimatedKm || 0} km</div>
+                  <div>{variationRideTarget?.originalBooking?.actualKm || variationRideTarget?.originalBooking?.estimatedKm || 0} km</div>
+                  <div className="text-blue-600 font-bold">
+                      {((variationRideTarget?.originalBooking?.actualKm || variationRideTarget?.originalBooking?.estimatedKm || 0) - (variationRideTarget?.originalBooking?.estimatedKm || 0))} km
+                  </div>
+
+                  {/* Fare */}
+                  <div className="font-bold text-slate-700">Base Fare</div>
+                  <div>₹ {variationRideTarget?.originalBooking?.estimatedFare || 0}</div>
+                  <div>₹ {variationRideTarget?.originalBooking?.actualFare || variationRideTarget?.originalBooking?.estimatedFare || 0}</div>
+                  <div className="text-blue-600 font-bold">
+                      ₹ {((variationRideTarget?.originalBooking?.actualFare || variationRideTarget?.originalBooking?.estimatedFare || 0) - (variationRideTarget?.originalBooking?.estimatedFare || 0))}
+                  </div>
+
+                  {/* Extras */}
+                  <div className="font-bold text-slate-700">Extra Charges</div>
+                  <div>₹ 0</div>
+                  <div>₹ {variationRideTarget?.originalBooking?.extraCharges || 0}</div>
+                  <div className="text-amber-600 font-bold">
+                      + ₹ {variationRideTarget?.originalBooking?.extraCharges || 0}
+                  </div>
+                  
+                  {/* Tolls & Parking */}
+                  <div className="font-bold text-slate-700">Tolls & Parking</div>
+                  <div>₹ 0</div>
+                  <div>₹ {(variationRideTarget?.originalBooking?.tollCharges || 0) + (variationRideTarget?.originalBooking?.parkingCharges || 0)}</div>
+                  <div className="text-amber-600 font-bold">
+                      + ₹ {(variationRideTarget?.originalBooking?.tollCharges || 0) + (variationRideTarget?.originalBooking?.parkingCharges || 0)}
+                  </div>
+              </div>
+              
+              <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                  <p className="text-xs text-amber-800 font-medium">Variations are calculated automatically when the driver closes the trip and inputs actual KM and extra charges.</p>
+              </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsVariationDialogOpen(false)} className="rounded-xl">Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Documents Dialog */}
+      <Dialog open={isDocsDialogOpen} onOpenChange={setIsDocsDialogOpen}>
+        <DialogContent className="sm:max-w-2xl rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-slate-800">Uploaded Documents</DialogTitle>
+            <DialogDescription className="text-slate-500">
+              Documents uploaded by driver or team for booking <strong className="text-slate-700">{docsRideTarget?.bookingId}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 py-4">
+              {/* Mocking documents */}
+              <div className="border border-slate-200 rounded-xl p-2 flex flex-col items-center justify-center gap-2 hover:bg-slate-50 cursor-pointer transition-colors">
+                  <div className="h-24 w-full bg-slate-100 rounded-lg flex items-center justify-center">
+                      <FileImage className="h-8 w-8 text-slate-400" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-700">Signed Duty Slip</span>
+                  <span className="text-[10px] text-slate-500">Uploaded 2 hours ago</span>
+              </div>
+              <div className="border border-slate-200 rounded-xl p-2 flex flex-col items-center justify-center gap-2 hover:bg-slate-50 cursor-pointer transition-colors">
+                  <div className="h-24 w-full bg-slate-100 rounded-lg flex items-center justify-center">
+                      <FileImage className="h-8 w-8 text-slate-400" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-700">Toll Receipt</span>
+                  <span className="text-[10px] text-slate-500">Uploaded 1 hour ago</span>
+              </div>
+              <div className="border border-slate-200 border-dashed rounded-xl p-2 flex flex-col items-center justify-center gap-2 hover:bg-slate-50 cursor-pointer transition-colors opacity-70">
+                  <div className="h-24 w-full rounded-lg flex items-center justify-center">
+                      <Plus className="h-8 w-8 text-slate-400" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-700">Upload Document</span>
+              </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDocsDialogOpen(false)} className="rounded-xl">Close</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       </div>

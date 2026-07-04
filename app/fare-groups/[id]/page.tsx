@@ -3,7 +3,7 @@
 import { useState, use, useEffect } from 'react'
 import { useAdmin, defaultPeakHour, defaultNightCharge } from '@/lib/admin-context'
 import { 
-  AirportFareConfig, RentalFareConfig, CityRideFareConfig, OutstationFareConfig,
+  AirportFareConfig, RailwayFareConfig, RentalFareConfig, CityRideFareConfig, OutstationFareConfig,
   FareCalculationType, SlabConfig, PeakHourConfig, NightChargeConfig, ChargeType, RentalType, OutstationType,
   RouteConfig, PreBookingCharges
 } from '@/lib/types'
@@ -49,7 +49,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Separator } from '@/components/ui/separator'
-import { ArrowLeft, Plus, Pencil, Trash2, Plane, Car, MapPin, Navigation, X, Settings } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, Plane, Train, Car, MapPin, Navigation, X, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import Link from 'next/link'
@@ -128,14 +128,14 @@ function FareGroupSettingsTab({ fareGroup, cities, onUpdate }: { fareGroup: any,
 export default function FareConfigPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
-  const { fareGroups, updateFareGroup, cities, airports, carCategories, getCity, getAirport, getAirportTerminal, getCarCategory } = useAdmin()
+  const { fareGroups, updateFareGroup, cities, airports, railwayStations, carCategories, getCity, getAirport, getAirportTerminal, getRailwayStation, getRailwayStationTerminal, getCarCategory } = useAdmin()
   
   const fareGroup = fareGroups.find(g => g.id === id)
   
   const [activeTab, setActiveTab] = useState('airport')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [dialogType, setDialogType] = useState<'airport' | 'rental' | 'city' | 'outstation'>('airport')
-  const [editingFare, setEditingFare] = useState<AirportFareConfig | RentalFareConfig | CityRideFareConfig | OutstationFareConfig | null>(null)
+  const [dialogType, setDialogType] = useState<'airport' | 'railway' | 'rental' | 'city' | 'outstation'>('airport')
+  const [editingFare, setEditingFare] = useState<AirportFareConfig | RailwayFareConfig | RentalFareConfig | CityRideFareConfig | OutstationFareConfig | null>(null)
 
   if (!fareGroup) {
     return (
@@ -151,23 +151,26 @@ export default function FareConfigPage({ params }: { params: Promise<{ id: strin
   const activeCities = cities.filter(c => c.isActive)
   const activeCategories = carCategories.filter(c => c.isActive)
 
-  const handleAddFare = (type: 'airport' | 'rental' | 'city' | 'outstation') => {
+  const handleAddFare = (type: 'airport' | 'railway' | 'rental' | 'city' | 'outstation') => {
     setDialogType(type)
     setEditingFare(null)
     setIsDialogOpen(true)
   }
 
-  const handleEditFare = (fare: AirportFareConfig | RentalFareConfig | CityRideFareConfig | OutstationFareConfig, type: 'airport' | 'rental' | 'city' | 'outstation') => {
+  const handleEditFare = (fare: AirportFareConfig | RailwayFareConfig | RentalFareConfig | CityRideFareConfig | OutstationFareConfig, type: 'airport' | 'railway' | 'rental' | 'city' | 'outstation') => {
     setDialogType(type)
     setEditingFare(fare)
     setIsDialogOpen(true)
   }
 
-  const handleDeleteFare = (fareId: string, type: 'airport' | 'rental' | 'city' | 'outstation') => {
+  const handleDeleteFare = (fareId: string, type: 'airport' | 'railway' | 'rental' | 'city' | 'outstation') => {
     let updatedFares
     switch (type) {
       case 'airport':
         updatedFares = { airportFares: fareGroup.airportFares.filter(f => f.id !== fareId) }
+        break
+      case 'railway':
+        updatedFares = { railwayFares: fareGroup.railwayFares?.filter(f => f.id !== fareId) || [] }
         break
       case 'rental':
         updatedFares = { rentalFares: fareGroup.rentalFares.filter(f => f.id !== fareId) }
@@ -183,7 +186,7 @@ export default function FareConfigPage({ params }: { params: Promise<{ id: strin
     toast.success('Fare configuration deleted')
   }
 
-  const handleSaveFare = (fare: AirportFareConfig | RentalFareConfig | CityRideFareConfig | OutstationFareConfig) => {
+  const handleSaveFare = (fare: AirportFareConfig | RailwayFareConfig | RentalFareConfig | CityRideFareConfig | OutstationFareConfig) => {
     let updatedFares
     
     switch (dialogType) {
@@ -193,6 +196,14 @@ export default function FareConfigPage({ params }: { params: Promise<{ id: strin
           updatedFares = { airportFares: fareGroup.airportFares.map(f => f.id === editingFare.id ? airportFare : f) }
         } else {
           updatedFares = { airportFares: [...fareGroup.airportFares, airportFare] }
+        }
+        break
+      case 'railway':
+        const railwayFare = fare as RailwayFareConfig
+        if (editingFare) {
+          updatedFares = { railwayFares: (fareGroup.railwayFares || []).map(f => f.id === editingFare.id ? railwayFare : f) }
+        } else {
+          updatedFares = { railwayFares: [...(fareGroup.railwayFares || []), railwayFare] }
         }
         break
       case 'rental':
@@ -250,6 +261,10 @@ export default function FareConfigPage({ params }: { params: Promise<{ id: strin
             <Plane className="h-4 w-4" />
             Airport
           </TabsTrigger>
+          <TabsTrigger value="railway" className="flex items-center gap-2">
+            <Train className="h-4 w-4" />
+            Railway
+          </TabsTrigger>
           <TabsTrigger value="rental" className="flex items-center gap-2">
             <Car className="h-4 w-4" />
             Rentals
@@ -280,6 +295,21 @@ export default function FareConfigPage({ params }: { params: Promise<{ id: strin
             onAdd={() => handleAddFare('airport')}
             onEdit={(fare) => handleEditFare(fare, 'airport')}
             onDelete={(id) => handleDeleteFare(id, 'airport')}
+          />
+        </TabsContent>
+
+        <TabsContent value="railway" className="mt-6">
+          <RailwayFaresTab
+            fares={fareGroup.railwayFares || []}
+            cities={activeCities}
+            categories={activeCategories}
+            getCity={getCity}
+            getRailwayStation={getRailwayStation}
+            getRailwayStationTerminal={getRailwayStationTerminal}
+            getCarCategory={getCarCategory}
+            onAdd={() => handleAddFare('railway')}
+            onEdit={(fare) => handleEditFare(fare, 'railway')}
+            onDelete={(id) => handleDeleteFare(id, 'railway')}
           />
         </TabsContent>
 
@@ -335,6 +365,7 @@ export default function FareConfigPage({ params }: { params: Promise<{ id: strin
         cities={activeCities}
         categories={activeCategories}
         airports={airports.filter(airport => airport.isActive)}
+        railwayStations={railwayStations.filter(st => st.isActive)}
         editingFare={editingFare}
         onSave={handleSaveFare}
       />
@@ -486,6 +517,113 @@ function AirportFaresTab({
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// Railway Fares Tab Component
+function RailwayFaresTab({
+  fares, cities, categories, getCity, getRailwayStation, getRailwayStationTerminal, getCarCategory, onAdd, onEdit, onDelete
+}: {
+  fares: RailwayFareConfig[]
+  cities: { id: string; name: string }[]
+  categories: { id: string; name: string }[]
+  getCity: (id: string) => { name: string } | undefined
+  getRailwayStation: (id: string) => { name: string; code: string } | undefined
+  getRailwayStationTerminal: (stationId: string, terminalId: string) => { name: string; code: string } | undefined
+  getCarCategory: (id: string) => { name: string } | undefined
+  onAdd: () => void
+  onEdit: (fare: RailwayFareConfig) => void
+  onDelete: (id: string) => void
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Railway Pickup & Drop Fares</CardTitle>
+            <CardDescription>Configure railway station and terminal specific fares</CardDescription>
+          </div>
+          <Button onClick={onAdd} disabled={cities.length === 0 || categories.length === 0}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Railway Fare
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {cities.length === 0 || categories.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            Please add cities and car categories first
+          </div>
+        ) : fares.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            No railway fares configured yet
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>City</TableHead>
+                <TableHead>Station / Terminal</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Calculation</TableHead>
+                <TableHead>Base Fare</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {fares.map((fare) => (
+                <TableRow key={fare.id}>
+                  <TableCell>{getCity(fare.cityId)?.name || '-'}</TableCell>
+                  <TableCell>
+                    {fare.railwayStationId ? (
+                      <div>
+                        <div className="font-medium">{getRailwayStation(fare.railwayStationId)?.code || '-'}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {fare.railwayStationTerminalIds?.length
+                            ? fare.railwayStationTerminalIds
+                                .map((terminalId) => getRailwayStationTerminal(fare.railwayStationId!, terminalId)?.code || terminalId)
+                                .join(', ')
+                            : fare.railwayStationTerminalId
+                              ? getRailwayStationTerminal(fare.railwayStationId, fare.railwayStationTerminalId)?.name || '-'
+                              : 'All terminals'}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Any station</span>
+                    )}
+                  </TableCell>
+                  <TableCell>{getCarCategory(fare.carCategoryId)?.name || '-'}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">
+                      {fare.type === 'pickup' ? 'Pickup' : fare.type === 'drop' ? 'Drop' : 'Both'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">{fare.calculationType}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    {fare.calculationType === 'fixed' && `Rs. ${fare.fixedFare}`}
+                    {fare.calculationType === 'per_km' && `Rs. ${fare.perKmRate}/km`}
+                    {fare.calculationType === 'slab' && `${fare.slabs?.length || 0} slabs`}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button variant="ghost" size="icon" onClick={() => onEdit(fare)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => onDelete(fare.id)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -820,16 +958,17 @@ function OutstationFaresTab({
 
 // Fare Configuration Dialog
 function FareConfigDialog({
-  isOpen, onClose, type, cities, categories, airports, editingFare, onSave
+  isOpen, onClose, type, cities, categories, airports, railwayStations, editingFare, onSave
 }: {
   isOpen: boolean
   onClose: () => void
-  type: 'airport' | 'rental' | 'city' | 'outstation'
+  type: 'airport' | 'railway' | 'rental' | 'city' | 'outstation'
   cities: { id: string; name: string }[]
   categories: { id: string; name: string }[]
   airports: { id: string; cityId: string; name: string; code: string; terminals: { id: string; name: string; code: string; isActive: boolean }[] }[]
-  editingFare: AirportFareConfig | RentalFareConfig | CityRideFareConfig | OutstationFareConfig | null
-  onSave: (fare: AirportFareConfig | RentalFareConfig | CityRideFareConfig | OutstationFareConfig) => void
+  railwayStations: { id: string; cityId: string; name: string; code: string; terminals: { id: string; name: string; code: string; isActive: boolean }[] }[]
+  editingFare: AirportFareConfig | RailwayFareConfig | RentalFareConfig | CityRideFareConfig | OutstationFareConfig | null
+  onSave: (fare: AirportFareConfig | RailwayFareConfig | RentalFareConfig | CityRideFareConfig | OutstationFareConfig) => void
 }) {
   const { cities: allCities, getCity } = useAdmin()
   const generateId = () => Math.random().toString(36).substring(2, 11)
@@ -859,6 +998,31 @@ function FareConfigDialog({
   const airportOptions = airports.filter(airport => airport.cityId === airportForm.cityId)
   const selectedAirport = airports.find(airport => airport.id === airportForm.airportId)
   const terminalOptions = selectedAirport?.terminals.filter(terminal => terminal.isActive) || []
+
+  // Railway fare state
+  const [railwayForm, setRailwayForm] = useState<Partial<RailwayFareConfig>>({
+    cityId: '',
+    railwayStationId: undefined,
+    railwayStationTerminalId: undefined,
+    railwayStationTerminalIds: [],
+    carCategoryId: '',
+    type: 'pickup',
+    calculationType: 'fixed',
+    fixedFare: 300,
+    perKmRate: 15,
+    baseFare: 50,
+    minimumFare: 150,
+    waitingChargePerMin: 2,
+    freeWaitingMinutes: 0,
+    peakHour: { ...defaultPeakHour },
+    nightCharge: { ...defaultNightCharge },
+    shortNoticeCharge: { ...defaultShortNoticeCharge },
+    slabs: [],
+    preBookingCharges: { ...defaultPreBookingCharges },
+  })
+  const railwayOptions = railwayStations.filter(station => station.cityId === railwayForm.cityId)
+  const selectedRailway = railwayStations.find(station => station.id === railwayForm.railwayStationId)
+  const railwayTerminalOptions = selectedRailway?.terminals.filter(terminal => terminal.isActive) || []
 
   // Rental fare state
   const [rentalForm, setRentalForm] = useState<Partial<RentalFareConfig> & { minAdvanceBookingHours?: number }>({
@@ -935,6 +1099,18 @@ function FareConfigDialog({
               minAdvanceBookingHours: (editingFare as any).minAdvanceBookingHours,
             })
             break
+          case 'railway':
+            setRailwayForm({
+              ...(editingFare as RailwayFareConfig),
+              railwayStationTerminalIds:
+                (editingFare as RailwayFareConfig).railwayStationTerminalIds ||
+                ((editingFare as RailwayFareConfig).railwayStationTerminalId ? [(editingFare as RailwayFareConfig).railwayStationTerminalId!] : []),
+              freeWaitingMinutes: (editingFare as RailwayFareConfig).freeWaitingMinutes || 0,
+              preBookingCharges: (editingFare as RailwayFareConfig).preBookingCharges || { ...defaultPreBookingCharges },
+              shortNoticeCharge: (editingFare as any).shortNoticeCharge || { ...defaultShortNoticeCharge },
+              minAdvanceBookingHours: (editingFare as any).minAdvanceBookingHours,
+            })
+            break
           case 'rental':
             setRentalForm({
               ...(editingFare as RentalFareConfig),
@@ -988,6 +1164,26 @@ function FareConfigDialog({
           slabs: [],
           preBookingCharges: { ...defaultPreBookingCharges },
           minAdvanceBookingHours: undefined,
+        })
+        setRailwayForm({
+          cityId: '',
+          railwayStationId: undefined,
+          railwayStationTerminalId: undefined,
+          railwayStationTerminalIds: [],
+          carCategoryId: '',
+          type: 'pickup',
+          calculationType: 'fixed',
+          fixedFare: 300,
+          perKmRate: 15,
+          baseFare: 50,
+          minimumFare: 150,
+          waitingChargePerMin: 2,
+          freeWaitingMinutes: 0,
+          peakHour: { ...defaultPeakHour },
+          nightCharge: { ...defaultNightCharge },
+          shortNoticeCharge: { ...defaultShortNoticeCharge },
+          slabs: [],
+          preBookingCharges: { ...defaultPreBookingCharges },
         })
         setRentalForm({
           cityId: '',
@@ -1060,6 +1256,17 @@ function FareConfigDialog({
           airportTerminalId: airportForm.airportTerminalIds[0],
           id: editingFare?.id || generateId(),
         } as AirportFareConfig)
+        break
+      case 'railway':
+        if (!railwayForm.railwayStationId || !railwayForm.railwayStationTerminalIds?.length) {
+          toast.error('Please select railway station and at least one terminal')
+          return
+        }
+        onSave({
+          ...railwayForm,
+          railwayStationTerminalId: railwayForm.railwayStationTerminalIds[0],
+          id: editingFare?.id || generateId(),
+        } as RailwayFareConfig)
         break
       case 'rental':
         onSave({
@@ -1663,7 +1870,7 @@ function FareConfigDialog({
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {editingFare ? 'Edit' : 'Add'} {type === 'airport' ? 'Airport' : type === 'rental' ? 'Rental' : type === 'city' ? 'City Ride' : 'Outstation'} Fare
+            {editingFare ? 'Edit' : 'Add'} {type === 'airport' ? 'Airport' : type === 'railway' ? 'Railway' : type === 'rental' ? 'Rental' : type === 'city' ? 'City Ride' : 'Outstation'} Fare
           </DialogTitle>
           <DialogDescription>
             Configure fare settings for this service type
@@ -1677,10 +1884,11 @@ function FareConfigDialog({
               <Field>
                 <FieldLabel>City</FieldLabel>
                 <Select
-                  value={type === 'airport' ? airportForm.cityId : type === 'rental' ? rentalForm.cityId : type === 'city' ? cityForm.cityId : outstationForm.cityId}
+                  value={type === 'airport' ? airportForm.cityId : type === 'railway' ? railwayForm.cityId : type === 'rental' ? rentalForm.cityId : type === 'city' ? cityForm.cityId : outstationForm.cityId}
                   onValueChange={(value) => {
                     switch (type) {
                       case 'airport': setAirportForm(f => ({ ...f, cityId: value, airportId: undefined, airportTerminalId: undefined })); break
+                      case 'railway': setRailwayForm(f => ({ ...f, cityId: value, railwayStationId: undefined, railwayStationTerminalId: undefined })); break
                       case 'rental': setRentalForm(f => ({ ...f, cityId: value })); break
                       case 'city': setCityForm(f => ({ ...f, cityId: value })); break
                       case 'outstation': setOutstationForm(f => ({ ...f, cityId: value })); break
@@ -1700,10 +1908,11 @@ function FareConfigDialog({
               <Field>
                 <FieldLabel>Car Category</FieldLabel>
                 <Select
-                  value={type === 'airport' ? airportForm.carCategoryId : type === 'rental' ? rentalForm.carCategoryId : type === 'city' ? cityForm.carCategoryId : outstationForm.carCategoryId}
+                  value={type === 'airport' ? airportForm.carCategoryId : type === 'railway' ? railwayForm.carCategoryId : type === 'rental' ? rentalForm.carCategoryId : type === 'city' ? cityForm.carCategoryId : outstationForm.carCategoryId}
                   onValueChange={(value) => {
                     switch (type) {
                       case 'airport': setAirportForm(f => ({ ...f, carCategoryId: value })); break
+                      case 'railway': setRailwayForm(f => ({ ...f, carCategoryId: value })); break
                       case 'rental': setRentalForm(f => ({ ...f, carCategoryId: value })); break
                       case 'city': setCityForm(f => ({ ...f, carCategoryId: value })); break
                       case 'outstation': setOutstationForm(f => ({ ...f, carCategoryId: value })); break
@@ -1774,6 +1983,66 @@ function FareConfigDialog({
                                       airportTerminalIds: next,
                                       airportTerminalId: next[0],
                                     }
+                                  })
+                                }}
+                              />
+                              <span>{terminal.name} ({terminal.code})</span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </Field>
+              </FieldGroup>
+            )}
+
+            {type === 'railway' && (
+              <FieldGroup className="grid grid-cols-2 gap-4">
+                <Field>
+                  <FieldLabel>Railway Station</FieldLabel>
+                  <Select
+                    value={railwayForm.railwayStationId || ''}
+                    onValueChange={(value) => setRailwayForm(f => ({ ...f, railwayStationId: value, railwayStationTerminalId: undefined, railwayStationTerminalIds: [] }))}
+                    disabled={!railwayForm.cityId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select station" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {railwayOptions.map(station => (
+                        <SelectItem key={station.id} value={station.id}>
+                          {station.name} ({station.code})
+                        </SelectItem>
+                      ))}
+                      {railwayForm.cityId && railwayOptions.length === 0 && (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                          No active stations configured for this city
+                        </div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field>
+                  <FieldLabel>Terminals / Entrances</FieldLabel>
+                  <div className="rounded-md border p-3">
+                    {!railwayForm.railwayStationId ? (
+                      <p className="text-sm text-muted-foreground">Select a station first</p>
+                    ) : railwayTerminalOptions.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No active terminals configured for this station</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-3">
+                        {railwayTerminalOptions.map(terminal => {
+                          const checked = railwayForm.railwayStationTerminalIds?.includes(terminal.id) || false
+                          return (
+                            <label key={terminal.id} className="flex items-center gap-2 text-sm">
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(isChecked) => {
+                                  setRailwayForm(f => {
+                                    const current = f.railwayStationTerminalIds || []
+                                    const next = isChecked ? [...current, terminal.id] : current.filter(id => id !== terminal.id)
+                                    return { ...f, railwayStationTerminalIds: next, railwayStationTerminalId: next[0] }
                                   })
                                 }}
                               />
@@ -1904,6 +2173,88 @@ function FareConfigDialog({
                 {renderPeakHourConfig(airportForm.peakHour!, (config) => setAirportForm(f => ({ ...f, peakHour: config })))}
                 {renderNightChargeConfig(airportForm.nightCharge!, (config) => setAirportForm(f => ({ ...f, nightCharge: config })))}
                 {renderShortNoticeChargeConfig(airportForm.shortNoticeCharge, (config) => setAirportForm(f => ({ ...f, shortNoticeCharge: config })))}
+              </>
+            )}
+
+            {type === 'railway' && (
+              <>
+                <FieldGroup className="grid grid-cols-2 gap-4">
+                  <Field>
+                    <FieldLabel>Transfer Type</FieldLabel>
+                    <Select
+                      value={railwayForm.type}
+                      onValueChange={(value: 'pickup' | 'drop' | 'both') => setRailwayForm(f => ({ ...f, type: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pickup">Station Pickup</SelectItem>
+                        <SelectItem value="drop">Station Drop</SelectItem>
+                        <SelectItem value="both">Both (Pickup & Drop)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field>
+                    <FieldLabel>Calculation Type</FieldLabel>
+                    <Select
+                      value={railwayForm.calculationType}
+                      onValueChange={(value: FareCalculationType) => setRailwayForm(f => ({ ...f, calculationType: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="fixed">Fixed Fare</SelectItem>
+                        <SelectItem value="per_km">Per KM</SelectItem>
+                        <SelectItem value="slab">Slab-wise</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </FieldGroup>
+
+                {railwayForm.calculationType === 'fixed' && (
+                  <Field>
+                    <FieldLabel>Fixed Fare (Rs.)</FieldLabel>
+                    <Input type="number" value={railwayForm.fixedFare} onChange={(e) => setRailwayForm(f => ({ ...f, fixedFare: parseFloat(e.target.value) }))} />
+                  </Field>
+                )}
+
+                {railwayForm.calculationType === 'per_km' && (
+                  <FieldGroup className="grid grid-cols-3 gap-4">
+                    <Field>
+                      <FieldLabel>Per KM Rate (Rs.)</FieldLabel>
+                      <Input type="number" value={railwayForm.perKmRate} onChange={(e) => setRailwayForm(f => ({ ...f, perKmRate: parseFloat(e.target.value) }))} />
+                    </Field>
+                    <Field>
+                      <FieldLabel>Base Fare (Rs.)</FieldLabel>
+                      <Input type="number" value={railwayForm.baseFare} onChange={(e) => setRailwayForm(f => ({ ...f, baseFare: parseFloat(e.target.value) }))} />
+                    </Field>
+                    <Field>
+                      <FieldLabel>Minimum Fare (Rs.)</FieldLabel>
+                      <Input type="number" value={railwayForm.minimumFare} onChange={(e) => setRailwayForm(f => ({ ...f, minimumFare: parseFloat(e.target.value) }))} />
+                    </Field>
+                  </FieldGroup>
+                )}
+
+                {railwayForm.calculationType === 'slab' && (
+                  renderSlabConfig(railwayForm.slabs || [], (slabs) => setRailwayForm(f => ({ ...f, slabs })))
+                )}
+
+                <FieldGroup className="grid grid-cols-2 gap-4">
+                  <Field>
+                    <FieldLabel>Free Waiting Time (min)</FieldLabel>
+                    <Input type="number" value={railwayForm.freeWaitingMinutes} onChange={(e) => setRailwayForm(f => ({ ...f, freeWaitingMinutes: parseInt(e.target.value) || 0 }))} />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Waiting Charge (Rs./min)</FieldLabel>
+                    <Input type="number" value={railwayForm.waitingChargePerMin} onChange={(e) => setRailwayForm(f => ({ ...f, waitingChargePerMin: parseFloat(e.target.value) || 0 }))} />
+                  </Field>
+                </FieldGroup>
+
+                {renderPreBookingCharges(railwayForm.preBookingCharges!, (charges) => setRailwayForm(f => ({ ...f, preBookingCharges: charges })))}
+                {renderPeakHourConfig(railwayForm.peakHour!, (config) => setRailwayForm(f => ({ ...f, peakHour: config })))}
+                {renderNightChargeConfig(railwayForm.nightCharge!, (config) => setRailwayForm(f => ({ ...f, nightCharge: config })))}
               </>
             )}
 

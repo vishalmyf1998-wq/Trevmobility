@@ -7,10 +7,10 @@ import { toast } from 'sonner'
 import { supabase } from '../supabaseClient'
 import { sendInviteEmail } from './actions'
 import {
-  Driver, Car, CarCategory, City, B2CCustomer, Airport, AirportTerminal, FareGroup, B2BClient, B2BEntity, GSTConfig,
+  Driver, Car, CarCategory, City, B2CCustomer, Airport, AirportTerminal, RailwayStation, RailwayStationTerminal, FareGroup, B2BClient, B2BEntity, GSTConfig,
   Booking, DutySlip, Invoice, PeakHourConfig, NightChargeConfig,
   Hub, PromoCode, CityPolygon, CarLocation,
-  B2BEmployee, B2BApprovalRule, CommunicationTemplate, AdminRole, AdminUser, BookingTag, CancellationPolicy, WalletTransaction,
+  B2BEmployee, B2BApprovalRule, CommunicationTemplate, AdminRole, AdminUser, BookingTag, CancellationPolicy, WalletTransaction, TollLocation,
   UserType
 } from './types'
 
@@ -135,8 +135,8 @@ const initialAirports: Airport[] = [
     isActive: true,
     createdAt: demoNow,
     terminals: [
-      { id: 'demo-terminal-bom-t1', airportId: 'demo-airport-bom', name: 'Terminal 1', code: 'T1', isActive: true, createdAt: demoNow },
-      { id: 'demo-terminal-bom-t2', airportId: 'demo-airport-bom', name: 'Terminal 2', code: 'T2', isActive: true, createdAt: demoNow },
+      { id: 'demo-terminal-bom-t1', airportId: 'demo-airport-bom', name: 'Terminal 1', code: 'T1', isActive: true, latitude: 19.0886, longitude: 72.8680, createdAt: demoNow },
+      { id: 'demo-terminal-bom-t2', airportId: 'demo-airport-bom', name: 'Terminal 2', code: 'T2', isActive: true, latitude: 19.0970, longitude: 72.8732, createdAt: demoNow },
     ],
   },
   {
@@ -148,10 +148,49 @@ const initialAirports: Airport[] = [
     isActive: true,
     createdAt: demoNow,
     terminals: [
-      { id: 'demo-terminal-del-t2', airportId: 'demo-airport-del', name: 'Terminal 2', code: 'T2', isActive: true, createdAt: demoNow },
-      { id: 'demo-terminal-del-t3', airportId: 'demo-airport-del', name: 'Terminal 3', code: 'T3', isActive: true, createdAt: demoNow },
+      { id: 'demo-terminal-del-t2', airportId: 'demo-airport-del', name: 'Terminal 2', code: 'T2', isActive: true, latitude: 28.5606, longitude: 77.1121, createdAt: demoNow },
+      { id: 'demo-terminal-del-t3', airportId: 'demo-airport-del', name: 'Terminal 3', code: 'T3', isActive: true, latitude: 28.5562, longitude: 77.1000, createdAt: demoNow },
     ],
   },
+]
+
+const initialRailwayStations: RailwayStation[] = [
+  {
+    id: 'demo-station-mumbai-csmt',
+    cityId: 'demo-city-mumbai',
+    name: 'Chhatrapati Shivaji Maharaj Terminus',
+    code: 'CSMT',
+    address: 'Fort, Mumbai',
+    isActive: true,
+    createdAt: demoNow,
+    terminals: [{ id: 'demo-terminal-csmt-main', railwayStationId: 'demo-station-mumbai-csmt', name: 'Main Entrance', code: 'MAIN', isActive: true, latitude: 18.9402, longitude: 72.8350, createdAt: demoNow }],
+  },
+  {
+    id: 'demo-station-delhi-ndls',
+    cityId: 'demo-city-delhi',
+    name: 'New Delhi Railway Station',
+    code: 'NDLS',
+    address: 'Paharganj, New Delhi',
+    isActive: true,
+    createdAt: demoNow,
+    terminals: [{ id: 'demo-terminal-ndls-ajmeri', railwayStationId: 'demo-station-delhi-ndls', name: 'Ajmeri Gate', code: 'AJMERI', isActive: true, latitude: 28.6433, longitude: 77.2178, createdAt: demoNow }],
+  },
+]
+
+const initialTollLocations: TollLocation[] = [
+  {
+    id: 'demo-toll-1',
+    name: 'Bandra Worli Sea Link',
+    amount: 100,
+    coordinates: [
+      { lat: 19.0463, lng: 72.8205 },
+      { lat: 19.0475, lng: 72.8185 },
+      { lat: 19.0305, lng: 72.8150 },
+      { lat: 19.0285, lng: 72.8170 }
+    ],
+    isActive: true,
+    createdAt: demoNow
+  }
 ]
 
 const generateMockDrivers = (): Driver[] => {
@@ -221,6 +260,7 @@ const initialFareGroups: FareGroup[] = [
     airportFares: [
       { id: 'demo-airfare-1', cityId: 'demo-city-mumbai', airportId: 'demo-airport-bom', airportTerminalIds: ['demo-terminal-bom-t1', 'demo-terminal-bom-t2'], carCategoryId: 'demo-cat-sedan', type: 'both', calculationType: 'fixed', fixedFare: 999, peakHour: defaultPeakHour, nightCharge: defaultNightCharge, waitingChargePerMin: 3, freeWaitingMinutes: 20, baseFare: 250, minimumFare: 350 },
     ],
+    railwayFares: [],
     rentalFares: [
       { id: 'demo-rental-1', cityId: 'demo-city-mumbai', carCategoryId: 'demo-cat-sedan', rentalType: 'with_capping', packageHours: 8, packageKm: 80, packageFare: 2400, extraKmRate: 18, extraHourRate: 250, freeWaitingMinutes: 15, kmCapping: 80, peakHour: defaultPeakHour, nightCharge: defaultNightCharge },
     ],
@@ -239,6 +279,7 @@ const initialFareGroups: FareGroup[] = [
     type: 'B2B',
     isDefault: true,
     airportFares: [],
+    railwayFares: [],
     rentalFares: [],
     cityRideFares: [
       { id: 'demo-cityfare-2', cityId: 'demo-city-delhi', carCategoryId: 'demo-cat-suv', calculationType: 'per_km', perKmRate: 24, peakHour: defaultPeakHour, nightCharge: defaultNightCharge, baseFare: 299, minimumFare: 499, perMinuteRate: 3, freeWaitingMinutes: 10 },
@@ -359,6 +400,8 @@ const generateMockBookings = (): Booking[] => {
       pickupTime: `${String(Math.floor(Math.random() * 14) + 6).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
       status: status as any,
       tripType: tripType as any,
+      flightNumber: tripType.includes('airport') ? `6E-${Math.floor(100 + Math.random() * 900)}` : undefined,
+      trainNumber: tripType.includes('railway') ? `1290${Math.floor(1 + Math.random() * 9)}` : undefined,
       carId: carId,
       driverId: driverId,
       b2bClientId: isB2B ? 'demo-b2b-acme' : undefined,
@@ -368,7 +411,7 @@ const generateMockBookings = (): Booking[] => {
       totalFare: estimatedFare + 100,
       grandTotal: estimatedFare + gstAmount + 100,
       gstAmount: gstAmount,
-      tollCharges: Math.random() > 0.5 ? 100 : 0,
+      tollCharges: (i % 3 === 0) ? (Math.floor(Math.random() * 200) + 50) : 0, // Ensure every 3rd mock booking has toll
       parkingCharges: Math.random() > 0.8 ? 150 : 0,
       promoDiscount: Math.random() > 0.8 ? 50 : 0,
       remarks: Math.random() > 0.8 ? 'VIP Guest - Please arrive 10 mins early' : '',
@@ -603,6 +646,7 @@ interface AdminContextType {
   cities: City[]
   b2cCustomers: B2CCustomer[]
   airports: Airport[]
+  railwayStations: RailwayStation[]
   fareGroups: FareGroup[]
   b2bClients: B2BClient[]
   gstConfig: GSTConfig
@@ -623,6 +667,7 @@ interface AdminContextType {
   cancellationPolicies: CancellationPolicy[]
   driverPayouts: DriverPayout[]
   supportTickets: SupportTicket[]
+  tollLocations: TollLocation[]
   
   // Actions - Drivers
   addDriver: (driver: Omit<Driver, 'id' | 'createdAt'>) => void
@@ -663,6 +708,14 @@ interface AdminContextType {
   updateAirportTerminal: (airportId: string, terminalId: string, terminal: Partial<AirportTerminal>) => void
   deleteAirportTerminal: (airportId: string, terminalId: string) => void
   
+  // Actions - Railway Stations
+  addRailwayStation: (station: Omit<RailwayStation, 'id' | 'createdAt' | 'terminals'>) => void
+  updateRailwayStation: (id: string, station: Partial<Omit<RailwayStation, 'terminals'>>) => void
+  deleteRailwayStation: (id: string) => void
+  addRailwayStationTerminal: (stationId: string, terminal: Omit<RailwayStationTerminal, 'id' | 'railwayStationId' | 'createdAt'>) => void
+  updateRailwayStationTerminal: (stationId: string, terminalId: string, terminal: Partial<RailwayStationTerminal>) => void
+  deleteRailwayStationTerminal: (stationId: string, terminalId: string) => void
+
   // Actions - Fare Groups
   addFareGroup: (fareGroup: Omit<FareGroup, 'id' | 'createdAt'>) => void
   updateFareGroup: (id: string, fareGroup: Partial<FareGroup>) => void
@@ -759,12 +812,19 @@ interface AdminContextType {
   addSupportTicket: (ticket: Omit<SupportTicket, 'id' | 'ticketNumber' | 'createdAt' | 'updatedAt'>) => void
   updateSupportTicket: (id: string, ticket: Partial<SupportTicket>) => void
   deleteSupportTicket: (id: string) => void
+
+  // Actions - Tolls
+  addTollLocation: (toll: Omit<TollLocation, 'id' | 'createdAt'>) => void
+  updateTollLocation: (id: string, toll: Partial<TollLocation>) => void
+  deleteTollLocation: (id: string) => void
   
   // Helpers
   getCarCategory: (id: string) => CarCategory | undefined
   getCity: (id: string) => City | undefined
   getAirport: (id: string) => Airport | undefined
   getAirportTerminal: (airportId: string, terminalId: string) => AirportTerminal | undefined
+  getRailwayStation: (id: string) => RailwayStation | undefined
+  getRailwayStationTerminal: (stationId: string, terminalId: string) => RailwayStationTerminal | undefined
   getDriver: (id: string) => Driver | undefined
   getCar: (id: string) => Car | undefined
   getFareGroup: (id: string) => FareGroup | undefined
@@ -834,6 +894,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   const [cities, setCities] = useState<City[]>(() => loadState('cities', initialCities))
   const [b2cCustomers, setB2CCustomers] = useState<B2CCustomer[]>(() => loadState('b2cCustomers', initialB2CCustomers))
   const [airports, setAirports] = useState<Airport[]>(() => loadState('airports', initialAirports))
+  const [railwayStations, setRailwayStations] = useState<RailwayStation[]>(() => loadState('railwayStations', initialRailwayStations))
   const [fareGroups, setFareGroups] = useState<FareGroup[]>(initialFareGroups)
   const [b2bClients, setB2BClients] = useState<B2BClient[]>(() => loadState('b2bClients', initialB2BClients))
   const [gstConfig, setGstConfig] = useState<GSTConfig>(initialGstConfig)
@@ -854,6 +915,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   const [cancellationPolicies, setCancellationPolicies] = useState<CancellationPolicy[]>(() => loadState('cancellationPolicies', initialCancellationPolicies))
   const [driverPayouts, setDriverPayouts] = useState<DriverPayout[]>(() => loadState('driverPayouts', initialDriverPayouts))
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>(() => loadState('supportTickets', initialSupportTickets))
+  const [tollLocations, setTollLocations] = useState<TollLocation[]>(() => loadState('tollLocations', initialTollLocations))
 
   // UserType state
   const loadUserType = (): UserType => {
@@ -926,6 +988,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { localStorage.setItem('carCategories', JSON.stringify(carCategories)) }, [carCategories])
   useEffect(() => { localStorage.setItem('cities', JSON.stringify(cities)) }, [cities])
   useEffect(() => { localStorage.setItem('airports', JSON.stringify(airports)) }, [airports])
+  useEffect(() => { localStorage.setItem('railwayStations', JSON.stringify(railwayStations)) }, [railwayStations])
   useEffect(() => { localStorage.setItem('gstConfig', JSON.stringify(gstConfig)) }, [gstConfig])
   useEffect(() => { localStorage.setItem('dutySlips', JSON.stringify(dutySlips)) }, [dutySlips])
   useEffect(() => { localStorage.setItem('invoices', JSON.stringify(invoices)) }, [invoices])
@@ -944,6 +1007,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { localStorage.setItem('driverPayouts', JSON.stringify(driverPayouts)) }, [driverPayouts])
   useEffect(() => { localStorage.setItem('supportTickets', JSON.stringify(supportTickets)) }, [supportTickets])
   useEffect(() => { localStorage.setItem('b2cCustomers', JSON.stringify(b2cCustomers)) }, [b2cCustomers])
+  useEffect(() => { localStorage.setItem('tollLocations', JSON.stringify(tollLocations)) }, [tollLocations])
 
   // One-time testing seed for every sidebar module. This also upgrades browsers
   // that already have older empty localStorage arrays.
@@ -959,6 +1023,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     setCarCategories((prev) => mergeById(prev, initialCarCategories))
     setCities((prev) => mergeById(prev, initialCities))
     setAirports((prev) => mergeById(prev, initialAirports))
+    setRailwayStations((prev) => mergeById(prev, initialRailwayStations))
     setDrivers((prev) => mergeById(prev, initialDrivers))
     setCars((prev) => mergeById(prev, initialCars))
     setFareGroups((prev) => mergeById(prev, initialFareGroups))
@@ -984,6 +1049,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     setBookingTags((prev) => mergeById(prev, initialBookingTags))
     setCancellationPolicies((prev) => mergeById(prev, initialCancellationPolicies))
     setSupportTickets((prev) => mergeById(prev, initialSupportTickets))
+    setTollLocations((prev) => mergeById(prev, initialTollLocations))
 
     localStorage.setItem('dummy_sidebar_data_v3', 'true')
   }, [])
@@ -1472,9 +1538,9 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
       if (airport.id !== airportId) return airport
       return {
         ...airport,
-        terminals: [
-          ...airport.terminals,
-          { ...terminal, id: generateId(), airportId, createdAt: new Date().toISOString() },
+        terminals: [ // Added latitude and longitude to terminals
+          ...airport.terminals, 
+          { ...terminal, id: generateId(), airportId, createdAt: new Date().toISOString(), latitude: terminal.latitude || undefined, longitude: terminal.longitude || undefined },
         ],
       }
     }))
@@ -1485,7 +1551,7 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
       if (airport.id !== airportId) return airport
       return {
         ...airport,
-        terminals: airport.terminals.map(t => t.id === terminalId ? { ...t, ...terminal } : t),
+        terminals: airport.terminals.map(t => t.id === terminalId ? { ...t, ...terminal, latitude: terminal.latitude || undefined, longitude: terminal.longitude || undefined } : t),
       }
     }))
   }, [])
@@ -1500,6 +1566,40 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
     }))
   }, [])
   
+  // Railway Station actions
+  const addRailwayStation = useCallback((station: Omit<RailwayStation, 'id' | 'createdAt' | 'terminals'>) => {
+    setRailwayStations(prev => [...prev, { ...station, id: generateId(), terminals: [], createdAt: new Date().toISOString() }])
+  }, []) 
+
+  const updateRailwayStation = useCallback((id: string, station: Partial<Omit<RailwayStation, 'terminals'>>) => {
+    setRailwayStations(prev => prev.map(a => a.id === id ? { ...a, ...station } : a))
+  }, [])
+
+  const deleteRailwayStation = useCallback((id: string) => {
+    setRailwayStations(prev => prev.filter(a => a.id !== id))
+  }, [])
+
+  const addRailwayStationTerminal = useCallback((stationId: string, terminal: Omit<RailwayStationTerminal, 'id' | 'railwayStationId' | 'createdAt'>) => {
+    setRailwayStations(prev => prev.map(station => {
+      if (station.id !== stationId) return station
+      return { ...station, terminals: [...station.terminals, { ...terminal, id: generateId(), railwayStationId: stationId, createdAt: new Date().toISOString(), latitude: terminal.latitude || undefined, longitude: terminal.longitude || undefined }] }
+    }))
+  }, [])
+
+  const updateRailwayStationTerminal = useCallback((stationId: string, terminalId: string, terminal: Partial<RailwayStationTerminal>) => {
+    setRailwayStations(prev => prev.map(station => {
+      if (station.id !== stationId) return station
+      return { ...station, terminals: station.terminals.map(t => t.id === terminalId ? { ...t, ...terminal } : t) }
+    })) 
+  }, [])
+
+  const deleteRailwayStationTerminal = useCallback((stationId: string, terminalId: string) => {
+    setRailwayStations(prev => prev.map(station => {
+      if (station.id !== stationId) return station
+      return { ...station, terminals: station.terminals.filter(t => t.id !== terminalId) }
+    }))
+  }, [])
+
   // Fare Group actions
   const addFareGroup = useCallback((fareGroup: Omit<FareGroup, 'id' | 'createdAt'>) => {
     setFareGroups(prev => [...prev, { ...fareGroup, id: generateId(), createdAt: new Date().toISOString() }])
@@ -2085,6 +2185,19 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
     if (error) handleDbError(error, 'Error deleting support ticket from Supabase:')
   }, [])
 
+  // Toll Location actions
+  const addTollLocation = useCallback((toll: Omit<TollLocation, 'id' | 'createdAt'>) => {
+    setTollLocations(prev => [...prev, { ...toll, id: generateId(), createdAt: new Date().toISOString() }])
+  }, [])
+
+  const updateTollLocation = useCallback((id: string, toll: Partial<TollLocation>) => {
+    setTollLocations(prev => prev.map(t => t.id === id ? { ...t, ...toll } : t))
+  }, [])
+
+  const deleteTollLocation = useCallback((id: string) => {
+    setTollLocations(prev => prev.filter(t => t.id !== id))
+  }, [])
+
   // Helper functions
   const getCarCategory = useCallback((id: string) => carCategories.find(c => c.id === id), [carCategories])
   const getCity = useCallback((id: string) => cities.find(c => c.id === id), [cities])
@@ -2094,6 +2207,11 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
     const airport = airports.find(a => a.id === airportId)
     return airport?.terminals.find(t => t.id === terminalId)
   }, [airports])
+  const getRailwayStation = useCallback((id: string) => railwayStations.find(a => a.id === id), [railwayStations])
+  const getRailwayStationTerminal = useCallback((stationId: string, terminalId: string) => {
+    const station = railwayStations.find(a => a.id === stationId)
+    return station?.terminals.find(t => t.id === terminalId)
+  }, [railwayStations])
   const getDriver = useCallback((id: string) => drivers.find(d => d.id === id), [drivers])
   const getCar = useCallback((id: string) => cars.find(c => c.id === id), [cars])
   const getFareGroup = useCallback((id: string) => fareGroups.find(fg => fg.id === id), [fareGroups])
@@ -2123,8 +2241,8 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
 
   return (
     <AdminContext.Provider value={{
-      drivers, cars, carCategories, cities, b2cCustomers, airports, fareGroups, b2bClients, gstConfig, bookings, walletTransactions, dutySlips, invoices,
-      hubs, promoCodes, cityPolygons, carLocations, driverPayouts, supportTickets,
+      drivers, cars, carCategories, cities, b2cCustomers, airports, railwayStations, fareGroups, b2bClients, gstConfig, bookings, walletTransactions, dutySlips, invoices,
+      hubs, promoCodes, cityPolygons, carLocations, driverPayouts, supportTickets, tollLocations,
       b2bEmployees, b2bApprovalRules, communicationTemplates, adminRoles, adminUsers, bookingTags, cancellationPolicies,
       addDriver, updateDriver, deleteDriver,
       addCar, updateCar, deleteCar,
@@ -2133,6 +2251,7 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
       addCity, updateCity, deleteCity,
       upsertB2CCustomer, updateB2CCustomer, addWalletTransaction,
       addAirport, updateAirport, deleteAirport, addAirportTerminal, updateAirportTerminal, deleteAirportTerminal,
+      addRailwayStation, updateRailwayStation, deleteRailwayStation, addRailwayStationTerminal, updateRailwayStationTerminal, deleteRailwayStationTerminal,
       addFareGroup, updateFareGroup, deleteFareGroup,
       addB2BClient, updateB2BClient, deleteB2BClient,
       addB2BEntity, updateB2BEntity, deleteB2BEntity, getB2BEntities,
@@ -2154,7 +2273,8 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
       addCancellationPolicy, updateCancellationPolicy, deleteCancellationPolicy,
       addDriverPayout, updateDriverPayout, deleteDriverPayout,
       addSupportTicket, updateSupportTicket, deleteSupportTicket,
-      getCarCategory, getCity, getB2CCustomer, findB2CCustomer, getAirport, getAirportTerminal, getDriver, getCar, getFareGroup, getB2BClient, getB2BEntity, getBooking,
+      addTollLocation, updateTollLocation, deleteTollLocation,
+      getCarCategory, getCity, getB2CCustomer, findB2CCustomer, getAirport, getAirportTerminal, getRailwayStation, getRailwayStationTerminal, getDriver, getCar, getFareGroup, getB2BClient, getB2BEntity, getBooking,
       getHub, getPromoCode, getPromoCodeByCode, getB2BEmployee, getB2BApprovalRule, getAdminRole, getBookingTag,
       getCancellationPolicy,
       userType, setUserType,

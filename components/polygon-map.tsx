@@ -132,7 +132,7 @@ export default function PolygonMap({
 
   // Calculate center based on selected city or polygons
   const center = selectedCity
-    ? cityCenters[getCity(selectedCity)?.name || ''] || defaultCenter
+    ? cityCenters[getCity?.(selectedCity)?.name || ''] || defaultCenter
     : polygons.length > 0 && polygons[0].coordinates.length > 0
     ? [
         polygons[0].coordinates.reduce((sum, c) => sum + c.lat, 0) / polygons[0].coordinates.length,
@@ -168,8 +168,8 @@ export default function PolygonMap({
             positions={polygon.coordinates.map(c => [c.lat, c.lng] as [number, number])}
             interactive={false}
             pathOptions={{
-              color: polygon.color,
-              fillColor: polygon.color,
+              color: polygon.color || '#3b82f6',
+              fillColor: polygon.color || '#3b82f6',
               fillOpacity: 0.3,
               weight: 2,
             }}

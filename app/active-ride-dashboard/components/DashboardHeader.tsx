@@ -3,18 +3,25 @@ import { Download, Search, Zap, RefreshCw, Leaf, Clock, History } from 'lucide-r
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface DashboardHeaderProps {
   isRefreshing: boolean;
   handleRefresh: () => void;
   statusFilter: string;
-  setStatusFilter: (val: any) => void;
-  searchQuery: string;
-  setSearchQuery: (val: string) => void;
+  setStatusFilter: (status: any) => void;
+  cityFilter: string;
+  setCityFilter: (city: string) => void;
+  hubFilter: string;
+  setHubFilter: (hub: string) => void;
+  cities: any[];
+  hubs: any[];
+  searchQuery?: string;
+  setSearchQuery?: (query: string) => void;
   dateFrom: string;
-  setDateFrom: (val: string) => void;
+  setDateFrom: (date: string) => void;
   dateTo: string;
-  setDateTo: (val: string) => void;
+  setDateTo: (date: string) => void;
   onExport: () => void;
   resultCount: number;
   counts: {
@@ -29,6 +36,7 @@ interface DashboardHeaderProps {
     gpsOff: number;
     priority: number;
     lowSoc: number;
+    loginDelay: number;
   };
   lastAllocationTime: Date | null;
   nextAllocationTime: Date | null;
@@ -41,6 +49,12 @@ export function DashboardHeader({
   handleRefresh,
   statusFilter,
   setStatusFilter,
+  cityFilter,
+  setCityFilter,
+  hubFilter,
+  setHubFilter,
+  cities,
+  hubs,
   searchQuery,
   setSearchQuery,
   dateFrom,
@@ -79,21 +93,24 @@ export function DashboardHeader({
             </div>
             <div className="bg-white/40 backdrop-blur-xl border border-white/60 shadow-[0_4px_24px_-8px_rgba(0,0,0,0.1)] rounded-xl px-3 py-1.5 flex items-center gap-2">
                <Clock className={`w-3.5 h-3.5 ${isAutoAllocateOn ? 'text-blue-500 animate-pulse' : 'text-slate-500'}`} />
-               <span className="text-xs font-bold text-slate-700">Next Tick: {isAutoAllocateOn && nextAllocationTime ? nextAllocationTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'}) : 'Paused'}</span>
+               <span className="text-xs font-bold text-slate-700">Next Run: {isAutoAllocateOn && nextAllocationTime ? nextAllocationTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'}) : 'Paused'}</span>
             </div>
           </div>
-          <div className="flex gap-2">
-            <div className="bg-emerald-50/80 backdrop-blur-xl border border-emerald-100 shadow-sm rounded-xl px-3 py-1 flex items-center gap-1.5">
-               <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-sm border border-emerald-600"></div>
-               <span className="text-[11px] font-bold text-emerald-800">&gt; Green Ride: {arrivalMetrics?.green || 0}%</span>
+          <div className="bg-white/40 backdrop-blur-xl border border-white/60 shadow-[0_4px_24px_-8px_rgba(0,0,0,0.1)] rounded-xl p-2 w-full max-w-xs">
+            <div className="flex justify-between items-center mb-1 px-1">
+              <span className="text-[11px] font-bold text-slate-600">Arrival Punctuality</span>
+              <span className="text-[10px] font-bold text-slate-400">{arrivalMetrics?.total} rides</span>
             </div>
-            <div className="bg-yellow-50/80 backdrop-blur-xl border border-yellow-100 shadow-sm rounded-xl px-3 py-1 flex items-center gap-1.5">
-               <div className="h-2.5 w-2.5 rounded-full bg-yellow-400 shadow-sm border border-yellow-500"></div>
-               <span className="text-[11px] font-bold text-yellow-800">Yellow Ride: {arrivalMetrics?.yellow || 0}%</span>
-            </div>
-            <div className="bg-red-50/80 backdrop-blur-xl border border-red-100 shadow-sm rounded-xl px-3 py-1 flex items-center gap-1.5">
-               <div className="h-2.5 w-2.5 rounded-full bg-red-500 shadow-sm border border-red-600"></div>
-               <span className="text-[11px] font-bold text-red-800">Red Ride: {arrivalMetrics?.red || 0}%</span>
+            <div className="w-full bg-slate-200/70 rounded-full h-2.5 flex overflow-hidden shadow-inner">
+              <div className="bg-emerald-500 h-full flex items-center justify-center text-white text-[8px] font-black" style={{ width: `${arrivalMetrics?.total > 0 ? arrivalMetrics.green : 68}%` }}>
+                {(arrivalMetrics?.total > 0 ? arrivalMetrics.green : 68) > 10 ? `${arrivalMetrics?.total > 0 ? arrivalMetrics.green : 68}%` : ''}
+              </div>
+              <div className="bg-yellow-400 h-full flex items-center justify-center text-white text-[8px] font-black" style={{ width: `${arrivalMetrics?.total > 0 ? arrivalMetrics.yellow : 22}%` }}>
+                {(arrivalMetrics?.total > 0 ? arrivalMetrics.yellow : 22) > 10 ? `${arrivalMetrics?.total > 0 ? arrivalMetrics.yellow : 22}%` : ''}
+              </div>
+              <div className="bg-red-500 h-full flex items-center justify-center text-white text-[8px] font-black" style={{ width: `${arrivalMetrics?.total > 0 ? arrivalMetrics.red : 10}%` }}>
+                {(arrivalMetrics?.total > 0 ? arrivalMetrics.red : 10) > 10 ? `${arrivalMetrics?.total > 0 ? arrivalMetrics.red : 10}%` : ''}
+              </div>
             </div>
           </div>
         </div>
@@ -114,6 +131,30 @@ export function DashboardHeader({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
+            </div>
+            <div className="flex gap-3">
+              <Select value={cityFilter} onValueChange={setCityFilter}>
+                <SelectTrigger className="w-full md:w-[180px] h-11 bg-white/50 hover:bg-white/80 focus:bg-white border-white/60 shadow-inner rounded-[1.5rem] text-[13px] font-medium transition-all duration-300 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-indigo-500/20">
+                  <SelectValue placeholder="Select City" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Cities</SelectItem>
+                  {cities.map((city) => (
+                    <SelectItem key={city.id} value={city.id}>{city.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={hubFilter} onValueChange={setHubFilter}>
+                <SelectTrigger className="w-full md:w-[180px] h-11 bg-white/50 hover:bg-white/80 focus:bg-white border-white/60 shadow-inner rounded-[1.5rem] text-[13px] font-medium transition-all duration-300 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-indigo-500/20">
+                  <SelectValue placeholder="Select Hub" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Hubs</SelectItem>
+                  {hubs.map((hub) => (
+                    <SelectItem key={hub.id} value={hub.id}>{hub.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex gap-2 w-full md:w-auto">
               <div className="relative flex-1 md:w-36">
@@ -137,17 +178,20 @@ export function DashboardHeader({
           
           {/* Alert Filters (Below Search Bar) */}
           <div className="flex flex-wrap items-center gap-2 pl-1">
-            <Button size="sm" variant="ghost" onClick={() => setStatusFilter('delayed')} className={`h-8 px-4 rounded-full text-[12px] font-bold transition-all duration-300 ${statusFilter === 'delayed' ? 'bg-rose-500 text-white shadow-md shadow-rose-500/25' : 'bg-white/40 text-rose-700 hover:bg-white/80 border border-rose-200 backdrop-blur-md shadow-sm'}`}>
+            <Button size="sm" variant="ghost" onClick={() => setStatusFilter('delayed')} className={`h-8 px-4 rounded-full text-[15px] font-bold transition-all duration-300 ${statusFilter === 'delayed' ? 'bg-rose-500 text-white shadow-md shadow-rose-500/25' : 'bg-white/40 text-rose-700 hover:bg-white/80 border border-rose-200 backdrop-blur-md shadow-sm'}`}>
               Delayed <Badge variant="secondary" className={`ml-1.5 border-none px-1.5 min-w-[20px] rounded-full ${statusFilter === 'delayed' ? 'bg-white/30 text-white' : 'bg-rose-100 text-rose-800'}`}>{counts.delayed}</Badge>
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setStatusFilter('unassigned')} className={`h-8 px-4 rounded-full text-[12px] font-bold transition-all duration-300 ${statusFilter === 'unassigned' ? 'bg-amber-500 text-white shadow-md shadow-amber-500/25' : 'bg-white/40 text-amber-700 hover:bg-white/80 border border-amber-200 backdrop-blur-md shadow-sm'}`}>
+            <Button size="sm" variant="ghost" onClick={() => setStatusFilter('unassigned')} className={`h-8 px-4 rounded-full text-[15px] font-bold transition-all duration-300 ${statusFilter === 'unassigned' ? 'bg-amber-500 text-white shadow-md shadow-amber-500/25' : 'bg-white/40 text-amber-700 hover:bg-white/80 border border-amber-200 backdrop-blur-md shadow-sm'}`}>
               Unassigned <Badge variant="secondary" className={`ml-1.5 px-1.5 min-w-[20px] rounded-full border-none ${statusFilter === 'unassigned' ? 'bg-white/30 text-white' : 'bg-amber-100 text-amber-800'}`}>{counts.unassigned}</Badge>
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setStatusFilter('gps_off')} className={`h-8 px-4 rounded-full text-[12px] font-bold transition-all duration-300 ${statusFilter === 'gps_off' ? 'bg-zinc-800 text-white shadow-md shadow-zinc-800/25' : 'bg-white/40 text-zinc-700 hover:bg-white/80 border border-zinc-200 backdrop-blur-md shadow-sm'}`}>
+            <Button size="sm" variant="ghost" onClick={() => setStatusFilter('gps_off')} className={`h-8 px-4 rounded-full text-[15px] font-bold transition-all duration-300 ${statusFilter === 'gps_off' ? 'bg-zinc-800 text-white shadow-md shadow-zinc-800/25' : 'bg-white/40 text-zinc-700 hover:bg-white/80 border border-zinc-200 backdrop-blur-md shadow-sm'}`}>
               No GPS <Badge variant="secondary" className={`ml-1.5 px-1.5 min-w-[20px] rounded-full border-none ${statusFilter === 'gps_off' ? 'bg-white/30 text-white' : 'bg-zinc-200 text-zinc-800'}`}>{counts.gpsOff}</Badge>
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setStatusFilter('low_soc')} className={`h-8 px-4 rounded-full text-[12px] font-bold transition-all duration-300 ${statusFilter === 'low_soc' ? 'bg-red-600 text-white shadow-md shadow-red-600/25' : 'bg-white/40 text-red-700 hover:bg-white/80 border border-red-200 backdrop-blur-md shadow-sm'}`}>
+            <Button size="sm" variant="ghost" onClick={() => setStatusFilter('low_soc')} className={`h-8 px-4 rounded-full text-[15px] font-bold transition-all duration-300 ${statusFilter === 'low_soc' ? 'bg-red-600 text-white shadow-md shadow-red-600/25' : 'bg-white/40 text-red-700 hover:bg-white/80 border border-red-200 backdrop-blur-md shadow-sm'}`}>
               Low SOC &lt; 20% <Badge variant="secondary" className={`ml-1.5 px-1.5 min-w-[20px] rounded-full border-none ${statusFilter === 'low_soc' ? 'bg-white/30 text-white' : 'bg-red-100 text-red-800'}`}>{counts.lowSoc}</Badge>
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setStatusFilter('login_delay')} className={`h-8 px-4 rounded-full text-[15px] font-bold transition-all duration-300 ${statusFilter === 'login_delay' ? 'bg-sky-500 text-white shadow-md shadow-sky-500/25' : 'bg-white/40 text-sky-700 hover:bg-white/80 border border-sky-200 backdrop-blur-md shadow-sm'}`}>
+              Login Delay <Badge variant="secondary" className={`ml-1.5 px-1.5 min-w-[20px] rounded-full border-none ${statusFilter === 'login_delay' ? 'bg-white/30 text-white' : 'bg-sky-100 text-sky-800'}`}>{counts.loginDelay}</Badge>
             </Button>
           </div>
         </div>

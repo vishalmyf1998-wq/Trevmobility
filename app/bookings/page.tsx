@@ -236,7 +236,8 @@ import { PhoneInput } from "@/components/ui/phone-input"
       currentUser,
       approveBookingEdit,
       rejectBookingEdit,
-      addSupportTicket
+      addSupportTicket,
+      tollLocations
     } = useAdmin()
 
     const isCorpEmployee = userType === 'corporate-employee'
@@ -767,14 +768,40 @@ setNewCustomerData({ name: "", phone: "", email: "", address: "" })
           }
 
           const totalEstKm = estKm + extraStopsKm;
-          setFormData(prev => prev.estimatedKm === totalEstKm ? prev : { ...prev, estimatedKm: totalEstKm })
+
+          // Simulated Auto-Toll Logic for Booking Search
+          // In production, intersect actual polyline points from Google Maps API with tollLocations polygons
+          let autoTollAmount = 0;
+          if (tollLocations && tollLocations.length > 0) {
+            const pickupLower = actualPickup.toLowerCase();
+            const dropLower = actualDrop.toLowerCase();
+            tollLocations.forEach(toll => {
+              if (toll.isActive) {
+                const tollNameLower = toll.name.toLowerCase();
+                // Basic mock check: If pickup/drop name contains toll name OR toll name contains pickup/drop name
+                if (pickupLower.includes(tollNameLower) || dropLower.includes(tollNameLower)) {
+                  autoTollAmount += toll.amount;
+                }
+              }
+            });
+          }
+
+          setFormData(prev => {
+            const hasChanges = prev.estimatedKm !== totalEstKm || (autoTollAmount > 0 && prev.tollCharges !== autoTollAmount);
+            if (!hasChanges) return prev;
+            return {
+              ...prev,
+              estimatedKm: totalEstKm,
+              tollCharges: autoTollAmount > 0 ? autoTollAmount : prev.tollCharges // Apply auto toll only if detected
+            }
+          });
         }
 
         // Debounce the calculation to avoid running on every single keystroke
         const timeoutId = setTimeout(calculateDistance, 800)
         return () => clearTimeout(timeoutId)
       }
-    }, [formData.pickupLocation, formData.dropLocation, formData.tripType, formData.airportId, formData.airportTerminalId, formatAirportLocation, JSON.stringify(formData.stops)])
+    }, [formData.pickupLocation, formData.dropLocation, formData.tripType, formData.airportId, formData.airportTerminalId, formatAirportLocation, JSON.stringify(formData.stops), tollLocations])
 
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault()
