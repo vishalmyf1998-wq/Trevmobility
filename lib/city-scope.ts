@@ -26,41 +26,57 @@ export function scopeToCityId(scope: string) {
   return (CITY_SCOPE_CONFIG as any)[scope]?.cityId || null;
 }
 
-// Global registry to map city ID/name to dispatch center ID
-export const cityToDispatchCenterMap: Record<string, string> = {};
+// Global registry to map city ID/name to dispatch center IDs
+export const cityToDispatchCentersMap: Record<string, string[]> = {};
 
-export function updateCityDispatchCenterMap(cities: Array<{ id: string; name: string; operatingCity?: string | null }>) {
+export function updateCityDispatchCenterMap(cities: Array<{ id: string; name: string; operatingCities?: string[]; operatingCity?: string | null }>) {
   // Clear the map first
-  for (const key in cityToDispatchCenterMap) {
-    delete cityToDispatchCenterMap[key];
+  for (const key in cityToDispatchCentersMap) {
+    delete cityToDispatchCentersMap[key];
   }
   // Fill the map
   cities.forEach(city => {
-    if (city.operatingCity) {
-      cityToDispatchCenterMap[city.id] = city.operatingCity;
-      cityToDispatchCenterMap[city.name.toLowerCase()] = city.operatingCity;
+    const dcs: string[] = [];
+    if (city.operatingCities && Array.isArray(city.operatingCities)) {
+      dcs.push(...city.operatingCities);
+    }
+    if (city.operatingCity && !dcs.includes(city.operatingCity)) {
+      dcs.push(city.operatingCity);
+    }
+    if (dcs.length > 0) {
+      cityToDispatchCentersMap[city.id] = dcs;
+      cityToDispatchCentersMap[city.name.toLowerCase()] = dcs;
     }
   });
 }
 
-export function resolveFleetScope(
+export function resolveFleetScopes(
   entity: {
     operatingCity?: string | null
+    operatingCities?: string[]
     pickupCity?: string | null
     cityId?: string | null
     hubId?: string | null
   },
   hubs: Array<{ id: string; cityId: string }> = []
-): string {
-  // Priority 1: Explicit operatingCity set on the entity (from Fleet Settings UI)
-  if (entity.operatingCity && entity.operatingCity !== 'all') {
-    return entity.operatingCity;
-  }
+): string[] {
+  const dcs: string[] = [];
 
-  // Priority 2: Look up using cityToDispatchCenterMap
+  // Priority 1: Explicit operatingCities / operatingCity set on the entity
+  if (entity.operatingCities && Array.isArray(entity.operatingCities)) {
+    entity.operatingCities.forEach(dc => {
+      if (dc !== 'all' && !dcs.includes(dc)) dcs.push(dc);
+    });
+  }
+  if (entity.operatingCity && entity.operatingCity !== 'all' && !dcs.includes(entity.operatingCity)) {
+    dcs.push(entity.operatingCity);
+  }
+  if (dcs.length > 0) return dcs;
+
+  // Priority 2: Look up using cityToDispatchCentersMap
   const lookupKey = entity.cityId || entity.pickupCity;
   if (lookupKey) {
-    const mapped = cityToDispatchCenterMap[lookupKey] || cityToDispatchCenterMap[lookupKey.toLowerCase()];
+    const mapped = cityToDispatchCentersMap[lookupKey] || cityToDispatchCentersMap[lookupKey.toLowerCase()];
     if (mapped) return mapped;
   }
 
@@ -68,24 +84,35 @@ export function resolveFleetScope(
   if (entity.hubId) {
     const hubCityId = hubs.find((hub) => hub.id === entity.hubId)?.cityId;
     if (hubCityId) {
-      const mapped = cityToDispatchCenterMap[hubCityId] || cityToDispatchCenterMap[hubCityId.toLowerCase()];
+      const mapped = cityToDispatchCentersMap[hubCityId] || cityToDispatchCentersMap[hubCityId.toLowerCase()];
       if (mapped) return mapped;
     }
   }
 
   // Priority 4: Infer from pickupCity or cityId as a fallback
   const explicitScope = cityIdToScope(entity.pickupCity || entity.cityId);
-  if (explicitScope) return explicitScope;
+  if (explicitScope) return [explicitScope];
   
   const hubCityId = hubs.find((hub) => hub.id === entity.hubId)?.cityId
-  return cityIdToScope(hubCityId) || 'other';
+  const inferred = cityIdToScope(hubCityId) || 'other';
+  return [inferred];
+}
+
+export function resolveFleetScope(
+  entity: Parameters<typeof resolveFleetScopes>[0],
+  hubs: Parameters<typeof resolveFleetScopes>[1] = []
+): string {
+  const scopes = resolveFleetScopes(entity, hubs);
+  return scopes[0] || 'other';
 }
 
 export function matchesCityScope(
   selectedCity: string,
-  entity: Parameters<typeof resolveFleetScope>[0],
-  hubs: Parameters<typeof resolveFleetScope>[1] = [],
+  entity: Parameters<typeof resolveFleetScopes>[0],
+  hubs: Parameters<typeof resolveFleetScopes>[1] = [],
 ) {
-  return selectedCity === 'all' || resolveFleetScope(entity, hubs) === selectedCity
+  if (selectedCity === 'all') return true;
+  const resolved = resolveFleetScopes(entity, hubs);
+  return resolved.includes(selectedCity);
 }
 

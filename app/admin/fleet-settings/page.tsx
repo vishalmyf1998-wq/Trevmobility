@@ -67,8 +67,11 @@ export default function DispatchCenterSettingsPage() {
 
     // Unassign cities belonging to this dispatch center
     cities.forEach((city: any) => {
-      if (city.operatingCity === dcId) {
-        updateCity(city.id, { ...city, operatingCity: null });
+      const list = city.operatingCities ? [...city.operatingCities] : (city.operatingCity ? [city.operatingCity] : []);
+      if (list.includes(dcId)) {
+        const operatingCities = list.filter(id => id !== dcId);
+        const operatingCity = operatingCities.length > 0 ? operatingCities[operatingCities.length - 1] : null;
+        updateCity(city.id, { ...city, operatingCities, operatingCity });
       }
     });
 
@@ -80,25 +83,35 @@ export default function DispatchCenterSettingsPage() {
   const handleAddCityToDC = (dcId: string, cityId: string) => {
     const city = cities.find((c: any) => c.id === cityId);
     if (city) {
-      updateCity(cityId, { ...city, operatingCity: dcId });
+      const operatingCities = city.operatingCities ? [...city.operatingCities] : (city.operatingCity ? [city.operatingCity] : []);
+      if (!operatingCities.includes(dcId)) {
+        operatingCities.push(dcId);
+      }
+      updateCity(cityId, { ...city, operatingCities, operatingCity: dcId });
       const dcName = dispatchCenters.find(dc => dc.id === dcId)?.name || dcId;
       toast.success(`City '${city.name}' assigned to Dispatch Center '${dcName}'.`);
     }
   };
 
   // Remove City from Dispatch Center
-  const handleRemoveCityFromDC = (cityId: string) => {
+  const handleRemoveCityFromDC = (dcId: string, cityId: string) => {
     const city = cities.find((c: any) => c.id === cityId);
     if (city) {
-      updateCity(cityId, { ...city, operatingCity: null });
-      toast.success(`City '${city.name}' unassigned.`);
+      const list = city.operatingCities ? [...city.operatingCities] : (city.operatingCity ? [city.operatingCity] : []);
+      const operatingCities = list.filter(id => id !== dcId);
+      const operatingCity = operatingCities.length > 0 ? operatingCities[operatingCities.length - 1] : null;
+      updateCity(cityId, { ...city, operatingCities, operatingCity });
+      toast.success(`City '${city.name}' removed from this Dispatch Center.`);
     }
   };
 
   // Filter cities by their assigned dispatch center
   const getCitiesInDC = (dcId: string) => {
     return cities.filter((city: any) => {
-      const resolvedDc = city.operatingCity || (city.id === 'demo-city-delhi' ? 'ncr' : city.id === 'demo-city-jaipur' ? 'jpr' : 'other');
+      const list = city.operatingCities || (city.operatingCity ? [city.operatingCity] : []);
+      if (list.length > 0) return list.includes(dcId);
+      
+      const resolvedDc = (city.id === 'demo-city-delhi' ? 'ncr' : city.id === 'demo-city-jaipur' ? 'jpr' : 'other');
       return resolvedDc === dcId;
     });
   };
@@ -106,9 +119,9 @@ export default function DispatchCenterSettingsPage() {
   // Unassigned cities are those that aren't mapped to any active dispatch center in dispatchCenters list
   const getUnassignedCities = () => {
     return cities.filter((city: any) => {
-      const resolvedDc = city.operatingCity || (city.id === 'demo-city-delhi' ? 'ncr' : city.id === 'demo-city-jaipur' ? 'jpr' : null);
-      if (!resolvedDc) return true;
-      return !dispatchCenters.some(dc => dc.id === resolvedDc);
+      const list = city.operatingCities || (city.operatingCity ? [city.operatingCity] : []);
+      const activeList = list.filter(id => dispatchCenters.some(dc => dc.id === id));
+      return activeList.length === 0;
     });
   };
 
@@ -239,7 +252,7 @@ export default function DispatchCenterSettingsPage() {
                               <span key={city.id} className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 bg-slate-50 border rounded-xl text-xs font-bold text-slate-700 shadow-sm">
                                 {city.name}
                                 <button 
-                                  onClick={() => handleRemoveCityFromDC(city.id)}
+                                  onClick={() => handleRemoveCityFromDC(dc.id, city.id)}
                                   className="p-0.5 hover:bg-slate-200 rounded-full transition-colors text-slate-400 hover:text-slate-600"
                                 >
                                   <X className="w-3.5 h-3.5" />
