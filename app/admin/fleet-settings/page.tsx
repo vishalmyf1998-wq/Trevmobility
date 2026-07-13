@@ -22,6 +22,14 @@ export default function DispatchCenterSettingsPage() {
   const [newDcName, setNewDcName] = useState('');
   const [newDcShortLabel, setNewDcShortLabel] = useState('');
 
+  // Search state for adding cities
+  const [citySearchQueries, setCitySearchQueries] = useState<Record<string, string>>({});
+  const [activeSearchDc, setActiveSearchDc] = useState<string | null>(null);
+
+  const handleSearchQueryChange = (dcId: string, query: string) => {
+    setCitySearchQueries(prev => ({ ...prev, [dcId]: query }));
+  };
+
   // Handle Dispatch Center creation
   const handleCreateDC = (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,6 +195,12 @@ export default function DispatchCenterSettingsPage() {
                 return resolvedDc !== dc.id;
               });
 
+              // Filter unassigned pool based on search query
+              const searchQuery = (citySearchQueries[dc.id] || '').toLowerCase();
+              const filteredPool = unassignedPool.filter((city: any) => 
+                city.name.toLowerCase().includes(searchQuery)
+              );
+
               return (
                 <Card key={dc.id} className="shadow-md border border-slate-100 rounded-2xl flex flex-col justify-between">
                   <div>
@@ -238,24 +252,66 @@ export default function DispatchCenterSettingsPage() {
                     </CardContent>
                   </div>
                   
-                  {/* Add City Select Dropdown */}
+                  {/* Add City Searchable Picker */}
                   <CardContent className="pt-0 border-t border-slate-50 mt-4 bg-slate-50/50 p-4 rounded-b-2xl">
-                    <div className="flex gap-2">
-                      <Select 
-                        onValueChange={(value) => handleAddCityToDC(dc.id, value)}
-                        value=""
-                      >
-                        <SelectTrigger className="w-full bg-white rounded-xl border-slate-200 text-xs font-semibold">
-                          <SelectValue placeholder="Add city..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {unassignedPool.map((city: any) => (
-                            <SelectItem key={city.id} value={city.id} className="text-xs font-semibold">
-                              {city.name} {city.operatingCity ? `(from ${dispatchCenters.find(d => d.id === city.operatingCity)?.name || city.operatingCity})` : ''}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="relative">
+                      {activeSearchDc === dc.id ? (
+                        <div className="space-y-2 bg-white p-3 rounded-xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
+                          <div className="flex items-center gap-2">
+                            <Input
+                              placeholder="Type to search city..."
+                              value={citySearchQueries[dc.id] || ''}
+                              onChange={(e) => handleSearchQueryChange(dc.id, e.target.value)}
+                              className="h-8 text-xs rounded-lg border-slate-200"
+                              autoFocus
+                            />
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => {
+                                setActiveSearchDc(null);
+                                handleSearchQueryChange(dc.id, '');
+                              }}
+                              className="h-8 w-8 text-slate-400 hover:text-slate-600 rounded-lg"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          
+                          <div className="max-h-40 overflow-y-auto divide-y divide-slate-50 custom-scrollbar">
+                            {filteredPool.length === 0 ? (
+                              <p className="text-[11px] text-slate-400 p-2 italic text-center">No matching cities found</p>
+                            ) : (
+                              filteredPool.map((city: any) => (
+                                <button
+                                  key={city.id}
+                                  onClick={() => {
+                                    handleAddCityToDC(dc.id, city.id);
+                                    setActiveSearchDc(null);
+                                    handleSearchQueryChange(dc.id, '');
+                                  }}
+                                  className="w-full text-left px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex justify-between items-center rounded-lg cursor-pointer"
+                                >
+                                  <span>{city.name}</span>
+                                  {city.operatingCity && (
+                                    <span className="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded">
+                                      {dispatchCenters.find(d => d.id === city.operatingCity)?.name || city.operatingCity}
+                                    </span>
+                                  )}
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <Button 
+                          onClick={() => setActiveSearchDc(dc.id)}
+                          variant="outline" 
+                          className="w-full bg-white rounded-xl border-slate-200 text-xs font-semibold hover:bg-slate-50 text-slate-500 h-9 justify-start px-3 flex items-center gap-2"
+                        >
+                          <Plus className="w-3.5 h-3.5 text-slate-400" /> Add city (searchable)...
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
