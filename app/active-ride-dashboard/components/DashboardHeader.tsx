@@ -140,12 +140,12 @@ export function DashboardHeader({
             <div className="flex gap-3">
               <Select value={cityFilter} onValueChange={setCityFilter}>
                 <SelectTrigger className="w-full md:w-[180px] h-11 bg-white/50 hover:bg-white/80 focus:bg-white border-white/60 shadow-inner rounded-[1.5rem] text-[13px] font-medium transition-all duration-300 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-indigo-500/20">
-                  <SelectValue placeholder="Dispatch Center" />
+                  <SelectValue placeholder="Select City" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Dispatch Centers</SelectItem>
-                  {dispatchCenters.filter(dc => dc.id !== 'other').map((dc) => (
-                    <SelectItem key={dc.id} value={dc.id}>{dc.name}</SelectItem>
+                  <SelectItem value="all">All Cities</SelectItem>
+                  {cities.map((city) => (
+                    <SelectItem key={city.id} value={city.id}>{city.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

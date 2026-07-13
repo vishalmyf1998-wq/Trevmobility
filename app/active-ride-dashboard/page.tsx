@@ -421,7 +421,11 @@ export default function ActiveRideDashboard() {
   const [expandedRideId, setExpandedRideId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'delayed' | 'unassigned' | 'dispatched' | 'arrived' | 'pickup' | 'dropped' | 'closed' | 'cancelled' | 'gps_off' | 'priority' | 'low_soc' | 'login_delay'>('all');
-  const cityFilter = selectedCity;
+  const [dashboardCityFilter, setDashboardCityFilter] = useState<string>('all');
+  const handleDashboardCityFilterChange = useCallback((value: string) => {
+    setHubFilter('all');
+    setDashboardCityFilter(value);
+  }, []);
   const [hubFilter, setHubFilter] = useState('all');
   const [delaySubFilter, setDelaySubFilter] = useState('all');
   const [ongoingSubFilter, setOngoingSubFilter] = useState('all');
@@ -799,7 +803,7 @@ export default function ActiveRideDashboard() {
     const query = searchQuery.trim().toLowerCase();
     return statusFiltered.filter((b: any) => {
       const pickupDate = b.pickupDate || "";
-      const matchesCity = matchesCityScope(selectedCity, b, hubs);
+      const matchesCity = dashboardCityFilter === 'all' || b.cityId === dashboardCityFilter;
       const matchesHub = hubFilter === 'all' || b.hubId === hubFilter;
       const matchesSearch = !query || [
         b.bookingNumber,
@@ -811,7 +815,7 @@ export default function ActiveRideDashboard() {
       const matchesTo = !dateTo || pickupDate <= dateTo;
       return matchesCity && matchesHub && matchesSearch && matchesFrom && matchesTo;
     });
-  }, [bookings, statusFilter, cityFilter, hubFilter, delaySubFilter, ongoingSubFilter, prioritySubFilter, liveMetrics, searchQuery, dateFrom, dateTo, isGpsOff, isPriority]);
+  }, [bookings, statusFilter, dashboardCityFilter, hubFilter, delaySubFilter, ongoingSubFilter, prioritySubFilter, liveMetrics, searchQuery, dateFrom, dateTo, isGpsOff, isPriority]);
 
   const sortedRides = useMemo(() => {
     const liveRides = filteredBookings.map((b: any) => {
@@ -1037,8 +1041,8 @@ export default function ActiveRideDashboard() {
          handleRefresh={() => { setIsRefreshing(true); setTimeout(() => setIsRefreshing(false), 500); }}
          statusFilter={statusFilter}
          setStatusFilter={setStatusFilter}
-         cityFilter={cityFilter}
-         setCityFilter={handleCityFilterChange}
+         cityFilter={dashboardCityFilter}
+         setCityFilter={handleDashboardCityFilterChange}
          hubFilter={hubFilter}
          setHubFilter={setHubFilter}
          cities={cities}
