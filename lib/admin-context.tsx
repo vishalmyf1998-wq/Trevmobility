@@ -912,6 +912,153 @@ const sanitizeForSupabase = (obj: any) => {
   return sanitized;
 }
 
+const mapIdToUuid = (id: string | null | undefined): string | null => {
+  if (!id) return null;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) return id; // already uuid
+  
+  const mapping: Record<string, string> = {
+    'demo-city-delhi': '11111111-1111-4111-a111-111111111111',
+    'demo-city-jaipur': '22222222-2222-4222-a222-222222222222',
+    'demo-city-mumbai': '33333333-3333-4333-a333-333333333333',
+    'demo-city-bengaluru': '44444444-4444-4444-a444-444444444444',
+    
+    'demo-cat-sedan': '55555555-5555-4555-a555-555555555555',
+    'demo-cat-suv': '66666666-6666-4666-a666-666666666666',
+    'demo-cat-premium': '77777777-7777-4777-a777-777777777777',
+    
+    'demo-hub-delhi-ncr': 'aaaaaaaa-aaaa-4aaa-daaa-aaaaaaaaaaaa',
+    'demo-hub-jaipur-main': 'bbbbbbbb-bbbb-4bbb-dbbb-bbbbbbbbbbbb',
+    'demo-hub-mumbai-airport': 'cccccccc-cccc-4ccc-dccc-cccccccccccc',
+    'demo-hub-bengaluru': 'dddddddd-dddd-4ddd-dddd-dddddddddddd',
+    
+    'demo-b2c-1': 'e1111111-1111-4111-e111-111111111111',
+    'demo-b2c-2': 'e2222222-2222-4222-e222-222222222222',
+    'demo-b2c-3': 'e3333333-3333-4333-e333-333333333333',
+    
+    'demo-b2b-acme': 'f1111111-1111-4111-f111-111111111111',
+    'demo-b2b-zen': 'f2222222-2222-4222-f222-222222222222',
+    
+    'demo-emp-1': 'f3333333-3333-4333-f333-333333333333',
+    'demo-emp-2': 'f4444444-4444-4444-f444-444444444444',
+    'demo-emp-3': 'f5555555-5555-4555-f555-555555555555',
+
+    'demo-airport-bom': 'aa111111-1111-4111-a111-111111111111',
+    'demo-airport-del': 'aa222222-2222-4222-a222-222222222222',
+    'demo-terminal-bom-t1': 'ab111111-1111-4111-a111-111111111111',
+    'demo-terminal-bom-t2': 'ab222222-2222-4222-a222-222222222222',
+    'demo-terminal-del-t2': 'ab333333-3333-4333-a333-333333333333',
+    'demo-terminal-del-t3': 'ab444444-4444-4444-a444-444444444444',
+  };
+  
+  if (mapping[id]) return mapping[id];
+  
+  if (id.startsWith('demo-driver-')) {
+    const num = id.replace('demo-driver-', '');
+    return `88888888-8888-4888-b888-${num.padStart(12, '0')}`;
+  }
+  if (id.startsWith('demo-car-')) {
+    const num = id.replace('demo-car-', '');
+    return `99999999-9999-4999-c999-${num.padStart(12, '0')}`;
+  }
+  if (id.startsWith('demo-booking-')) {
+    const num = id.replace('demo-booking-', '');
+    return `d1111111-1111-4111-d111-${num.padStart(12, '0')}`;
+  }
+  
+  return id;
+};
+
+const mapUuidToId = (uuid: string | null | undefined): string | null => {
+  if (!uuid) return null;
+  const reverseMapping: Record<string, string> = {
+    '11111111-1111-4111-a111-111111111111': 'demo-city-delhi',
+    '22222222-2222-4222-a222-222222222222': 'demo-city-jaipur',
+    '33333333-3333-4333-a333-333333333333': 'demo-city-mumbai',
+    '44444444-4444-4444-a444-444444444444': 'demo-city-bengaluru',
+    
+    '55555555-5555-4555-a555-555555555555': 'demo-cat-sedan',
+    '66666666-6666-4666-a666-666666666666': 'demo-cat-suv',
+    '77777777-7777-4777-a777-777777777777': 'demo-cat-premium',
+    
+    'aaaaaaaa-aaaa-4aaa-daaa-aaaaaaaaaaaa': 'demo-hub-delhi-ncr',
+    'bbbbbbbb-bbbb-4bbb-dbbb-bbbbbbbbbbbb': 'demo-hub-jaipur-main',
+    'cccccccc-cccc-4ccc-dccc-cccccccccccc': 'demo-hub-mumbai-airport',
+    'dddddddd-dddd-4ddd-dddd-dddddddddddd': 'demo-hub-bengaluru',
+    
+    'e1111111-1111-4111-e111-111111111111': 'demo-b2c-1',
+    'e2222222-2222-4222-e222-222222222222': 'demo-b2c-2',
+    'e3333333-3333-4333-e333-333333333333': 'demo-b2c-3',
+    
+    'f1111111-1111-4111-f111-111111111111': 'demo-b2b-acme',
+    'f2222222-2222-4222-f222-222222222222': 'demo-b2b-zen',
+    
+    'f3333333-3333-4333-f333-333333333333': 'demo-emp-1',
+    'f4444444-4444-4444-f444-444444444444': 'demo-emp-2',
+    'f5555555-5555-4555-f555-555555555555': 'demo-emp-3',
+
+    'aa111111-1111-4111-a111-111111111111': 'demo-airport-bom',
+    'aa222222-2222-4222-a222-222222222222': 'demo-airport-del',
+    'ab111111-1111-4111-a111-111111111111': 'demo-terminal-bom-t1',
+    'ab222222-2222-4222-a222-222222222222': 'demo-terminal-bom-t2',
+    'ab333333-3333-4333-a333-333333333333': 'demo-terminal-del-t2',
+    'ab444444-4444-4444-a444-444444444444': 'demo-terminal-del-t3',
+  };
+  
+  if (reverseMapping[uuid]) return reverseMapping[uuid];
+  
+  if (uuid.startsWith('88888888-8888-4888-b888-')) {
+    const num = parseInt(uuid.replace('88888888-8888-4888-b888-', ''), 10);
+    return `demo-driver-${num}`;
+  }
+  if (uuid.startsWith('99999999-9999-4999-c999-')) {
+    const num = parseInt(uuid.replace('99999999-9999-4999-c999-', ''), 10);
+    return `demo-car-${num}`;
+  }
+  if (uuid.startsWith('d1111111-1111-4111-d111-')) {
+    const num = parseInt(uuid.replace('d1111111-1111-4111-d111-', ''), 10);
+    return `demo-booking-${num}`;
+  }
+  
+  return uuid;
+};
+
+const mapBookingToSupabase = (b: any) => {
+  const sanitized = sanitizeForSupabase(b);
+  return {
+    ...sanitized,
+    id: mapIdToUuid(b.id),
+    b2cCustomerId: mapIdToUuid(b.b2cCustomerId),
+    b2bClientId: mapIdToUuid(b.b2bClientId),
+    b2bEmployeeId: mapIdToUuid(b.b2bEmployeeId),
+    driverId: mapIdToUuid(b.driverId),
+    carId: mapIdToUuid(b.carId),
+    cityId: mapIdToUuid(b.cityId),
+    carCategoryId: mapIdToUuid(b.carCategoryId),
+    hubId: mapIdToUuid(b.hubId),
+    airportId: mapIdToUuid(b.airportId),
+    airportTerminalId: mapIdToUuid(b.airportTerminalId),
+    promoCodeId: mapIdToUuid(b.promoCodeId),
+  };
+};
+
+const mapBookingFromSupabase = (b: any) => {
+  return {
+    ...b,
+    id: mapUuidToId(b.id),
+    b2cCustomerId: mapUuidToId(b.b2cCustomerId),
+    b2bClientId: mapUuidToId(b.b2bClientId),
+    b2bEmployeeId: mapUuidToId(b.b2bEmployeeId),
+    driverId: mapUuidToId(b.driverId),
+    carId: mapUuidToId(b.carId),
+    cityId: mapUuidToId(b.cityId),
+    carCategoryId: mapUuidToId(b.carCategoryId),
+    hubId: mapUuidToId(b.hubId),
+    airportId: mapUuidToId(b.airportId),
+    airportTerminalId: mapUuidToId(b.airportTerminalId),
+    promoCodeId: mapUuidToId(b.promoCodeId),
+  };
+};
+
 // Universal Database Error Handler for all tables
 const handleDbError = (error: any, contextMsg: string) => {
   console.error(contextMsg, error)
@@ -1306,12 +1453,11 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       if (error) {
         console.warn('Bookings table might not exist yet or failed to fetch:', error.message || error)
       } else if (data && data.length > 0) {
-        // Merge Supabase data with local state instead of overwriting
-        // so bookings added while the fetch was in-flight don't vanish
+        const mapped = data.map(mapBookingFromSupabase) as Booking[]
         setBookings(prev => {
-          if (prev.length === 0) return data as Booking[]
+          if (prev.length === 0) return mapped
           const existingIds = new Set(prev.map(b => b.id))
-          const newOnes = (data as Booking[]).filter(b => !existingIds.has(b.id))
+          const newOnes = mapped.filter(b => !existingIds.has(b.id))
           return [...prev, ...newOnes]
         })
       }
@@ -1778,7 +1924,7 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
     const newBooking = { ...booking, id: generateId(), createdAt: new Date().toISOString() };
     setBookings(prev => [...prev, newBooking as Booking]);
 
-    const payload = sanitizeForSupabase(newBooking);
+    const payload = mapBookingToSupabase(newBooking);
     const { error } = await supabase.from('bookings').insert([payload]);
     if (error) {
       handleDbError(error, 'Error adding booking to Supabase:');
@@ -1786,10 +1932,11 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
   }, []);
 
   const updateBooking = useCallback(async (id: string, updates: Partial<Booking>) => {
-    // Check if ID is a valid UUID (Supabase requires UUIDs for the id column)
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+    // Map id to UUID for Supabase
+    const dbId = mapIdToUuid(id);
+    const isUuid = dbId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(dbId);
     
-    if (!isUuid || id.includes('demo-')) {
+    if (!isUuid) {
         // Skip Supabase update for local mock data or invalid UUIDs
         setBookings(prev => prev.map(b => b.id === id ? { ...b, ...updates } as Booking : b));
         return;
@@ -1836,7 +1983,13 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
             eventLog: newEventLog
         };
         
-        const { error } = await supabase.from('bookings').update(sanitizeForSupabase(payload)).eq('id', id);
+        // Map payload to Supabase UUID schema
+        const dbPayload = {
+            ...mapBookingToSupabase(payload),
+            pendingEdits: mapBookingToSupabase(actualEdits)
+        };
+        
+        const { error } = await supabase.from('bookings').update(dbPayload).eq('id', dbId);
 
         if (error) {
             handleDbError(error, 'Error submitting booking edit for approval:');
@@ -1846,15 +1999,15 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
         }
     } else {
         // For Trev Admins or for simple status changes, update directly.
-        const payload = sanitizeForSupabase(updates)
-        const { error } = await supabase.from('bookings').update(payload).eq('id', id)
+        const payload = mapBookingToSupabase(updates);
+        const { error } = await supabase.from('bookings').update(payload).eq('id', dbId)
         if (error) {
           handleDbError(error, 'Error updating booking in Supabase:')
         } else {
           setBookings(prev => prev.map(b => b.id === id ? { ...b, ...updates } as Booking : b))
         }
     }
-  }, [userType, bookings])
+  }, [userType, bookings, currentUser]);
 
   const approveBookingEdit = useCallback(async (bookingId: string) => {
     const booking = bookings.find(b => b.id === bookingId);
@@ -1911,7 +2064,7 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
   const deleteBooking = useCallback(async (id: string) => {
     setBookings(prev => prev.filter(b => b.id !== id))
 
-    const { error } = await supabase.from('bookings').delete().eq('id', id)
+    const { error } = await supabase.from('bookings').delete().eq('id', mapIdToUuid(id) || id)
     if (error) {
       handleDbError(error, 'Error deleting booking from Supabase:')
     }
