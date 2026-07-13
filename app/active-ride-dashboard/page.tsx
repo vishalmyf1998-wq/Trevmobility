@@ -1248,8 +1248,21 @@ export default function ActiveRideDashboard() {
               cities,
             );
             const currentFleet = resolveFleetScope(ride.originalBooking, hubs);
-            const routeCityName =
-              getCity(ride.originalBooking.cityId)?.name ||
+            let matchedCity = null;
+            if (ride.originalBooking.cityId) {
+              matchedCity = cities.find((c: any) => c.id === ride.originalBooking.cityId);
+            }
+            if (!matchedCity && ride.originalBooking.hubId) {
+              const hubCityId = hubs.find((h: any) => h.id === ride.originalBooking.hubId)?.cityId;
+              if (hubCityId) {
+                matchedCity = cities.find((c: any) => c.id === hubCityId);
+              }
+            }
+            if (!matchedCity && ride.originalBooking.pickupCity) {
+              matchedCity = cities.find((c: any) => c.id === ride.originalBooking.pickupCity || c.operatingCity === ride.originalBooking.pickupCity);
+            }
+
+            const routeCityName = matchedCity?.name || 
               (dispatchCenters.find(dc => dc.id === currentFleet)?.name || (currentFleet === 'jpr' ? 'Jaipur' : currentFleet === 'ncr' ? 'Delhi-NCR' : 'Unassigned'));
             const routeHub =
               hubs.find((hub) => hub.id === ride.originalBooking.hubId) ||
