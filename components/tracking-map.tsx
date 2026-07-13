@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { MapContainer, Marker, Popup, Tooltip, Polyline, useMap, CircleMarker } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -48,6 +48,23 @@ const statusColors: Record<string, string> = {
   picked_up: '#22c55e', // green
   dropped: '#14b8a6', // teal (Ended but not closed)
   cancelled: '#ef4444', // red
+}
+
+function isValidLatLng(value: unknown): value is [number, number] {
+  if (!Array.isArray(value) || value.length !== 2) return false
+  const [lat, lng] = value
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  )
+}
+
+function hasValidLocation(location: CarLocation) {
+  return isValidLatLng([location.latitude, location.longitude])
 }
 
 interface MapUpdaterProps {
@@ -104,6 +121,35 @@ function MapReadyGate({ children }: { children: React.ReactNode }) {
   }, [map])
 
   return isReady ? <>{children}</> : null
+}
+
+function SafeMarker(props: React.ComponentProps<typeof Marker>) {
+  const map = useMap()
+  const [canRender, setCanRender] = useState(false)
+
+  useEffect(() => {
+    let frameId = 0
+    let mounted = true
+
+    const waitForPane = () => {
+      if (!mounted) return
+      if (map.getPane('markerPane')) {
+        setCanRender(true)
+        return
+      }
+      frameId = window.requestAnimationFrame(waitForPane)
+    }
+
+    waitForPane()
+
+    return () => {
+      mounted = false
+      if (frameId) window.cancelAnimationFrame(frameId)
+    }
+  }, [map])
+
+  if (!canRender) return null
+  return <Marker {...props} />
 }
 
 function SafeTileLayer() {
@@ -187,35 +233,52 @@ export default function TrackingMap({
     setIsMounted(true);
   }, []);
 
+  const validCarLocations = useMemo(
+    () => carLocations.filter(hasValidLocation),
+    [carLocations],
+  )
+
+  const validStopPoints = useMemo(
+    () => stopPoints.filter((stop) => isValidLatLng(stop.position)),
+    [stopPoints],
+  )
+
+  const validPickupPoint = isValidLatLng(pickupPoint) ? pickupPoint : null
+  const validDropPoint = isValidLatLng(dropPoint) ? dropPoint : null
+  const validPlannedRoute = useMemo(
+    () => plannedRoute.filter(isValidLatLng),
+    [plannedRoute],
+  )
+
   // Calculate center based on car locations or default to Mumbai
   const defaultCenter: [number, number] = [19.0760, 72.8777]
   
-  const center = carLocations.length > 0
+  const center = validCarLocations.length > 0
     ? [
-        carLocations.reduce((sum, loc) => sum + loc.latitude, 0) / carLocations.length,
-        carLocations.reduce((sum, loc) => sum + loc.longitude, 0) / carLocations.length,
+        validCarLocations.reduce((sum, loc) => sum + loc.latitude, 0) / validCarLocations.length,
+        validCarLocations.reduce((sum, loc) => sum + loc.longitude, 0) / validCarLocations.length,
       ] as [number, number]
     : defaultCenter
 
   // Compute map zoom bounds and route polyline path
   const activeCarId = selectedTrip ? trips.find(t => t.id === selectedTrip)?.carId : null;
-  const activeCarLoc = activeCarId ? carLocations.find(l => l.carId === activeCarId) : null;
+  const activeCarLoc = activeCarId ? validCarLocations.find(l => l.carId === activeCarId) : null;
   
   const boundsPoints: [number, number][] = [];
   const pathPoints: [number, number][] = [];
   
   if (activeCarLoc) pathPoints.push([activeCarLoc.latitude, activeCarLoc.longitude]);
-  if (pickupPoint) {
-    boundsPoints.push(pickupPoint); // Static points keep Map stable during live tracking
-    pathPoints.push(pickupPoint);
+  if (validPickupPoint) {
+    boundsPoints.push(validPickupPoint); // Static points keep Map stable during live tracking
+    pathPoints.push(validPickupPoint);
   }
-  stopPoints.forEach((stop) => {
+  validStopPoints.forEach((stop) => {
     boundsPoints.push(stop.position);
     pathPoints.push(stop.position);
   });
-  if (dropPoint) {
-    boundsPoints.push(dropPoint);
-    pathPoints.push(dropPoint);
+  if (validDropPoint) {
+    boundsPoints.push(validDropPoint);
+    pathPoints.push(validDropPoint);
   }
   if (boundsPoints.length === 0 && activeCarLoc) boundsPoints.push([activeCarLoc.latitude, activeCarLoc.longitude]);
 
@@ -232,7 +295,7 @@ export default function TrackingMap({
         <MapReadyGate>
           <SafeTileLayer />
           
-          {carLocations.map((location) => {
+          {validCarLocations.map((location) => {
             const car = getCar(location.carId)
             if (!car) return null
             
@@ -273,7 +336,7 @@ export default function TrackingMap({
               }
             }
 
-            const path = carPaths[location.carId] || []
+            const path = (carPaths[location.carId] || []).filter(isValidLatLng)
             
             const soc = (car as any)?.soc ?? 82;
             const range = (car as any)?.range ?? 210;
@@ -285,7 +348,7 @@ export default function TrackingMap({
                 {(isSelected || showAllRoutes) && path.length > 1 && (
                   <Polyline positions={path} color={isSelected ? '#ef4444' : color} weight={4} opacity={0.7} />
                 )}
-                <Marker
+                <SafeMarker
                   position={[location.latitude, location.longitude]}
                   icon={createCarIcon(
                     isSelected ? '#ef4444' : color,
@@ -378,27 +441,27 @@ export default function TrackingMap({
                       )}
                     </div>
                   </Popup>
-                </Marker>
+                </SafeMarker>
               </React.Fragment>
             )
           })}
 
           {/* Draw the Pickup/Drop Route */}
-          {(showPlannedRoute ? plannedRoute : pathPoints).length >= 2 && (
-            <Polyline positions={showPlannedRoute ? plannedRoute : pathPoints} color="#0ea5e9" weight={4} opacity={0.6} dashArray="8, 8" />
+          {(showPlannedRoute ? validPlannedRoute : pathPoints).length >= 2 && (
+            <Polyline positions={showPlannedRoute ? validPlannedRoute : pathPoints} color="#0ea5e9" weight={4} opacity={0.6} dashArray="8, 8" />
           )}
-          {pickupPoint && (
-            <CircleMarker center={pickupPoint} radius={7} color="white" weight={2} fillColor="#10b981" fillOpacity={1}>
+          {validPickupPoint && (
+            <CircleMarker center={validPickupPoint} radius={7} color="white" weight={2} fillColor="#10b981" fillOpacity={1}>
               <Tooltip direction="top">Pickup Location</Tooltip>
             </CircleMarker>
           )}
-          {stopPoints.map((stop, index) => (
+          {validStopPoints.map((stop, index) => (
             <CircleMarker key={`${stop.position.join("-")}-${index}`} center={stop.position} radius={6} color="white" weight={2} fillColor="#f59e0b" fillOpacity={1}>
               <Tooltip direction="top">{stop.label || `Stop ${index + 1}`}</Tooltip>
             </CircleMarker>
           ))}
-          {dropPoint && (
-            <CircleMarker center={dropPoint} radius={7} color="white" weight={2} fillColor="#ef4444" fillOpacity={1}>
+          {validDropPoint && (
+            <CircleMarker center={validDropPoint} radius={7} color="white" weight={2} fillColor="#ef4444" fillOpacity={1}>
               <Tooltip direction="top">Drop Location</Tooltip>
             </CircleMarker>
           )}

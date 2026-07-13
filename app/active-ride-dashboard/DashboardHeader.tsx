@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, RefreshCw, Search } from "lucide-react";
+import { Download, RefreshCw, Search, Settings } from "lucide-react";
+import Link from "next/link";
 
 export function DashboardHeader({
   isRefreshing,
@@ -33,6 +34,7 @@ export function DashboardHeader({
   setOngoingSubFilter,
   prioritySubFilter,
   setPrioritySubFilter,
+  actions,
 }: {
   isRefreshing: boolean;
   handleRefresh: () => void;
@@ -63,6 +65,7 @@ export function DashboardHeader({
   setOngoingSubFilter: (filter: string) => void;
   prioritySubFilter: string;
   setPrioritySubFilter: (filter: string) => void;
+  actions?: React.ReactNode;
 }) {
   return (
     <div className="space-y-4">
@@ -128,6 +131,7 @@ export function DashboardHeader({
           <Button variant="outline" onClick={onExport} size="icon" className="h-10 w-10 rounded-xl bg-white/60">
             <Download className="h-4 w-4" />
           </Button>
+          {actions}
         </div>
       </div>
 

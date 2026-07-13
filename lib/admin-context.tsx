@@ -13,7 +13,14 @@ import {
   B2BEmployee, B2BApprovalRule, CommunicationTemplate, AdminRole, AdminUser, BookingTag, CancellationPolicy, WalletTransaction, TollLocation,
   UserType
 } from './types'
-import { isCityScope, matchesCityScope, type CityScope } from './city-scope'
+import { matchesCityScope, type CityScope, updateCityDispatchCenterMap } from './city-scope'
+
+export interface DispatchCenter {
+  id: string
+  name: string
+  shortLabel: string
+}
+
 
 export interface DriverPayout {
   id: string
@@ -122,9 +129,9 @@ const initialCarCategories: CarCategory[] = [
 
 const initialCities: City[] = [
   { id: 'demo-city-mumbai', name: 'Mumbai', state: 'Maharashtra', isActive: true, boundaryType: 'latlong', coverageArea: 95, latitude: 19.076, longitude: 72.8777, createdAt: demoNow },
-  { id: 'demo-city-delhi', name: 'Delhi NCR', state: 'Delhi', isActive: true, boundaryType: 'latlong', coverageArea: 120, latitude: 28.6139, longitude: 77.209, createdAt: demoNow },
+  { id: 'demo-city-delhi', name: 'Delhi NCR', state: 'Delhi', isActive: true, boundaryType: 'latlong', coverageArea: 120, latitude: 28.6139, longitude: 77.209, createdAt: demoNow, operatingCity: 'ncr' },
   { id: 'demo-city-bengaluru', name: 'Bengaluru', state: 'Karnataka', isActive: true, boundaryType: 'polygon', coverageArea: 110, latitude: 12.9716, longitude: 77.5946, createdAt: demoNow },
-  { id: 'demo-city-jaipur', name: 'Jaipur', state: 'Rajasthan', isActive: true, boundaryType: 'latlong', coverageArea: 90, latitude: 26.9124, longitude: 75.7873, createdAt: demoNow },
+  { id: 'demo-city-jaipur', name: 'Jaipur', state: 'Rajasthan', isActive: true, boundaryType: 'latlong', coverageArea: 90, latitude: 26.9124, longitude: 75.7873, createdAt: demoNow, operatingCity: 'jpr' },
 ]
 
 const initialAirports: Airport[] = [
@@ -359,7 +366,19 @@ const generateMockBookings = (): Booking[] => {
   const statuses = ['pending', 'confirmed', 'assigned', 'dispatched', 'arrived', 'picked_up', 'dropped', 'closed', 'cancelled']
   const tripTypes = ['city_ride', 'airport_pickup', 'airport_drop', 'rental', 'outstation']
   const customers = ['Rahul Sharma', 'Priya Singh', 'Amit Kumar', 'Neha Gupta', 'Vikram Patel', 'Sunil Shetty', 'Anjali Desai']
-  const locations = ['Delhi Airport T3', 'Connaught Place, Delhi', 'Cyber City, Gurgaon', 'DLF Phase 3, Gurgaon', 'Sector 18, Noida', 'Film City, Noida', 'Indirapuram, Ghaziabad', 'Raj Nagar, Ghaziabad', 'Sector 15, Faridabad', 'NIT Faridabad', 'Saket, Delhi', 'Vasant Kunj, Delhi', 'Dwarka Sector 21, Delhi', 'Aerocity, Delhi']
+  const ncrLocations = [
+    'Delhi Airport T3', 'Connaught Place, Delhi', 'Cyber City, Gurgaon', 'DLF Phase 3, Gurgaon',
+    'Sector 18, Noida', 'Film City, Noida', 'Indirapuram, Ghaziabad', 'Raj Nagar, Ghaziabad',
+    'Sector 15, Faridabad', 'NIT Faridabad', 'Saket, Delhi', 'Vasant Kunj, Delhi',
+    'Dwarka Sector 21, Delhi', 'Aerocity, Delhi'
+  ]
+  const jaipurLocations = [
+    'Jaipur Airport', 'Sindhi Camp, Jaipur', 'Raja Park, Jaipur', 'Malviya Nagar, Jaipur',
+    'Vaishali Nagar, Jaipur', 'C-Scheme, Jaipur', 'Mansarovar, Jaipur', 'Hawa Mahal, Jaipur'
+  ]
+  const otherCities = [
+    'Agra', 'Udaipur', 'Chandigarh', 'Dehradun', 'Amritsar', 'Shimla', 'Pushkar', 'Ajmer', 'Jodhpur'
+  ]
 
   for (let i = 1; i <= 100; i++) {
     const dateOffset = Math.floor(Math.random() * 30) - 15 
@@ -389,9 +408,30 @@ const generateMockBookings = (): Booking[] => {
     const estimatedFare = Math.floor(Math.random() * 3000) + 500
     const gstAmount = Math.floor(estimatedFare * 0.05)
     
-    const pickup = locations[Math.floor(Math.random() * locations.length)]
-    let drop = locations[Math.floor(Math.random() * locations.length)]
-    while(drop === pickup) drop = locations[Math.floor(Math.random() * locations.length)]
+    const isJaipur = i % 5 === 0
+    const regionLocations = isJaipur ? jaipurLocations : ncrLocations
+    const pickup = regionLocations[Math.floor(Math.random() * regionLocations.length)]
+    
+    let drop = ''
+    const tags = []
+    
+    if (tripType === 'outstation') {
+      if (Math.random() > 0.4) {
+        // Drop is outside NCR/Jaipur
+        const otherCity = otherCities[Math.floor(Math.random() * otherCities.length)]
+        drop = `${otherCity} Town Center`
+        tags.push('other cities')
+      } else {
+        // Drop is in a different region (e.g. NCR to Jaipur or vice versa)
+        const destinationRegion = isJaipur ? ncrLocations : jaipurLocations
+        drop = destinationRegion[Math.floor(Math.random() * destinationRegion.length)]
+      }
+    } else {
+      drop = regionLocations[Math.floor(Math.random() * regionLocations.length)]
+      while (drop === pickup) {
+        drop = regionLocations[Math.floor(Math.random() * regionLocations.length)]
+      }
+    }
 
     generatedBookings.push({
       id: `demo-booking-${i}`,
@@ -422,13 +462,13 @@ const generateMockBookings = (): Booking[] => {
       remarks: Math.random() > 0.8 ? 'VIP Guest - Please arrive 10 mins early' : '',
       createdBy: isB2B ? 'Corporate Admin' : 'System',
       createdAt: new Date(Date.now() - Math.random() * 10000000000).toISOString(),
-      // Assign some bookings to Jaipur
-      cityId: i % 5 === 0 ? 'demo-city-jaipur' : 'demo-city-delhi',
-      pickupCity: i % 5 === 0 ? 'jpr' : 'ncr',
-      operatingCity: i % 5 === 0 ? 'jpr' : 'ncr',
-      hubId: i % 5 === 0 ? 'demo-hub-jaipur-main' : 'demo-hub-delhi-ncr',
+      cityId: isJaipur ? 'demo-city-jaipur' : 'demo-city-delhi',
+      pickupCity: isJaipur ? 'jpr' : 'ncr',
+      operatingCity: isJaipur ? 'jpr' : 'ncr',
+      hubId: isJaipur ? 'demo-hub-jaipur-main' : 'demo-hub-delhi-ncr',
       carCategoryId: 'demo-cat-sedan',
-      eventLog: []
+      eventLog: [],
+      tags: tags
     })
   }
   return generatedBookings
@@ -903,6 +943,13 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   const [cars, setCars] = useState<Car[]>(() => loadState('cars', initialCars))
   const [carCategories, setCarCategories] = useState<CarCategory[]>(() => loadState('carCategories', initialCarCategories))
   const [cities, setCities] = useState<City[]>(() => loadState('cities', initialCities))
+  const [dispatchCenters, setDispatchCenters] = useState<DispatchCenter[]>(() =>
+    loadState('dispatchCenters', [
+      { id: 'ncr', name: 'Delhi-NCR', shortLabel: 'NCR' },
+      { id: 'jpr', name: 'Jaipur', shortLabel: 'Jaipur' },
+      { id: 'other', name: 'Other', shortLabel: 'Other' },
+    ])
+  )
   const [b2cCustomers, setB2CCustomers] = useState<B2CCustomer[]>(() => loadState('b2cCustomers', initialB2CCustomers))
   const [airports, setAirports] = useState<Airport[]>(() => loadState('airports', initialAirports))
   const [railwayStations, setRailwayStations] = useState<RailwayStation[]>(() => loadState('railwayStations', initialRailwayStations))
@@ -929,14 +976,8 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>(() => loadState('supportTickets', initialSupportTickets))
   const [tollLocations, setTollLocations] = useState<TollLocation[]>(() => loadState('tollLocations', initialTollLocations))
 
-  useEffect(() => {
-    const savedCity = localStorage.getItem('operations_selected_city')
-    if (isCityScope(savedCity)) setSelectedCityState(savedCity)
-  }, [])
-
   const setSelectedCity = useCallback((city: CityScope) => {
     setSelectedCityState(city)
-    localStorage.setItem('operations_selected_city', city)
   }, [])
 
   // UserType state
@@ -976,13 +1017,15 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   // Persist all state to localStorage
   // Clear old localStorage bookings to load new fields (one-time migration)
   useEffect(() => {
-    const migrated = localStorage.getItem('bookings_migrated_v6')
+    const migrated = localStorage.getItem('bookings_migrated_v7_no_city')
     if (!migrated) {
       localStorage.removeItem('bookings')
-      localStorage.setItem('bookings_migrated_v6', 'true')
+      localStorage.setItem('bookings_migrated_v7_no_city', 'true')
       setBookings(initialBookings)
     }
+  }, [initialBookings])
 
+  useEffect(() => {
     const catMigrated = localStorage.getItem('categories_cleared_v3')
     if (!catMigrated) {
       localStorage.removeItem('carCategories')
@@ -1009,6 +1052,8 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { localStorage.setItem('cars', JSON.stringify(cars)) }, [cars])
   useEffect(() => { localStorage.setItem('carCategories', JSON.stringify(carCategories)) }, [carCategories])
   useEffect(() => { localStorage.setItem('cities', JSON.stringify(cities)) }, [cities])
+  useEffect(() => { localStorage.setItem('dispatchCenters', JSON.stringify(dispatchCenters)) }, [dispatchCenters])
+  useEffect(() => { updateCityDispatchCenterMap(cities) }, [cities])
   useEffect(() => { localStorage.setItem('airports', JSON.stringify(airports)) }, [airports])
   useEffect(() => { localStorage.setItem('railwayStations', JSON.stringify(railwayStations)) }, [railwayStations])
   useEffect(() => { localStorage.setItem('gstConfig', JSON.stringify(gstConfig)) }, [gstConfig])
@@ -1428,6 +1473,19 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     setCarCategories(prev => prev.filter(c => c.id !== id))
   }, [])
   
+  // Dispatch Center actions
+  const addDispatchCenter = useCallback((dc: Omit<DispatchCenter, 'id'>) => {
+    setDispatchCenters(prev => [...prev, { ...dc, id: 'dc-' + Math.random().toString(36).substring(2, 9) }])
+  }, [])
+  
+  const updateDispatchCenter = useCallback((id: string, updates: Partial<DispatchCenter>) => {
+    setDispatchCenters(prev => prev.map(dc => dc.id === id ? { ...dc, ...updates } : dc))
+  }, [])
+  
+  const deleteDispatchCenter = useCallback((id: string) => {
+    setDispatchCenters(prev => prev.filter(dc => dc.id !== id))
+  }, [])
+
   // City actions
   const addCity = useCallback((city: Omit<City, 'id' | 'createdAt'>) => {
     setCities(prev => [...prev, { ...city, id: generateId(), createdAt: new Date().toISOString() }])
@@ -2326,6 +2384,7 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
       getCarCategory, getCity, getB2CCustomer, findB2CCustomer, getAirport, getAirportTerminal, getRailwayStation, getRailwayStationTerminal, getDriver, getCar, getFareGroup, getB2BClient, getB2BEntity, getBooking,
       getHub, getPromoCode, getPromoCodeByCode, getB2BEmployee, getB2BApprovalRule, getAdminRole, getBookingTag,
       getCancellationPolicy,
+      dispatchCenters, addDispatchCenter, updateDispatchCenter, deleteDispatchCenter,
       userType, setUserType,
       selectedCity, setSelectedCity,
       currentUser, logout

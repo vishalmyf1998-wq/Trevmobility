@@ -24,7 +24,7 @@ import { FreeDriversSidebar } from "./components/FreeDriversSidebar";
 import { PrintableDutySlip } from "@/components/DutySlipPrint";
 import { PrintableInvoice } from "@/components/InvoicePrint";
 import { CityBadge } from "@/components/city-badge";
-import { cityIdToScope, resolveFleetScope, scopeToCityId } from "@/lib/city-scope";
+import { cityIdToScope, resolveFleetScope, scopeToCityId, matchesCityScope } from "@/lib/city-scope";
 
 const MapComponent = dynamic(() => import('@/components/tracking-map'), {
   ssr: false,
@@ -414,13 +414,14 @@ export default function ActiveRideDashboard() {
     getAirportTerminal,
     getRailwayStationTerminal,
     selectedCity,
-    setSelectedCity
+    setSelectedCity,
+    dispatchCenters = []
   } = useAdmin();
 
   const [expandedRideId, setExpandedRideId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'delayed' | 'unassigned' | 'dispatched' | 'arrived' | 'pickup' | 'dropped' | 'closed' | 'cancelled' | 'gps_off' | 'priority' | 'low_soc' | 'login_delay'>('all');
-  const cityFilter = selectedCity === 'all' ? 'all' : scopeToCityId(selectedCity);
+  const cityFilter = selectedCity;
   const [hubFilter, setHubFilter] = useState('all');
   const [delaySubFilter, setDelaySubFilter] = useState('all');
   const [ongoingSubFilter, setOngoingSubFilter] = useState('all');
@@ -453,12 +454,7 @@ export default function ActiveRideDashboard() {
 
   const handleCityFilterChange = useCallback((value: string) => {
     setHubFilter('all');
-    if (value === 'all') {
-      setSelectedCity('all');
-      return;
-    }
-    const scope = cityIdToScope(value);
-    if (scope) setSelectedCity(scope);
+    setSelectedCity(value);
   }, [setSelectedCity]);
 
   // Manual Adjustment State
@@ -803,7 +799,7 @@ export default function ActiveRideDashboard() {
     const query = searchQuery.trim().toLowerCase();
     return statusFiltered.filter((b: any) => {
       const pickupDate = b.pickupDate || "";
-      const matchesCity = cityFilter === 'all' || b.cityId === cityFilter;
+      const matchesCity = matchesCityScope(selectedCity, b, hubs);
       const matchesHub = hubFilter === 'all' || b.hubId === hubFilter;
       const matchesSearch = !query || [
         b.bookingNumber,
@@ -1250,7 +1246,7 @@ export default function ActiveRideDashboard() {
             const currentFleet = resolveFleetScope(ride.originalBooking, hubs);
             const routeCityName =
               getCity(ride.originalBooking.cityId)?.name ||
-              (currentFleet === 'jpr' ? 'Jaipur' : currentFleet === 'ncr' ? 'Delhi-NCR' : 'Unassigned');
+              (dispatchCenters.find(dc => dc.id === currentFleet)?.name || (currentFleet === 'jpr' ? 'Jaipur' : currentFleet === 'ncr' ? 'Delhi-NCR' : 'Unassigned'));
             const routeHub =
               hubs.find((hub) => hub.id === ride.originalBooking.hubId) ||
               hubs.find((hub) => resolveFleetScope({ cityId: hub.cityId }) === currentFleet);

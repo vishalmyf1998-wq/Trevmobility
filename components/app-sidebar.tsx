@@ -133,6 +133,7 @@ export function AppSidebar() {
           { title: 'Auto Slot Configuration', href: '/auto-slot-configuration' },
           { title: 'Car Categories', href: '/car-categories' },
           { title: 'Hubs', href: '/hubs' },
+          { title: 'Dispatch Center Settings', href: '/admin/fleet-settings' },
         ],
       },
       {
@@ -171,7 +172,7 @@ export function AppSidebar() {
       icon: CalendarCheck,
       ...(isTrevAdmin ? {
         items: [
-          { title: 'All Bookings', href: '/bookings' },
+          { title: 'Create Booking', href: '/bookings' },
           { title: 'Changes Approval', href: '/bookings?status=pending_edit_approval', notificationKey: 'pendingEdits' }
         ]
       } : { href: '/bookings' }),

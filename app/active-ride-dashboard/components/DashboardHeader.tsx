@@ -1,9 +1,13 @@
+"use client";
+
 import React from 'react';
 import { Download, Search, Zap, RefreshCw, Leaf, Clock, History } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAdmin } from '@/lib/admin-context';
+
 
 interface DashboardHeaderProps {
   isRefreshing: boolean;
@@ -69,6 +73,7 @@ export function DashboardHeader({
   isAutoAllocateOn,
   arrivalMetrics
 }: DashboardHeaderProps) {
+  const { dispatchCenters } = useAdmin();
   return (
     <div className="relative z-50 mb-8 animate-in fade-in slide-in-from-top-4 duration-700 ease-out">
       {/* Dynamic Title Area */}
@@ -135,12 +140,12 @@ export function DashboardHeader({
             <div className="flex gap-3">
               <Select value={cityFilter} onValueChange={setCityFilter}>
                 <SelectTrigger className="w-full md:w-[180px] h-11 bg-white/50 hover:bg-white/80 focus:bg-white border-white/60 shadow-inner rounded-[1.5rem] text-[13px] font-medium transition-all duration-300 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-indigo-500/20">
-                  <SelectValue placeholder="Select City" />
+                  <SelectValue placeholder="Dispatch Center" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Cities</SelectItem>
-                  {cities.map((city) => (
-                    <SelectItem key={city.id} value={city.id}>{city.name}</SelectItem>
+                  <SelectItem value="all">All Dispatch Centers</SelectItem>
+                  {dispatchCenters.filter(dc => dc.id !== 'other').map((dc) => (
+                    <SelectItem key={dc.id} value={dc.id}>{dc.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
