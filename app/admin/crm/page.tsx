@@ -128,23 +128,14 @@ export default function CRMModulePage() {
   // Simulation logic for live rides & auto tickets creation on SLA breach
   useEffect(() => {
     const timer = setInterval(() => {
+      const breachedRides: any[] = []
+
       setLiveRides(prev => {
         return prev.map(ride => {
           const newDelay = ride.delay + (Math.random() > 0.6 ? 2 : 0)
           
           if (newDelay > 15 && ride.delay <= 15) {
-            toast.error(`SLA Breach Alert: Ride ${ride.bookingNumber} is delayed by ${newDelay} mins!`, {
-              description: `Automatically generating CRM ticket & notifying ${ride.customerName}`
-            })
-
-            const autoTicket = {
-              subject: `Auto SLA Breach - Ride ${ride.bookingNumber} Delayed`,
-              customerName: ride.customerName,
-              type: "service",
-              priority: "high",
-              description: `System generated ticket. Ride ${ride.bookingNumber} delayed by ${newDelay} minutes. Driver: ${ride.driverName}.`
-            }
-            addSupportTicket(autoTicket)
+            breachedRides.push({ ...ride, delay: newDelay })
           }
 
           return {
@@ -154,10 +145,28 @@ export default function CRMModulePage() {
           }
         })
       })
-    }, 5000 / simulationSpeed)
+
+      // Run side-effects outside of the state updater
+      if (breachedRides.length > 0) {
+        breachedRides.forEach(ride => {
+          toast.error(`SLA Breach Alert: Ride ${ride.bookingNumber} is delayed by ${ride.delay} mins!`, {
+            description: `Automatically generating CRM ticket & notifying ${ride.customerName}`
+          })
+
+          const autoTicket = {
+            subject: `Auto SLA Breach - Ride ${ride.bookingNumber} Delayed`,
+            customerName: ride.customerName,
+            type: "service",
+            priority: "high",
+            description: `System generated ticket. Ride ${ride.bookingNumber} delayed by ${ride.delay} minutes. Driver: ${ride.driverName}.`
+          }
+          addSupportTicket(autoTicket)
+        })
+      }
+    }, 5000)
 
     return () => clearInterval(timer)
-  }, [simulationSpeed, addSupportTicket])
+  }, [addSupportTicket])
 
   // Feedback NPS rating low-stars complaint auto-trigger
   const handleAddFeedback = (newFdb: typeof feedbacks[0]) => {
