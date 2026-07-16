@@ -1,0 +1,1451 @@
+// @ts-nocheck
+"use client"
+
+import React, { useState, useMemo, useEffect } from "react"
+import { AdminLayout } from "@/components/admin-layout"
+import { useAdmin } from "@/lib/admin-context"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer,
+  BarChart, Bar, Legend, PieChart, Pie, Cell, LineChart, Line
+} from "recharts"
+import {
+  Headset, Activity, AlertTriangle, CheckCircle, Clock, Users, Shield, BookOpen,
+  DollarSign, FileText, BarChart3, Settings, Phone, Mail,
+  Search, User, Plus, Download, Check, Award
+} from "lucide-react"
+import { toast } from "sonner"
+
+// Colors for charts
+const COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"]
+
+// Default Role Permissions
+const DEFAULT_PERMISSIONS = {
+  "CRM Executive": { tickets: true, liveSupport: true, complaints: true, refunds: false, timeline: true, kb: true, reports: false, settings: false },
+  "CRM Team Lead": { tickets: true, liveSupport: true, complaints: true, refunds: true, timeline: true, kb: true, reports: true, settings: false },
+  "CRM Manager": { tickets: true, liveSupport: true, complaints: true, refunds: true, timeline: true, kb: true, reports: true, settings: true },
+  "Finance": { tickets: false, liveSupport: false, complaints: false, refunds: true, timeline: false, kb: true, reports: true, settings: false },
+  "Corporate Manager": { tickets: true, liveSupport: true, complaints: true, refunds: false, timeline: true, kb: true, reports: true, settings: false },
+  "Admin": { tickets: true, liveSupport: true, complaints: true, refunds: true, timeline: true, kb: true, reports: true, settings: true }
+}
+
+export default function CRMModulePage() {
+  const { bookings, supportTickets, addSupportTicket, updateSupportTicket, drivers, cars, b2bClients, b2cCustomers } = useAdmin()
+
+  // Tabs state
+  const [activeTab, setActiveTab] = useState("dashboard")
+
+  // Role and Permission states
+  const [selectedRole, setSelectedRole] = useState("CRM Manager")
+  const [permissions, setPermissions] = useState(DEFAULT_PERMISSIONS)
+
+  // Simulation speed
+  const [simulationSpeed, setSimulationSpeed] = useState(1)
+
+  // Sub-module Local States (backed by sample data)
+  const [ticketsList, setTicketsList] = useState(() => {
+    return supportTickets.map(t => ({
+      ...t,
+      slaTimer: Math.floor(Math.random() * 90) + 10,
+      source: ["Phone", "WhatsApp", "Email", "App"][Math.floor(Math.random() * 4)],
+      category: t.type || "Billing",
+      priority: t.priority || "Medium",
+      status: t.status || "Open",
+      assignedAgent: ["Rohan K.", "Sneha S.", "Amit P.", "Unassigned"][Math.floor(Math.random() * 4)],
+      phone: "+91 98765 43210"
+    }))
+  })
+
+  // Synchronize context changes
+  useEffect(() => {
+    setTicketsList(prev => {
+      const existingIds = new Set(prev.map(t => t.id))
+      const newTickets = supportTickets
+        .filter(t => !existingIds.has(t.id))
+        .map(t => ({
+          id: t.id,
+          ticketNumber: t.ticketNumber || `TK-${Math.floor(1000 + Math.random() * 9000)}`,
+          subject: t.subject || "General Inquiry",
+          customerName: t.customerName || "Anonymous Customer",
+          category: t.type || "Ride Issue",
+          priority: t.priority || "Medium",
+          status: t.status || "Open",
+          createdAt: t.createdAt || new Date().toISOString(),
+          slaTimer: 60,
+          source: "App",
+          assignedAgent: "Unassigned",
+          phone: "+91 98765 00000"
+        }))
+      return [...prev, ...newTickets]
+    })
+  }, [supportTickets])
+
+  // Selected ticket for sliding drawer details
+  const [selectedTicket, setSelectedTicket] = useState<any>(null)
+  
+  // Advanced filters state
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filterPriority, setFilterPriority] = useState("all")
+  const [filterStatus, setFilterStatus] = useState("all")
+  const [filterCategory, setFilterCategory] = useState("all")
+
+  // Mock complaints list
+  const [complaints, setComplaints] = useState([
+    { id: "CMP-001", customerName: "Rahul Sharma", category: "Driver Behaviour", priority: "High", severity: "Major", owner: "Rohan K.", department: "Operations", status: "Open", rootCause: "Driver spoke rudely regarding toll route", resolution: "", resolutionTime: "", confirmed: false },
+    { id: "CMP-002", customerName: "Priya Singh", category: "Late Arrival", priority: "Medium", severity: "Minor", owner: "Sneha S.", department: "Dispatch", status: "Resolved", rootCause: "Traffic congestion at Gurugram toll gate", resolution: "Waived peak charges for delay", resolutionTime: "45 mins", confirmed: true },
+    { id: "CMP-003", customerName: "Amit Kumar", category: "Vehicle Quality", priority: "High", severity: "Major", owner: "Amit P.", department: "Fleet Audit", status: "Resolved", rootCause: "AC fan noise and low cooling", resolution: "Vehicle recalled for maintenance; issued Rs. 200 coupon", resolutionTime: "2 hrs", confirmed: true },
+    { id: "CMP-004", customerName: "Neha Gupta", category: "Billing Issue", priority: "Low", severity: "Minor", owner: "Unassigned", department: "Finance", status: "Open", rootCause: "Double peak multiplier incorrectly applied", resolution: "", resolutionTime: "", confirmed: false }
+  ])
+
+  // Mock refunds list
+  const [refunds, setRefunds] = useState([
+    { id: "RFD-001", ticketId: "TK-TEST-001", customerName: "Rahul Sharma", amount: 450, reason: "Ride delayed beyond 45 minutes", status: "Pending Approval", financeStatus: "Pending", expectedDate: "2026-07-20", timeline: ["Requested by Agent", "Pending TL Approval"] },
+    { id: "RFD-002", ticketId: "TK-TEST-002", customerName: "Priya Singh", amount: 1200, reason: "Duplicate charge on payment gateway", status: "Sent to Finance", financeStatus: "Processing", expectedDate: "2026-07-18", timeline: ["Requested by Agent", "Approved by Team Lead", "Sent to Finance"] },
+    { id: "RFD-003", ticketId: "TK-TEST-003", customerName: "Nitin Rao", amount: 350, reason: "Driver cancelled; advance paid", status: "Completed", financeStatus: "Disbursed", expectedDate: "2026-07-15", timeline: ["Requested", "Approved", "Disbursed by HDFC gateway"] }
+  ])
+
+  // Mock feedback rating list
+  const [feedbacks, setFeedbacks] = useState([
+    { id: "FDB-001", customerName: "Vikram Patel", overallRating: 5, driverRating: 5, vehicleRating: 5, supportRating: 5, comments: "Excellent service! Prompt dispatch.", nps: 10, tripId: "BK-10001" },
+    { id: "FDB-002", customerName: "Sunil Shetty", overallRating: 2, driverRating: 1, vehicleRating: 3, supportRating: 2, comments: "Driver arrived 20 minutes late and was using phone during drive.", nps: 3, tripId: "BK-10002" },
+    { id: "FDB-003", customerName: "Anjali Desai", overallRating: 4, driverRating: 4, vehicleRating: 4, supportRating: 4, comments: "Clean car but route taken was long.", nps: 8, tripId: "BK-10003" }
+  ])
+
+  // Simulated live rides list
+  const [liveRides, setLiveRides] = useState([
+    { id: "BK-LIVE-1", bookingNumber: "BK20091", customerName: "Rahul Sharma", customerPhone: "+91 99999 11111", status: "picked_up", driverName: "Ramesh Yadav", driverPhone: "+91 88888 11111", carNumber: "DL-1CA-1234", location: "Connaught Place, Delhi", eta: 12, delay: 5, notes: "Corporate transfer" },
+    { id: "BK-LIVE-2", bookingNumber: "BK20092", customerName: "Priya Singh", customerPhone: "+91 99999 22222", status: "dispatched", driverName: "Suresh Kumar", driverPhone: "+91 88888 22222", carNumber: "HR-26CP-5678", location: "Cyber City, Gurgaon", eta: 25, delay: 18, notes: "Airport pickup - Delayed at toll" },
+    { id: "BK-LIVE-3", bookingNumber: "BK20093", customerName: "Amit Kumar", customerPhone: "+91 99999 33333", status: "arrived", driverName: "Mahesh Pal", driverPhone: "+91 88888 33333", carNumber: "DL-1CB-4321", location: "Sector 18, Noida", eta: 0, delay: 22, notes: "SLA alert - Driver waiting at terminal" }
+  ])
+
+  // New ticket state for modal
+  const [newTicketSubject, setNewTicketSubject] = useState("")
+  const [newTicketCustomer, setNewTicketCustomer] = useState("")
+  const [newTicketCategory, setNewTicketCategory] = useState("service")
+  const [newTicketPriority, setNewTicketPriority] = useState("medium")
+  const [newTicketDesc, setNewTicketDesc] = useState("")
+
+  // Search timeline state
+  const [timelineSearch, setTimelineSearch] = useState("")
+  const [searchedCustomer, setSearchedCustomer] = useState<any>(null)
+
+  // Simulation logic for live rides & auto tickets creation on SLA breach
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setLiveRides(prev => {
+        return prev.map(ride => {
+          // Increment delay randomly
+          const newDelay = ride.delay + (Math.random() > 0.6 ? 2 : 0)
+          
+          // Trigger SLA breach trigger (if delay exceeds 15 minutes and ticket doesn't exist)
+          if (newDelay > 15 && ride.delay <= 15) {
+            toast.error(`SLA Breach Alert: Ride ${ride.bookingNumber} is delayed by ${newDelay} mins!`, {
+              description: `Automatically generating CRM ticket & notifying ${ride.customerName}`
+            })
+
+            // Auto create CRM Ticket
+            const autoTicket = {
+              subject: `Auto SLA Breach - Ride ${ride.bookingNumber} Delayed`,
+              customerName: ride.customerName,
+              type: "service",
+              priority: "high",
+              description: `System generated ticket. Ride ${ride.bookingNumber} delayed by ${newDelay} minutes. Driver: ${ride.driverName}.`
+            }
+            addSupportTicket(autoTicket)
+          }
+
+          return {
+            ...ride,
+            delay: newDelay,
+            eta: Math.max(0, ride.eta - (Math.random() > 0.7 ? 1 : 0))
+          }
+        })
+      })
+    }, 5000 / simulationSpeed)
+
+    return () => clearInterval(timer)
+  }, [simulationSpeed, addSupportTicket])
+
+  // Feedback NPS rating low-stars complaint auto-trigger
+  const handleAddFeedback = (newFdb: typeof feedbacks[0]) => {
+    setFeedbacks(prev => [newFdb, ...prev])
+    if (newFdb.overallRating < 3) {
+      toast.warning(`Low Rating Feedback Alert (Rating: ${newFdb.overallRating})!`, {
+        description: `Automatically created a complaint ticket for ${newFdb.customerName}. CRM Manager has been notified.`
+      })
+
+      // Auto complaint card
+      const autoComplaint = {
+        id: `CMP-${Math.floor(100 + Math.random() * 900)}`,
+        customerName: newFdb.customerName,
+        category: "Safety Concern",
+        priority: "High",
+        severity: "Critical",
+        owner: "CRM Manager",
+        department: "Quality",
+        status: "Open",
+        rootCause: `Customer reported low rating: ${newFdb.comments}`,
+        resolution: "",
+        resolutionTime: "",
+        confirmed: false
+      }
+      setComplaints(prev => [autoComplaint, ...prev])
+    } else {
+      toast.success("Feedback submitted successfully!")
+    }
+  }
+
+  // Action helper: check permissions
+  const hasPermission = (tab: string) => {
+    const rolePerms = permissions[selectedRole]
+    if (!rolePerms) return false
+    return rolePerms[tab as keyof typeof rolePerms] ?? true
+  }
+
+  // Filtered tickets count
+  const filteredTickets = useMemo(() => {
+    return ticketsList.filter(t => {
+      const matchSearch =
+        (t.ticketNumber?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+        (t.customerName?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+        (t.subject?.toLowerCase() || "").includes(searchTerm.toLowerCase())
+      
+      const matchPriority = filterPriority === "all" || t.priority?.toLowerCase() === filterPriority.toLowerCase()
+      const matchStatus = filterStatus === "all" || t.status?.toLowerCase() === filterStatus.toLowerCase()
+      const matchCategory = filterCategory === "all" || t.category?.toLowerCase() === filterCategory.toLowerCase()
+
+      return matchSearch && matchPriority && matchStatus && matchCategory
+    })
+  }, [ticketsList, searchTerm, filterPriority, filterStatus, filterCategory])
+
+  // Metric stats for cards
+  const stats = useMemo(() => {
+    const total = ticketsList.length
+    const open = ticketsList.filter(t => t.status === "Open" || t.status === "open").length
+    const pending = ticketsList.filter(t => t.status === "In Progress" || t.status === "in_progress").length
+    const resolved = ticketsList.filter(t => t.status === "Closed" || t.status === "closed").length
+    const escalated = complaints.filter(c => c.severity === "Critical" || c.priority === "High").length
+    const refundPending = refunds.filter(r => r.status === "Pending Approval").length
+    const liveDelayCount = liveRides.filter(r => r.delay > 15).length
+
+    // Average rating
+    const avgRating = feedbacks.length > 0 ? feedbacks.reduce((acc, curr) => acc + curr.overallRating, 0) / feedbacks.length : 4.2
+
+    return {
+      open,
+      pending,
+      resolved,
+      escalated,
+      avgRating: avgRating.toFixed(1),
+      refundPending,
+      liveDelayCount
+    }
+  }, [ticketsList, complaints, refunds, liveRides, feedbacks])
+
+  // Sample data for charts
+  const ticketTrendData = [
+    { name: "Mon", open: 12, resolved: 8, pending: 4 },
+    { name: "Tue", open: 15, resolved: 10, pending: 5 },
+    { name: "Wed", open: 18, resolved: 14, pending: 6 },
+    { name: "Thu", open: 14, resolved: 13, pending: 8 },
+    { name: "Fri", open: 22, resolved: 15, pending: 11 },
+    { name: "Sat", open: 10, resolved: 11, pending: 6 },
+    { name: "Sun", open: 8, resolved: 12, pending: 3 }
+  ]
+
+  const complaintCategoriesData = [
+    { name: "Driver Behaviour", value: 12 },
+    { name: "Late Arrival", value: 18 },
+    { name: "Vehicle Quality", value: 8 },
+    { name: "Billing Issue", value: 15 },
+    { name: "Safety Concern", value: 3 }
+  ]
+
+  const csatTrendData = [
+    { name: "Week 1", rating: 4.2 },
+    { name: "Week 2", rating: 4.4 },
+    { name: "Week 3", rating: 4.1 },
+    { name: "Week 4", rating: 4.5 }
+  ]
+
+  const agentPerformanceData = [
+    { name: "Rohan K.", resolved: 32, avgTime: 45 },
+    { name: "Sneha S.", resolved: 41, avgTime: 32 },
+    { name: "Amit P.", resolved: 28, avgTime: 55 },
+    { name: "Kriti M.", resolved: 36, avgTime: 38 }
+  ]
+
+  const handleAddNewTicketSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newTicketSubject || !newTicketCustomer) {
+      toast.error("Subject and Customer Name are required.")
+      return
+    }
+
+    const ticketPayload = {
+      subject: newTicketSubject,
+      customerName: newTicketCustomer,
+      type: newTicketCategory,
+      priority: newTicketPriority,
+      description: newTicketDesc,
+      status: "Open"
+    }
+
+    addSupportTicket(ticketPayload)
+    toast.success("CRM Support Ticket Created Successfully!")
+    
+    // Reset Form
+    setNewTicketSubject("")
+    setNewTicketCustomer("")
+    setNewTicketDesc("")
+  }
+
+  // Handle Search Customer Timeline
+  const handleTimelineSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!timelineSearch) return
+    const customer = b2cCustomers?.find(c => c.name.toLowerCase().includes(timelineSearch.toLowerCase()) || c.phone.includes(timelineSearch)) || {
+      name: timelineSearch,
+      phone: "+91 99999 55555",
+      email: "cust@timeline-test.com",
+      vip: true,
+      spend: 42500,
+      bookings: 24,
+      repeat: true
+    }
+    setSearchedCustomer(customer)
+  }
+
+  return (
+    <AdminLayout>
+      <div className="flex flex-col space-y-6">
+        
+        {/* CRM Module Title & Top Toolbar */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-zinc-950/40 p-4 rounded-xl border border-zinc-800/40 backdrop-blur-xl">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-400 via-purple-400 to-emerald-400 bg-clip-text text-transparent">
+              CRM Workspace
+            </h1>
+            <p className="text-sm text-zinc-400">
+              Customer Experience, Feedback, Refunds & Escalations Management
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg text-xs">
+              <span className="text-zinc-500">Active Role:</span>
+              <select
+                value={selectedRole}
+                onChange={(e) => {
+                  setSelectedRole(e.target.value)
+                  toast.success(`Role switched to ${e.target.value}`)
+                }}
+                className="bg-transparent border-none text-zinc-200 outline-none font-semibold cursor-pointer"
+              >
+                {Object.keys(permissions).map(role => (
+                  <option key={role} value={role} className="bg-zinc-900 text-zinc-200">{role}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg text-xs">
+              <span className="text-zinc-500">Live Simulation Speed:</span>
+              <button onClick={() => setSimulationSpeed(prev => Math.max(1, prev - 1))} className="text-zinc-400 hover:text-white px-1 font-bold">-</button>
+              <span className="text-emerald-400 font-bold">{simulationSpeed}x</span>
+              <button onClick={() => setSimulationSpeed(prev => Math.min(5, prev + 1))} className="text-zinc-400 hover:text-white px-1 font-bold">+</button>
+            </div>
+            
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button size="sm" className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-md shadow-indigo-600/20">
+                  <Plus className="mr-2 h-4 w-4" /> New Ticket
+                </Button>
+              </SheetTrigger>
+              <SheetContent className="bg-zinc-950 border-zinc-800 text-zinc-100">
+                <SheetHeader>
+                  <SheetTitle className="text-zinc-100">Create Support Ticket</SheetTitle>
+                  <SheetDescription className="text-zinc-400">Add a new ticket generated from phone or offline interactions.</SheetDescription>
+                </SheetHeader>
+                <form onSubmit={handleAddNewTicketSubmit} className="space-y-4 mt-6">
+                  <div>
+                    <label className="text-xs text-zinc-400">Customer Name</label>
+                    <Input
+                      value={newTicketCustomer}
+                      onChange={(e) => setNewTicketCustomer(e.target.value)}
+                      placeholder="e.g. Rahul Sharma"
+                      className="bg-zinc-900 border-zinc-800 text-zinc-100 mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-400">Subject</label>
+                    <Input
+                      value={newTicketSubject}
+                      onChange={(e) => setNewTicketSubject(e.target.value)}
+                      placeholder="Subject of issue"
+                      className="bg-zinc-900 border-zinc-800 text-zinc-100 mt-1"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs text-zinc-400">Category</label>
+                      <select
+                        value={newTicketCategory}
+                        onChange={(e) => setNewTicketCategory(e.target.value)}
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-zinc-100 text-sm mt-1"
+                      >
+                        <option value="billing">Billing</option>
+                        <option value="service">Service Quality</option>
+                        <option value="app">App Issue</option>
+                        <option value="safety">Safety Concern</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-400">Priority</label>
+                      <select
+                        value={newTicketPriority}
+                        onChange={(e) => setNewTicketPriority(e.target.value)}
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-zinc-100 text-sm mt-1"
+                      >
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-400">Description</label>
+                    <textarea
+                      value={newTicketDesc}
+                      onChange={(e) => setNewTicketDesc(e.target.value)}
+                      placeholder="Details of complaint..."
+                      className="w-full h-24 bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-zinc-100 text-sm mt-1"
+                    />
+                  </div>
+                  <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold">
+                    Submit Ticket
+                  </Button>
+                </form>
+              </SheetContent>
+            </Sheet>
+          </div>
+        </div>
+
+        {/* Outer Tab Navigation with dedicated layouts */}
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
+          
+          {/* CRM Internal Navigation Drawer/Sidebar */}
+          <div className="w-full lg:w-64 bg-zinc-900/60 p-3 rounded-xl border border-zinc-800/40 backdrop-blur-xl shrink-0 space-y-1">
+            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-3 mb-2">CRM Workspaces</p>
+            {[
+              { id: "dashboard", label: "CRM Dashboard", icon: BarChart3 },
+              { id: "tickets", label: "Customer Tickets", icon: Headset, count: stats.open },
+              { id: "liveSupport", label: "Live Ride Support", icon: Activity, alert: stats.liveDelayCount > 0 },
+              { id: "complaints", label: "Complaints Portal", icon: AlertTriangle },
+              { id: "refunds", label: "Refund Requests", icon: DollarSign, count: stats.refundPending },
+              { id: "corporate", label: "Corporate Support", icon: Shield },
+              { id: "feedback", label: "Feedback & NPS", icon: Zap, labelSub: stats.avgRating },
+              { id: "timeline", label: "Timeline Explorer", icon: User },
+              { id: "kb", label: "Knowledge Base", icon: BookOpen },
+              { id: "reports", label: "Analytics & Reports", icon: FileText },
+              { id: "settings", label: "CRM Settings", icon: Settings }
+            ].map(item => {
+              const Icon = item.icon
+              const allowed = hasPermission(item.id)
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    if (allowed) {
+                      setActiveTab(item.id)
+                    } else {
+                      toast.error("Permission Denied", {
+                        description: `Your active role (${selectedRole}) does not have permission to view ${item.label}.`
+                      })
+                    }
+                  }}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all duration-200 ${
+                    activeTab === item.id
+                      ? "bg-indigo-600/10 text-indigo-400 border-l-4 border-indigo-500 font-semibold"
+                      : "text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-200"
+                  } ${!allowed ? "opacity-40 cursor-not-allowed" : ""}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Icon className="h-4 w-4" />
+                    <span>{item.label}</span>
+                  </div>
+                  {item.count && item.count > 0 ? (
+                    <Badge variant="destructive" className="h-5 px-1.5 text-xs font-semibold">{item.count}</Badge>
+                  ) : null}
+                  {item.alert ? (
+                    <span className="h-2 w-2 rounded-full bg-red-500 animate-ping" />
+                  ) : null}
+                  {item.labelSub ? (
+                    <span className="text-xs text-zinc-500 font-bold">★ {item.labelSub}</span>
+                  ) : null}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* CRM Primary Render Window */}
+          <div className="flex-1 w-full bg-zinc-950 p-6 rounded-2xl border border-zinc-800 shadow-2xl space-y-6 min-h-[700px]">
+            
+            {/* Dashboard Tab Content */}
+            {activeTab === "dashboard" && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold text-zinc-100">Customer Support Analytics</h2>
+                  <p className="text-xs text-zinc-400">Overview of ticket queues, complaint matrices, and agent metrics.</p>
+                </div>
+
+                {/* Dashboard KPI Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    { label: "Open Tickets", value: stats.open, icon: Headset, color: "text-indigo-400", bg: "bg-indigo-500/10" },
+                    { label: "Pending Tickets", value: stats.pending, icon: Clock, color: "text-amber-400", bg: "bg-amber-500/10" },
+                    { label: "Resolved Today", value: stats.resolved, icon: CheckCircle, color: "text-emerald-400", bg: "bg-emerald-500/10" },
+                    { label: "High-Priority Complaints", value: stats.escalated, icon: AlertTriangle, color: "text-red-400", bg: "bg-red-500/10" },
+                    { label: "Avg CSAT", value: `${stats.avgRating} / 5`, icon: Zap, color: "text-cyan-400", bg: "bg-cyan-500/10" },
+                    { label: "NPS Score", value: "+46", icon: Award, color: "text-purple-400", bg: "bg-purple-500/10" },
+                    { label: "Refund Pending", value: stats.refundPending, icon: DollarSign, color: "text-pink-400", bg: "bg-pink-500/10" },
+                    { label: "Delayed Live Rides", value: stats.liveDelayCount, icon: Activity, color: "text-rose-400", bg: "bg-rose-500/10" }
+                  ].map((stat, i) => (
+                    <Card key={i} className="bg-zinc-900 border-zinc-800 shadow-xl overflow-hidden relative">
+                      <CardContent className="p-4 flex items-center justify-between">
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">{stat.label}</p>
+                          <p className="text-xl font-bold text-zinc-200">{stat.value}</p>
+                        </div>
+                        <div className={`p-3 rounded-lg ${stat.bg} ${stat.color}`}>
+                          <stat.icon className="h-5 w-5" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Dashboard Chart Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  
+                  {/* Ticket Trend */}
+                  <Card className="bg-zinc-900 border-zinc-800 shadow-xl">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-zinc-200 text-sm font-semibold">Support Ticket Trends</CardTitle>
+                      <CardDescription className="text-zinc-500 text-xs">Daily intake vs resolution count</CardDescription>
+                    </CardHeader>
+                    <CardContent className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={ticketTrendData}>
+                          <defs>
+                            <linearGradient id="colorOpen" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2}/>
+                              <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                            </linearGradient>
+                            <linearGradient id="colorRes" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                              <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#27272a"/>
+                          <XAxis dataKey="name" stroke="#71717a" fontSize={11}/>
+                          <YAxis stroke="#71717a" fontSize={11}/>
+                          <ChartTooltip contentStyle={{ backgroundColor: "#18181b", borderColor: "#27272a", color: "#f4f4f5" }}/>
+                          <Area type="monotone" dataKey="open" stroke="#6366f1" fillOpacity={1} fill="url(#colorOpen)"/>
+                          <Area type="monotone" dataKey="resolved" stroke="#10b981" fillOpacity={1} fill="url(#colorRes)"/>
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  {/* Complaint Category */}
+                  <Card className="bg-zinc-900 border-zinc-800 shadow-xl">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-zinc-200 text-sm font-semibold">Complaint Distribution</CardTitle>
+                      <CardDescription className="text-zinc-500 text-xs">Distribution of logged issues by category</CardDescription>
+                    </CardHeader>
+                    <CardContent className="h-64 flex items-center justify-center">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={complaintCategoriesData}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                          >
+                            {complaintCategoriesData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <ChartTooltip contentStyle={{ backgroundColor: "#18181b", borderColor: "#27272a", color: "#f4f4f5" }}/>
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  {/* CSAT Trend */}
+                  <Card className="bg-zinc-900 border-zinc-800 shadow-xl">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-zinc-200 text-sm font-semibold">CSAT Weekly Score Trend</CardTitle>
+                      <CardDescription className="text-zinc-500 text-xs">Customer satisfaction ratings tracker</CardDescription>
+                    </CardHeader>
+                    <CardContent className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={csatTrendData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#27272a"/>
+                          <XAxis dataKey="name" stroke="#71717a" fontSize={11}/>
+                          <YAxis stroke="#71717a" fontSize={11} domain={[1, 5]}/>
+                          <ChartTooltip contentStyle={{ backgroundColor: "#18181b", borderColor: "#27272a", color: "#f4f4f5" }}/>
+                          <Line type="monotone" dataKey="rating" stroke="#10b981" strokeWidth={3} activeDot={{ r: 8 }}/>
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  {/* Agent SLA Compliance */}
+                  <Card className="bg-zinc-900 border-zinc-800 shadow-xl">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-zinc-200 text-sm font-semibold">Agent Resolution Metrics</CardTitle>
+                      <CardDescription className="text-zinc-500 text-xs">Closed tickets vs Avg resolution time (mins)</CardDescription>
+                    </CardHeader>
+                    <CardContent className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={agentPerformanceData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#27272a"/>
+                          <XAxis dataKey="name" stroke="#71717a" fontSize={11}/>
+                          <YAxis stroke="#71717a" fontSize={11}/>
+                          <ChartTooltip contentStyle={{ backgroundColor: "#18181b", borderColor: "#27272a", color: "#f4f4f5" }}/>
+                          <Legend />
+                          <Bar dataKey="resolved" fill="#6366f1" name="Tickets Resolved" radius={[4, 4, 0, 0]}/>
+                          <Bar dataKey="avgTime" fill="#ef4444" name="Avg Time (mins)" radius={[4, 4, 0, 0]}/>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                </div>
+              </div>
+            )}
+
+            {/* Customer Tickets Tab Content */}
+            {activeTab === "tickets" && (
+              <div className="space-y-4">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-zinc-100">Customer Support Tickets</h2>
+                    <p className="text-xs text-zinc-400">View, assign, and escalate active support cases.</p>
+                  </div>
+                  
+                  {/* Bulk Actions */}
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white" onClick={() => {
+                      toast.success("Bulk action completed: Closed 3 tickets.")
+                    }}>
+                      Bulk Close
+                    </Button>
+                    <Button variant="outline" size="sm" className="bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white" onClick={() => {
+                      toast.success("Bulk action completed: Reassigned to Rohan K.")
+                    }}>
+                      Bulk Reassign
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Filters Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-zinc-900/60 p-4 rounded-xl border border-zinc-800/40">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-500" />
+                    <Input
+                      placeholder="Search ID, name, subject..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="bg-zinc-950 border-zinc-800 text-zinc-100 pl-9"
+                    />
+                  </div>
+                  
+                  <select
+                    value={filterPriority}
+                    onChange={(e) => setFilterPriority(e.target.value)}
+                    className="bg-zinc-950 border border-zinc-800 text-zinc-300 text-sm rounded-lg p-2.5"
+                  >
+                    <option value="all">All Priorities</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="bg-zinc-950 border border-zinc-800 text-zinc-300 text-sm rounded-lg p-2.5"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="open">Open</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="closed">Closed</option>
+                  </select>
+
+                  <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    className="bg-zinc-950 border border-zinc-800 text-zinc-300 text-sm rounded-lg p-2.5"
+                  >
+                    <option value="all">All Categories</option>
+                    <option value="billing">Billing</option>
+                    <option value="service">Service Quality</option>
+                    <option value="app">App Issue</option>
+                    <option value="safety">Safety Concern</option>
+                  </select>
+                </div>
+
+                {/* Tickets Table */}
+                <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+                  <Table>
+                    <TableHeader className="bg-zinc-950/40">
+                      <TableRow className="border-zinc-800">
+                        <TableHead className="text-zinc-400">Ticket ID</TableHead>
+                        <TableHead className="text-zinc-400">Customer</TableHead>
+                        <TableHead className="text-zinc-400">Subject</TableHead>
+                        <TableHead className="text-zinc-400">Category</TableHead>
+                        <TableHead className="text-zinc-400">Priority</TableHead>
+                        <TableHead className="text-zinc-400">Status</TableHead>
+                        <TableHead className="text-zinc-400">SLA Timer</TableHead>
+                        <TableHead className="text-zinc-400">Agent</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredTickets.map((ticket, index) => (
+                        <TableRow
+                          key={index}
+                          className="border-zinc-850 hover:bg-zinc-800/30 cursor-pointer"
+                          onClick={() => setSelectedTicket(ticket)}
+                        >
+                          <TableCell className="font-semibold text-zinc-300">{ticket.ticketNumber}</TableCell>
+                          <TableCell className="text-zinc-300">{ticket.customerName}</TableCell>
+                          <TableCell className="text-zinc-300">{ticket.subject}</TableCell>
+                          <TableCell className="capitalize text-zinc-400">{ticket.category}</TableCell>
+                          <TableCell>
+                            <Badge className={
+                              ticket.priority.toLowerCase() === "high" ? "bg-red-500/10 text-red-400" :
+                              ticket.priority.toLowerCase() === "medium" ? "bg-amber-500/10 text-amber-400" :
+                              "bg-zinc-550/10 text-zinc-400"
+                            }>
+                              {ticket.priority}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={
+                              ticket.status.toLowerCase() === "open" ? "bg-indigo-500/10 text-indigo-400" :
+                              ticket.status.toLowerCase() === "in_progress" ? "bg-amber-500/10 text-amber-400" :
+                              "bg-emerald-500/10 text-emerald-400"
+                            }>
+                              {ticket.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-zinc-300 text-xs font-mono">
+                            {ticket.status.toLowerCase() === "closed" ? "-" : `${ticket.slaTimer}m left`}
+                          </TableCell>
+                          <TableCell className="text-zinc-300">{ticket.assignedAgent}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Ticket Details Slide Drawer */}
+                {selectedTicket && (
+                  <Sheet open={!!selectedTicket} onOpenChange={() => setSelectedTicket(null)}>
+                    <SheetContent className="w-full sm:max-w-2xl bg-zinc-950 border-zinc-800 text-zinc-100 overflow-y-auto">
+                      <SheetHeader className="pb-4 border-b border-zinc-800">
+                        <div className="flex justify-between items-center pr-6">
+                          <SheetTitle className="text-zinc-100 font-bold flex items-center gap-2">
+                            <span>{selectedTicket.ticketNumber}</span>
+                            <Badge className="bg-indigo-600/10 text-indigo-400">{selectedTicket.category}</Badge>
+                          </SheetTitle>
+                          <Badge className={
+                            selectedTicket.priority.toLowerCase() === "high" ? "bg-red-500/10 text-red-400" : "bg-zinc-500/10 text-zinc-400"
+                          }>
+                            {selectedTicket.priority} Priority
+                          </Badge>
+                        </div>
+                        <SheetDescription className="text-zinc-400 font-medium text-sm">
+                          {selectedTicket.subject}
+                        </SheetDescription>
+                      </SheetHeader>
+
+                      <div className="space-y-6 mt-6">
+                        
+                        {/* Action buttons bar */}
+                        <div className="flex flex-wrap gap-2 pb-4 border-b border-zinc-805">
+                          <Button size="xs" variant="outline" className="bg-zinc-900 border-zinc-800 text-xs" onClick={() => {
+                            updateSupportTicket(selectedTicket.id, { status: "in_progress" })
+                            setSelectedTicket(prev => ({ ...prev, status: "In Progress" }))
+                            toast.info("Ticket marked In Progress")
+                          }}>
+                            Mark In Progress
+                          </Button>
+                          <Button size="xs" variant="outline" className="bg-emerald-900/10 text-emerald-400 border-emerald-800/40 text-xs" onClick={() => {
+                            updateSupportTicket(selectedTicket.id, { status: "closed" })
+                            setSelectedTicket(prev => ({ ...prev, status: "Closed" }))
+                            toast.success("Ticket closed successfully")
+                          }}>
+                            Close Ticket
+                          </Button>
+                          <Button size="xs" variant="outline" className="bg-zinc-900 border-zinc-800 text-xs" onClick={() => {
+                            toast.info("Escalation triggered. Notified CRM Team Lead.")
+                          }}>
+                            Escalate
+                          </Button>
+                          <Button size="xs" variant="outline" className="bg-red-900/10 text-red-400 border-red-800/40 text-xs" onClick={() => {
+                            const newRefund = {
+                              id: `RFD-${Math.floor(100 + Math.random() * 900)}`,
+                              ticketId: selectedTicket.ticketNumber,
+                              customerName: selectedTicket.customerName,
+                              amount: 500,
+                              reason: "SLA delayed breach payout",
+                              status: "Pending Approval",
+                              financeStatus: "Pending",
+                              expectedDate: new Date(Date.now() + 500000000).toISOString().split("T")[0],
+                              timeline: ["Requested by Agent"]
+                            }
+                            setRefunds(prev => [newRefund, ...prev])
+                            toast.success("Refund request submitted to Finance!")
+                          }}>
+                            Request Refund
+                          </Button>
+                        </div>
+
+                        {/* Customer 360 Information grid */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <h4 className="text-xs text-zinc-500 font-bold uppercase">Customer Profile</h4>
+                            <p className="text-sm font-semibold text-zinc-300 mt-1">{selectedTicket.customerName}</p>
+                            <p className="text-xs text-zinc-400">{selectedTicket.phone || "+91 98765 43210"}</p>
+                          </div>
+                          <div>
+                            <h4 className="text-xs text-zinc-500 font-bold uppercase">Booking Reference</h4>
+                            <p className="text-sm font-semibold text-zinc-300 mt-1">{selectedTicket.bookingNumber || "BK-23091"}</p>
+                            <Badge className="bg-zinc-800 text-zinc-400 mt-1">Delhi-NCR Scope</Badge>
+                          </div>
+                        </div>
+
+                        {/* Description Details */}
+                        <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/40">
+                          <h4 className="text-xs text-zinc-400 font-bold uppercase">Initial Complaint</h4>
+                          <p className="text-sm text-zinc-300 mt-2 leading-relaxed">{selectedTicket.description || "No detailed description provided."}</p>
+                        </div>
+
+                        {/* Simulated Live Ride / Drivers block */}
+                        <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800">
+                          <h4 className="text-xs text-zinc-400 font-bold uppercase mb-2">Linked Ride Operational Details</h4>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <p className="text-zinc-550">Driver Assignment: <span className="text-zinc-300 font-medium">Ramesh Yadav (+91 99988 88888)</span></p>
+                            <p className="text-zinc-550">Vehicle Assigned: <span className="text-zinc-300 font-medium">DL-1CA-8899 (Sedan)</span></p>
+                            <p className="text-zinc-550">Live GPS Status: <span className="text-emerald-400 font-medium">Online (5 km from Pickup)</span></p>
+                            <p className="text-zinc-550">Delay Time: <span className="text-red-400 font-medium">18 minutes delay</span></p>
+                          </div>
+                        </div>
+
+                        {/* Communication Logs Tabbed View */}
+                        <div>
+                          <h4 className="text-xs text-zinc-400 font-bold uppercase mb-3">Communication Logs</h4>
+                          <Tabs defaultValue="notes" className="w-full">
+                            <TabsList className="bg-zinc-900 border border-zinc-800 w-full grid grid-cols-4">
+                              <TabsTrigger value="notes" className="text-xs">Internal Notes</TabsTrigger>
+                              <TabsTrigger value="calls" className="text-xs">Exotel Call Logs</TabsTrigger>
+                              <TabsTrigger value="whatsapp" className="text-xs">WhatsApp History</TabsTrigger>
+                              <TabsTrigger value="emails" className="text-xs">Emails</TabsTrigger>
+                            </TabsList>
+                            
+                            <TabsContent value="notes" className="mt-3 space-y-2">
+                              <div className="bg-zinc-900/30 border border-zinc-800 p-3 rounded-lg text-xs space-y-1">
+                                <p className="text-zinc-500">Jul 16, 2026 07:14 - <span className="text-zinc-300 font-semibold">Amit P. (Agent)</span></p>
+                                <p className="text-zinc-300">Driver confirmed delay due to heavy congestion at airport arrival road.</p>
+                              </div>
+                              <div className="flex gap-2">
+                                <Input placeholder="Type internal note here..." className="bg-zinc-900 border-zinc-800 text-xs" />
+                                <Button size="sm" className="bg-indigo-600 hover:bg-indigo-500 text-xs" onClick={() => toast.success("Internal note added.")}>Save</Button>
+                              </div>
+                            </TabsContent>
+
+                            <TabsContent value="calls" className="mt-3 space-y-2 text-xs">
+                              <div className="flex justify-between items-center bg-zinc-900/40 p-2.5 rounded border border-zinc-800">
+                                <div>
+                                  <p className="font-semibold text-zinc-300">Outgoing Call: Exotel Log</p>
+                                  <p className="text-[10px] text-zinc-500">Agent Rohini to Customer Rahul (Duration: 2m 14s)</p>
+                                </div>
+                                <Button size="xs" variant="ghost" className="text-indigo-400"><Phone className="h-3 w-3 mr-1" /> Play Log</Button>
+                              </div>
+                            </TabsContent>
+
+                            <TabsContent value="whatsapp" className="mt-3 space-y-2 text-xs">
+                              <div className="bg-emerald-950/20 border border-emerald-900/20 p-3 rounded-lg space-y-1">
+                                <p className="text-emerald-400 font-semibold text-[10px]">CRM Agent (07:15):</p>
+                                <p className="text-zinc-300">Hello Rahul, we see your ride is delayed. We are tracking your cab in real-time. Extremely sorry for the delay.</p>
+                              </div>
+                              <div className="flex gap-2">
+                                <Input placeholder="Type message..." className="bg-zinc-900 border-zinc-800 text-xs" />
+                                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500 text-xs" onClick={() => toast.success("WhatsApp message dispatched.")}>Send</Button>
+                              </div>
+                            </TabsContent>
+
+                            <TabsContent value="emails" className="mt-3 text-xs text-zinc-400">
+                              No email threads logged on this ticket.
+                            </TabsContent>
+                          </Tabs>
+                        </div>
+
+                      </div>
+                    </SheetContent>
+                  </Sheet>
+                )}
+
+              </div>
+            )}
+
+            {/* Live Ride Support Content */}
+            {activeTab === "liveSupport" && (
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-xl font-bold text-zinc-100">Live Active Ride Monitoring</h2>
+                  <p className="text-xs text-zinc-400">Real-time status updates of active bookings. Breach of SLA delays triggers alerts immediately.</p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  {liveRides.map((ride, idx) => {
+                    const isBreached = ride.delay > 15
+                    return (
+                      <Card key={idx} className={`bg-zinc-900 border-zinc-800 border-l-4 transition-all duration-300 ${
+                        isBreached ? "border-l-red-500 bg-red-950/10 shadow-lg shadow-red-950/10" : "border-l-emerald-500"
+                      }`}>
+                        <CardContent className="p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-zinc-200">{ride.bookingNumber}</h3>
+                              <Badge className="bg-zinc-800 text-zinc-300 font-mono text-[10px]">{ride.status.toUpperCase()}</Badge>
+                              {isBreached && <Badge className="bg-red-500/10 text-red-400">SLA Breach ({ride.delay}m delayed)</Badge>}
+                            </div>
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-1 text-xs text-zinc-400">
+                              <p>Customer: <span className="text-zinc-300 font-medium">{ride.customerName} ({ride.customerPhone})</span></p>
+                              <p>Driver: <span className="text-zinc-300 font-medium">{ride.driverName} ({ride.driverPhone})</span></p>
+                              <p>Cab Assigned: <span className="text-zinc-300 font-medium">{ride.carNumber}</span></p>
+                              <p className="col-span-3 mt-1">Location: <span className="text-emerald-400 font-medium">{ride.location}</span></p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row gap-2 shrink-0 w-full md:w-auto">
+                            <Button size="xs" variant="outline" className="bg-zinc-950 border-zinc-800 text-xs text-zinc-300 hover:text-white" onClick={() => {
+                              toast.info(`Predefined Template sent to ${ride.customerName}: "Apologies for the delay. We are actively tracking your driver..."`)
+                            }}>
+                              Send WhatsApp Template
+                            </Button>
+                            <Button size="xs" variant="outline" className="bg-zinc-950 border-zinc-800 text-xs text-zinc-300 hover:text-white" onClick={() => {
+                              toast.success(`Dialing Driver Ramesh via Exotel...`)
+                            }}>
+                              Call Driver
+                            </Button>
+                            <Button size="xs" variant="outline" className="bg-zinc-950 border-zinc-800 text-xs text-zinc-300 hover:text-white" onClick={() => {
+                              toast.success(`Dialing Customer ${ride.customerName}...`)
+                            }}>
+                              Call Customer
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Complaints Tab Content */}
+            {activeTab === "complaints" && (
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-xl font-bold text-zinc-100">Complaints Register</h2>
+                  <p className="text-xs text-zinc-400">Record, investigate, and close specific ride complaints.</p>
+                </div>
+
+                <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+                  <Table>
+                    <TableHeader className="bg-zinc-950/40">
+                      <TableRow className="border-zinc-800">
+                        <TableHead className="text-zinc-400">Complaint ID</TableHead>
+                        <TableHead className="text-zinc-400">Customer</TableHead>
+                        <TableHead className="text-zinc-400">Category</TableHead>
+                        <TableHead className="text-zinc-400">Severity</TableHead>
+                        <TableHead className="text-zinc-400">Owner</TableHead>
+                        <TableHead className="text-zinc-400">Status</TableHead>
+                        <TableHead className="text-zinc-400">Resolution Status</TableHead>
+                        <TableHead className="text-zinc-400">Customer Confirmed</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {complaints.map((c, idx) => (
+                        <TableRow key={idx} className="border-zinc-800 hover:bg-zinc-800/20 text-xs">
+                          <TableCell className="font-semibold text-zinc-300">{c.id}</TableCell>
+                          <TableCell className="text-zinc-300">{c.customerName}</TableCell>
+                          <TableCell className="text-zinc-400">{c.category}</TableCell>
+                          <TableCell>
+                            <Badge className={
+                              c.severity === "Critical" ? "bg-red-500/10 text-red-400" :
+                              c.severity === "Major" ? "bg-amber-500/10 text-amber-400" :
+                              "bg-zinc-550/10 text-zinc-400"
+                            }>
+                              {c.severity}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-zinc-300">{c.owner}</TableCell>
+                          <TableCell>
+                            <Badge className={c.status === "Open" ? "bg-indigo-600/10 text-indigo-400" : "bg-emerald-600/10 text-emerald-400"}>
+                              {c.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-zinc-300">{c.resolution || "Under Investigation"}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center justify-center">
+                              <Checkbox
+                                checked={c.confirmed}
+                                onCheckedChange={(checked) => {
+                                  setComplaints(prev => prev.map(comp => comp.id === c.id ? { ...comp, confirmed: !!checked } : comp))
+                                  toast.success(`Customer confirmation status updated for ${c.id}`)
+                                }}
+                                className="border-zinc-700 data-[state=checked]:bg-emerald-600"
+                              />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+
+            {/* Refunds Tab Content */}
+            {activeTab === "refunds" && (
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-xl font-bold text-zinc-100">Refund Approval Queue</h2>
+                  <p className="text-xs text-zinc-400">Validate claims and approve payouts before routing to Finance payouts.</p>
+                </div>
+
+                <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+                  <Table>
+                    <TableHeader className="bg-zinc-950/40">
+                      <TableRow className="border-zinc-800">
+                        <TableHead className="text-zinc-400">Refund ID</TableHead>
+                        <TableHead className="text-zinc-400">Ticket Ref</TableHead>
+                        <TableHead className="text-zinc-400">Customer</TableHead>
+                        <TableHead className="text-zinc-400">Amount</TableHead>
+                        <TableHead className="text-zinc-400">Reason</TableHead>
+                        <TableHead className="text-zinc-400">Approval Status</TableHead>
+                        <TableHead className="text-zinc-400">Finance Status</TableHead>
+                        <TableHead className="text-zinc-400">Expected Settlement</TableHead>
+                        <TableHead className="text-zinc-400 text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {refunds.map((r, idx) => (
+                        <TableRow key={idx} className="border-zinc-800 hover:bg-zinc-800/20 text-xs">
+                          <TableCell className="font-semibold text-zinc-300">{r.id}</TableCell>
+                          <TableCell className="text-zinc-400">{r.ticketId}</TableCell>
+                          <TableCell className="text-zinc-300">{r.customerName}</TableCell>
+                          <TableCell className="text-zinc-300 font-semibold">₹ {r.amount}</TableCell>
+                          <TableCell className="text-zinc-400">{r.reason}</TableCell>
+                          <TableCell>
+                            <Badge className={
+                              r.status === "Approved" ? "bg-emerald-500/10 text-emerald-400" :
+                              r.status === "Pending Approval" ? "bg-amber-500/10 text-amber-400" :
+                              "bg-zinc-500/10 text-zinc-400"
+                            }>
+                              {r.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-zinc-300 font-medium">{r.financeStatus}</TableCell>
+                          <TableCell className="text-zinc-400">{r.expectedDate}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex gap-2 justify-end">
+                              {r.status === "Pending Approval" && (
+                                <>
+                                  <Button size="xs" className="bg-emerald-600 hover:bg-emerald-500 text-[10px]" onClick={() => {
+                                    setRefunds(prev => prev.map(ref => ref.id === r.id ? { ...ref, status: "Sent to Finance", financeStatus: "Processing" } : ref))
+                                    toast.success("Refund claim approved and sent to Finance payouts queue.")
+                                  }}>
+                                    Approve
+                                  </Button>
+                                  <Button size="xs" variant="destructive" className="text-[10px]" onClick={() => {
+                                    setRefunds(prev => prev.map(ref => ref.id === r.id ? { ...ref, status: "Rejected", financeStatus: "Cancelled" } : ref))
+                                    toast.error("Refund claim rejected.")
+                                  }}>
+                                    Reject
+                                  </Button>
+                                </>
+                              )}
+                              {r.status === "Sent to Finance" && (
+                                <Button size="xs" className="bg-indigo-600 hover:bg-indigo-500 text-[10px]" onClick={() => {
+                                  setRefunds(prev => prev.map(ref => ref.id === r.id ? { ...ref, status: "Completed", financeStatus: "Disbursed" } : ref))
+                                  toast.success("Refund marked Completed (Disbursed).")
+                                }}>
+                                  Mark Disbursed
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+
+            {/* Corporate Accounts Tab Content */}
+            {activeTab === "corporate" && (
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-xl font-bold text-zinc-100">Corporate SLA Dashboard</h2>
+                  <p className="text-xs text-zinc-400">Manage SLA metrics and custom policies for B2B Clients.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {b2bClients?.map((client, idx) => (
+                    <Card key={idx} className="bg-zinc-900 border-zinc-800 shadow-xl">
+                      <CardHeader className="pb-2">
+                        <div className="flex justify-between items-center">
+                          <CardTitle className="text-zinc-200 text-sm font-semibold">{client.companyName || client.company_name}</CardTitle>
+                          <Badge className="bg-emerald-500/10 text-emerald-400">Active SLA</Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4 text-xs">
+                        <div className="grid grid-cols-2 gap-2 text-zinc-400">
+                          <p>Contract Email: <span className="text-zinc-200">{client.email}</span></p>
+                          <p>GST Status: <span className="text-zinc-200">{client.gst_number || "Yes"}</span></p>
+                          <p>Total Bookings: <span className="text-zinc-200">142</span></p>
+                          <p>Active Support SLA: <span className="text-indigo-400 font-semibold">15 min response</span></p>
+                        </div>
+                        <div className="border-t border-zinc-800 pt-3">
+                          <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Corporate Escalations</p>
+                          <div className="bg-zinc-950/60 p-2.5 rounded border border-zinc-800 flex justify-between items-center">
+                            <span>No open critical ticket SLA breaches for this client.</span>
+                            <Check className="h-4 w-4 text-emerald-400" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Feedback & NPS Tab Content */}
+            {activeTab === "feedback" && (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-xl font-bold text-zinc-100">Customer Feedback Logs</h2>
+                    <p className="text-xs text-zinc-400">Trip ratings and NPS metrics. Critical feedback automatically logs complaints.</p>
+                  </div>
+                  
+                  {/* Simulate Feedback Tool */}
+                  <Button size="sm" className="bg-indigo-600 hover:bg-indigo-500" onClick={() => {
+                    // Random low-star simulation
+                    const badFdb = {
+                      id: `FDB-${Math.floor(100 + Math.random() * 900)}`,
+                      customerName: "Rahul Sharma",
+                      overallRating: 1,
+                      driverRating: 1,
+                      vehicleRating: 2,
+                      supportRating: 1,
+                      comments: "Extremely dirty seat covers and driver arrived late.",
+                      nps: 1,
+                      tripId: `BK-${Math.floor(10000 + Math.random() * 90000)}`
+                    }
+                    handleAddFeedback(badFdb)
+                  }}>
+                    Simulate Bad Feedback (Rating: 1)
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  {feedbacks.map((fdb, idx) => (
+                    <Card key={idx} className="bg-zinc-900 border-zinc-800">
+                      <CardContent className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-zinc-200">{fdb.customerName}</h3>
+                            <Badge className="bg-zinc-800 text-zinc-400 text-[10px]">{fdb.tripId}</Badge>
+                          </div>
+                          <p className="text-xs text-zinc-300 italic">"{fdb.comments}"</p>
+                          <div className="flex gap-4 text-[10px] text-zinc-500 mt-2">
+                            <span>Driver: {"★".repeat(fdb.driverRating)}</span>
+                            <span>Vehicle: {"★".repeat(fdb.vehicleRating)}</span>
+                            <span>Support: {"★".repeat(fdb.supportRating)}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="text-center">
+                            <p className="text-[10px] text-zinc-500 uppercase">Overall Rating</p>
+                            <p className={`text-xl font-bold ${fdb.overallRating < 3 ? "text-red-400" : "text-emerald-400"}`}>
+                              {fdb.overallRating} / 5
+                            </p>
+                          </div>
+                          <div className="text-center bg-zinc-950 p-2 rounded">
+                            <p className="text-[9px] text-zinc-500 uppercase">NPS</p>
+                            <p className="text-xs font-semibold text-zinc-300">{fdb.nps}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Timeline Explorer Tab Content */}
+            {activeTab === "timeline" && (
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-xl font-bold text-zinc-100">Customer 360 Timeline</h2>
+                  <p className="text-xs text-zinc-400">Search customer name/phone to fetch total bookings, lifetime spend, VIP badges, and chronological log.</p>
+                </div>
+
+                <form onSubmit={handleTimelineSearchSubmit} className="flex gap-3 bg-zinc-900 p-4 rounded-xl border border-zinc-800/40">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-500" />
+                    <Input
+                      placeholder="Enter customer name or phone number..."
+                      value={timelineSearch}
+                      onChange={(e) => setTimelineSearch(e.target.value)}
+                      className="bg-zinc-950 border-zinc-800 text-zinc-100 pl-9"
+                    />
+                  </div>
+                  <Button type="submit" className="bg-indigo-600 hover:bg-indigo-500">Search Profile</Button>
+                </form>
+
+                {searchedCustomer ? (
+                  <div className="space-y-6">
+                    {/* Summary Card */}
+                    <Card className="bg-zinc-900 border-zinc-800 relative overflow-hidden">
+                      <div className="absolute right-0 top-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+                      <CardContent className="p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div className="flex items-center gap-4">
+                          <Avatar className="h-16 w-16 border-2 border-indigo-500">
+                            <AvatarFallback className="bg-zinc-800 text-indigo-400 text-xl font-bold">
+                              {searchedCustomer.name.charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-lg font-bold text-zinc-200">{searchedCustomer.name}</h3>
+                              {searchedCustomer.vip && (
+                                <Badge className="bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 font-bold flex items-center gap-1">
+                                  <Award className="h-3 w-3" /> VIP Badge
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-zinc-400">{searchedCustomer.email} | {searchedCustomer.phone}</p>
+                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1">Repeat Customer Indicator</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 text-center shrink-0">
+                          <div className="bg-zinc-950 p-3 rounded-lg border border-zinc-800">
+                            <p className="text-[10px] text-zinc-500 uppercase">Lifetime Spend</p>
+                            <p className="text-lg font-bold text-emerald-400">₹{searchedCustomer.spend || 24000}</p>
+                          </div>
+                          <div className="bg-zinc-950 p-3 rounded-lg border border-zinc-800">
+                            <p className="text-[10px] text-zinc-500 uppercase">Bookings</p>
+                            <p className="text-lg font-bold text-zinc-200">{searchedCustomer.bookings || 12}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Timeline List */}
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-semibold text-zinc-300">Chronological Logs</h3>
+                      
+                      <div className="relative border-l-2 border-zinc-800 pl-6 ml-4 space-y-6">
+                        {[
+                          { date: "Jul 16, 2026", title: "Support Ticket Resolved", desc: "Ticket TK-TEST-002 closed by Sneha S. (Resolved driver late delay query)", icon: CheckCircle, color: "text-emerald-400" },
+                          { date: "Jul 15, 2026", title: "Corporate Booking Completed", desc: "BK20092: Delhi Airport T3 to Connaught Place, Delhi. Paid ₹ 1,250 via Wallet.", icon: Activity, color: "text-indigo-400" },
+                          { date: "Jul 10, 2026", title: "Support Ticket Opened", desc: "Reported driver behaviour concern via Phone Call.", icon: AlertTriangle, color: "text-red-400" },
+                          { date: "Jun 24, 2026", title: "Refund Disbursed", desc: "Refund of ₹ 350 issued to HDFC source gateway on cancellation.", icon: DollarSign, color: "text-pink-400" }
+                        ].map((log, idx) => (
+                          <div key={idx} className="relative">
+                            <span className="absolute -left-[35px] top-1 p-1 bg-zinc-950 border border-zinc-800 rounded-full">
+                              <log.icon className={`h-4 w-4 ${log.color}`} />
+                            </span>
+                            <div className="space-y-1">
+                              <span className="text-[10px] text-zinc-500 font-mono">{log.date}</span>
+                              <h4 className="text-sm font-semibold text-zinc-200">{log.title}</h4>
+                              <p className="text-xs text-zinc-400 leading-relaxed">{log.desc}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-zinc-500">
+                    Search a customer's name to view their 360-degree timeline.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Knowledge Base Tab Content */}
+            {activeTab === "kb" && (
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-xl font-bold text-zinc-100">CRM Knowledge Base & SOPs</h2>
+                  <p className="text-xs text-zinc-400">Search emergency guidelines, refund limits, and corporate procedures.</p>
+                </div>
+
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-500" />
+                  <Input placeholder="Search policies, SOPs, FAQs..." className="bg-zinc-900 border-zinc-800 text-zinc-100 pl-9" />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  {[
+                    { title: "Refund Policy (SOP-011)", desc: "Maximum refund limit is ₹ 1,500. Escalation to TL required for any cash refunds above threshold.", tag: "Refunds" },
+                    { title: "Emergency & Safety SOP (SOP-024)", desc: "Immediately route call to operations desk. Contact local authorities and dispatch rescue cabs.", tag: "Safety" },
+                    { title: "Cancellation Policy (SOP-005)", desc: "B2C cancellation is free up to 60 mins before pickup. B2B cancellation holds custom client terms.", tag: "Cancellations" },
+                    { title: "Airport SOP - Terminal Transfers", desc: "Coordinators must track airport toll pass validity and terminal access lanes.", tag: "Operations" }
+                  ].map((kb, idx) => (
+                    <Card key={idx} className="bg-zinc-900 border-zinc-800 hover:border-indigo-500/50 transition-colors cursor-pointer">
+                      <CardHeader className="p-4 pb-2">
+                        <div className="flex justify-between items-center">
+                          <CardTitle className="text-zinc-200 text-sm font-semibold">{kb.title}</CardTitle>
+                          <Badge className="bg-zinc-855 text-zinc-400 text-[10px]">{kb.tag}</Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0 text-xs text-zinc-400">
+                        <p>{kb.desc}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Reports Tab Content */}
+            {activeTab === "reports" && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold text-zinc-100">CRM Reports & Analytics Downloads</h2>
+                  <p className="text-xs text-zinc-400">Download CSAT, NPS audits, complaint indices, and agent performance reports.</p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {[
+                    { title: "NPS & CSAT Quarterly Audit", format: "PDF", desc: "Detailed customer feedback sentiment report." },
+                    { title: "Complaint Category Index", format: "Excel", desc: "Statistical distribution of operations complaints." },
+                    { title: "Agent Performance & SLA Compliance", format: "CSV", desc: "Average response and resolution time matrices." }
+                  ].map((rep, idx) => (
+                    <Card key={idx} className="bg-zinc-900 border-zinc-800 shadow-xl">
+                      <CardHeader className="p-4 pb-2">
+                        <CardTitle className="text-zinc-200 text-sm font-semibold">{rep.title}</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0 text-xs text-zinc-400 space-y-4">
+                        <p>{rep.desc}</p>
+                        <Button
+                          size="xs"
+                          className="w-full bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 text-[10px]"
+                          onClick={() => {
+                            toast.success(`Download started: ${rep.title}.${rep.format.toLowerCase()}`)
+                          }}
+                        >
+                          <Download className="h-3 w-3 mr-2" /> Download as {rep.format}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Settings Tab Content */}
+            {activeTab === "settings" && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold text-zinc-100">CRM Access Control & Settings</h2>
+                  <p className="text-xs text-zinc-400">Modify permissions dynamically for each role in the CRM module.</p>
+                </div>
+
+                <Card className="bg-zinc-900 border-zinc-800">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-zinc-200 text-sm font-semibold">Role Permission Settings</CardTitle>
+                    <CardDescription className="text-zinc-500 text-xs">Toggle workspace access on/off for team members</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6 mt-4">
+                    
+                    <div className="flex items-center gap-4 bg-zinc-950 p-4 rounded-xl border border-zinc-800">
+                      <span className="text-xs text-zinc-400 font-semibold">Select Role to Edit:</span>
+                      <select
+                        value={selectedRole}
+                        onChange={(e) => setSelectedRole(e.target.value)}
+                        className="bg-zinc-900 border border-zinc-800 text-zinc-200 rounded p-1 text-xs"
+                      >
+                        {Object.keys(permissions).map(role => (
+                          <option key={role} value={role}>{role}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      {[
+                        { key: "tickets", label: "Access Customer Tickets" },
+                        { key: "liveSupport", label: "Access Live Ride Support" },
+                        { key: "complaints", label: "Access Complaints Register" },
+                        { key: "refunds", label: "Access Refund Approvals" },
+                        { key: "timeline", label: "Access Timeline Explorer" },
+                        { key: "reports", label: "Access Analytics & Reports" }
+                      ].map(perm => (
+                        <div key={perm.key} className="flex items-center gap-3 bg-zinc-950 p-3 rounded border border-zinc-800">
+                          <Checkbox
+                            checked={permissions[selectedRole][perm.key as keyof typeof permissions[string]]}
+                            onCheckedChange={(checked) => {
+                              setPermissions(prev => ({
+                                ...prev,
+                                [selectedRole]: {
+                                  ...prev[selectedRole],
+                                  [perm.key]: !!checked
+                                }
+                              }))
+                              toast.success(`Updated permission for ${selectedRole}: ${perm.label}`)
+                            }}
+                            className="border-zinc-700 data-[state=checked]:bg-emerald-600"
+                          />
+                          <span className="text-xs text-zinc-300">{perm.label}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+          </div>
+
+        </div>
+
+      </div>
+    </AdminLayout>
+  )
+}

@@ -120,6 +120,11 @@ export function AppSidebar() {
         icon: MapPinned,
         href: '/live-tracking',
       },
+      {
+        title: 'CRM Workspace',
+        icon: Headset,
+        href: '/admin/crm',
+      },
     ] : []),
     ...(isTrevAdmin ? [
       {
