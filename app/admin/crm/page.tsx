@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer,
   BarChart, Bar, Legend, PieChart, Pie, Cell, LineChart, Line
@@ -34,6 +35,7 @@ export default function CRMModulePage() {
 
   // Tabs state
   const [activeTab, setActiveTab] = useState("dashboard")
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
 
   // Simulation speed
   const simulationSpeed = 1
@@ -322,6 +324,7 @@ export default function CRMModulePage() {
 
     addSupportTicket(ticketPayload)
     toast.success("CRM Support Ticket Created Successfully!")
+    setIsCreateDialogOpen(false)
     
     // Reset Form
     setNewTicketSubject("")
@@ -362,78 +365,94 @@ export default function CRMModulePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button size="sm" className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm px-4 py-2">
-                  <Plus className="mr-2 h-4 w-4" /> New Ticket
-                </Button>
-              </SheetTrigger>
-              <SheetContent className="bg-white border-slate-100 text-slate-900">
-                <SheetHeader>
-                  <SheetTitle className="text-slate-900 font-extrabold">Create Support Ticket</SheetTitle>
-                  <SheetDescription className="text-slate-500 font-medium">Add a new ticket generated from phone or offline interactions.</SheetDescription>
-                </SheetHeader>
-                <form onSubmit={handleAddNewTicketSubmit} className="space-y-4 mt-6">
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Customer Name</label>
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <Button
+                onClick={() => setIsCreateDialogOpen(true)}
+                size="sm"
+                className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm px-4 py-2"
+              >
+                <Plus className="mr-2 h-4 w-4" /> New Ticket
+              </Button>
+              <DialogContent className="bg-white border-slate-100 text-slate-900 max-w-lg rounded-2xl shadow-2xl p-6">
+                <DialogHeader className="pb-3 border-b border-slate-100">
+                  <DialogTitle className="text-slate-900 text-xl font-black">Create Support Ticket</DialogTitle>
+                  <DialogDescription className="text-slate-500 font-semibold text-xs mt-1">
+                    Add a new ticket generated from phone calls or offline feedback channels.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleAddNewTicketSubmit} className="space-y-5 mt-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Customer Name *</label>
                     <Input
                       value={newTicketCustomer}
                       onChange={(e) => setNewTicketCustomer(e.target.value)}
                       placeholder="e.g. Rahul Sharma"
-                      className="border-slate-200 rounded-xl"
+                      className="border-slate-200 rounded-xl focus-visible:ring-indigo-500"
+                      required
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Subject</label>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Subject / Issue Summary *</label>
                     <Input
                       value={newTicketSubject}
                       onChange={(e) => setNewTicketSubject(e.target.value)}
-                      placeholder="Subject of issue"
-                      className="border-slate-200 rounded-xl"
+                      placeholder="e.g. Fare double-debited during ride"
+                      className="border-slate-200 rounded-xl focus-visible:ring-indigo-500"
+                      required
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Category</label>
                       <select
                         value={newTicketCategory}
                         onChange={(e) => setNewTicketCategory(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-800 text-sm"
+                        className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-800 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-semibold cursor-pointer"
                       >
-                        <option value="billing">Billing</option>
-                        <option value="service">Service Quality</option>
-                        <option value="app">App Issue</option>
-                        <option value="safety">Safety Concern</option>
+                        <option value="billing">💰 Billing</option>
+                        <option value="service">🚗 Service Quality</option>
+                        <option value="app">📱 App Issue</option>
+                        <option value="safety">🚨 Safety Concern</option>
                       </select>
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Priority</label>
                       <select
                         value={newTicketPriority}
                         onChange={(e) => setNewTicketPriority(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-800 text-sm"
+                        className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-800 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-semibold cursor-pointer"
                       >
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
+                        <option value="low">🟢 Low</option>
+                        <option value="medium">🟡 Medium</option>
+                        <option value="high">🔴 High</option>
                       </select>
                     </div>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Description</label>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Detailed Description</label>
                     <textarea
                       value={newTicketDesc}
                       onChange={(e) => setNewTicketDesc(e.target.value)}
-                      placeholder="Details of complaint..."
-                      className="w-full h-24 bg-white border border-slate-200 rounded-xl p-2.5 text-slate-800 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      placeholder="Enter specific details regarding the customer complaint or query..."
+                      className="w-full h-28 bg-white border border-slate-200 rounded-xl p-3 text-slate-800 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-400 font-medium leading-relaxed"
                     />
                   </div>
-                  <Button type="submit" className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3">
-                    Submit Ticket
-                  </Button>
+                  <div className="flex gap-3 justify-end border-t border-slate-100 pt-4 mt-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsCreateDialogOpen(false)}
+                      className="rounded-xl border-slate-200 text-slate-700 bg-white hover:bg-slate-50 font-bold"
+                    >
+                      Cancel
+                    </Button>
+                    <Button type="submit" className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 shadow-md shadow-indigo-500/10">
+                      Submit Ticket
+                    </Button>
+                  </div>
                 </form>
-              </SheetContent>
-            </Sheet>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
