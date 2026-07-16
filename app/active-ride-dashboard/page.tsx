@@ -3042,9 +3042,19 @@ export default function ActiveRideDashboard() {
                           const durationDiff = booking.tripType === 'rental' ? (booking.actualHours || 0) - (booking.packageHours || 0) : (booking.actualDays || 0) - (booking.days || 0);
                           const kmDiff = (booking.actualKm || 0) - (booking.estimatedKm || 0);
 
+                          const bookedDriver = booking.driverId ? getDriver(booking.driverId) : null;
+                          const bookedDriverName = bookedDriver ? bookedDriver.name : 'N/A';
+                          const servedDriverName = bookedDriverName; // standard assignment matching
+
+                          const servedCarModel = servedCar ? `${servedCar.model} (${servedCar.licensePlate})` : 'N/A';
+
                           const rows = [
-                              { param: 'Pickup Time', booked: pickupTime, served: actualPickupTime ? new Date(actualPickupTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A', variation: `${pickupTimeDiff > 0 ? '+' : ''}${pickupTimeDiff.toFixed(0)} min`, color: pickupTimeDiff > 5 ? 'text-red-600' : 'text-green-600' },
+                              { param: 'Pickup Time', booked: `${booking.pickupDate} ${pickupTime}`, served: actualPickupTime ? new Date(actualPickupTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'N/A', variation: `${pickupTimeDiff > 0 ? '+' : ''}${pickupTimeDiff.toFixed(0)} min`, color: pickupTimeDiff > 5 ? 'text-red-600' : 'text-green-600' },
                               { param: 'Car Category', booked: bookedCarCategory, served: servedCarCategory, variation: bookedCarCategory !== servedCarCategory ? 'Changed' : 'Same', color: bookedCarCategory !== servedCarCategory ? 'text-amber-600' : 'text-slate-500' },
+                              { param: 'Driver Assigned', booked: bookedDriverName, served: servedDriverName, variation: 'Same', color: 'text-slate-500' },
+                              { param: 'Vehicle Assigned', booked: bookedCarCategory, served: servedCarModel, variation: servedCar ? 'Served' : 'N/A', color: 'text-slate-500' },
+                              { param: 'Pickup Location', booked: booking.pickupLocation, served: booking.actualPickupLocation || booking.pickupLocation, variation: booking.actualPickupLocation && booking.actualPickupLocation !== booking.pickupLocation ? 'Redirected' : 'Same', color: booking.actualPickupLocation && booking.actualPickupLocation !== booking.pickupLocation ? 'text-amber-600' : 'text-slate-500' },
+                              { param: 'Drop Location', booked: booking.dropLocation, served: booking.actualDropLocation || booking.dropLocation, variation: booking.actualDropLocation && booking.actualDropLocation !== booking.dropLocation ? 'Redirected' : 'Same', color: booking.actualDropLocation && booking.actualDropLocation !== booking.dropLocation ? 'text-amber-600' : 'text-slate-500' },
                           ];
 
                           if (booking.tripType === 'rental') {
@@ -3061,6 +3071,12 @@ export default function ActiveRideDashboard() {
                               );
                           }
 
+                          if (booking.flightNumber || booking.trainNumber) {
+                              rows.push(
+                                  { param: 'Flight/Train', booked: booking.flightNumber || booking.trainNumber || 'N/A', served: booking.flightNumber || booking.trainNumber || 'N/A', variation: 'Same', color: 'text-slate-500' }
+                              );
+                          }
+
                           rows.push(
                               { param: 'Distance', booked: `${booking.estimatedKm || 0} km`, served: `${booking.actualKm || booking.estimatedKm || 0} km`, variation: `${kmDiff > 0 ? '+' : ''}${kmDiff.toFixed(1)} km`, color: kmDiff > 0 ? 'text-red-600' : 'text-slate-500' }
                           );
@@ -3068,8 +3084,8 @@ export default function ActiveRideDashboard() {
                           return rows.map((row, i) => (
                               <div key={i} className="contents">
                                   <div className="font-bold text-slate-700">{row.param}</div>
-                                  <div className="font-medium">{row.booked}</div>
-                                  <div className="font-medium">{row.served}</div>
+                                  <div className="font-medium text-xs break-all">{row.booked}</div>
+                                  <div className="font-medium text-xs break-all">{row.served}</div>
                                   <div className={`font-bold ${row.color}`}>{row.variation}</div>
                               </div>
                           ));
@@ -3083,10 +3099,17 @@ export default function ActiveRideDashboard() {
 
                           const baseFareDiff = (booking.actualFare || booking.estimatedFare || 0) - (booking.estimatedFare || 0);
                           const extraChargesValue = (booking.extraCharges || 0) + (booking.tollCharges || 0) + (booking.parkingCharges || 0);
+                          const gstDiff = (booking.actualGstAmount || booking.gstAmount || 0) - (booking.gstAmount || 0);
+                          const discountDiff = (booking.actualPromoDiscount || booking.promoDiscount || 0) - (booking.promoDiscount || 0);
 
                           const rows = [
                               { param: 'Base Fare', booked: `₹ ${booking.estimatedFare || 0}`, served: `₹ ${booking.actualFare || booking.estimatedFare || 0}`, variation: `${baseFareDiff >= 0 ? '+' : '-'} ₹ ${Math.abs(baseFareDiff)}`, color: baseFareDiff > 0 ? 'text-red-600' : 'text-green-600' },
-                              { param: 'Extra Charges', booked: '₹ 0', served: `₹ ${extraChargesValue}`, variation: `+ ₹ ${extraChargesValue}`, color: 'text-amber-600' },
+                              { param: 'GST / Taxes', booked: `₹ ${booking.gstAmount || 0}`, served: `₹ ${booking.actualGstAmount || booking.gstAmount || 0}`, variation: `${gstDiff >= 0 ? '+' : '-'} ₹ ${Math.abs(gstDiff)}`, color: gstDiff > 0 ? 'text-red-600' : 'text-green-600' },
+                              { param: 'Toll Charges', booked: `₹ 0`, served: `₹ ${booking.tollCharges || 0}`, variation: `+ ₹ ${booking.tollCharges || 0}`, color: 'text-amber-600' },
+                              { param: 'Parking & Fees', booked: `₹ 0`, served: `₹ ${booking.parkingCharges || 0}`, variation: `+ ₹ ${booking.parkingCharges || 0}`, color: 'text-amber-600' },
+                              { param: 'Promo Discount', booked: `- ₹ ${booking.promoDiscount || 0}`, served: `- ₹ ${booking.actualPromoDiscount || booking.promoDiscount || 0}`, variation: `${discountDiff >= 0 ? '-' : '+'} ₹ ${Math.abs(discountDiff)}`, color: discountDiff > 0 ? 'text-green-600' : 'text-slate-500' },
+                              { param: 'Extra Charges', booked: '₹ 0', served: `₹ ${booking.extraCharges || 0}`, variation: `+ ₹ ${booking.extraCharges || 0}`, color: 'text-amber-600' },
+                              { param: 'Grand Total', booked: `₹ ${booking.grandTotal || (booking.estimatedFare + (booking.gstAmount || 0))}`, served: `₹ ${booking.grandTotal || (booking.actualFare || booking.estimatedFare) + (booking.gstAmount || 0) + extraChargesValue - (booking.actualPromoDiscount || booking.promoDiscount || 0)}`, variation: `${(baseFareDiff + extraChargesValue) >= 0 ? '+' : '-'} ₹ ${Math.abs(baseFareDiff + extraChargesValue)}`, color: (baseFareDiff + extraChargesValue) > 0 ? 'text-red-600' : 'text-green-600' },
                           ];
 
                           return rows.map((row, i) => (
