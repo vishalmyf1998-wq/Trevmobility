@@ -2,7 +2,7 @@
 "use client"
 
 import React, { useState, useMemo, useEffect } from "react"
-import { AdminLayout } from "@/components/admin-layout"
+
 import { useAdmin } from "@/lib/admin-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -319,7 +319,7 @@ export default function CRMModulePage() {
   }
 
   return (
-    <AdminLayout>
+    <>
       <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
         
         {/* CRM Module Title & Top Toolbar */}
@@ -1441,6 +1441,6 @@ export default function CRMModulePage() {
         </div>
 
       </div>
-    </AdminLayout>
+    </>
   )
 }
