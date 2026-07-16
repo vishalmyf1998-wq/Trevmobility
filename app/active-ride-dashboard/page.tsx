@@ -3003,134 +3003,181 @@ export default function ActiveRideDashboard() {
       
       {/* Variation Dialog */}
       <Dialog open={isVariationDialogOpen} onOpenChange={setIsVariationDialogOpen}>
-        <DialogContent className="sm:max-w-2xl rounded-2xl">
-          <style>{`
-            .grid-cols-var { grid-template-columns: 1fr 1fr 1fr 0.7fr; }
-            .grid-cols-var > div { padding: 0.75rem 0.5rem; }
-            .grid-cols-var > div:nth-child(4n) { text-align: right; }
-          `}</style>
-          <DialogHeader>
-            <DialogTitle className="text-xl text-slate-800">Trip Variations</DialogTitle>
-            <DialogDescription className="text-slate-500">
-              Estimated vs Actuals for booking <strong className="text-slate-700">{variationRideTarget?.bookingId}</strong>
+        <DialogContent className="sm:max-w-2xl rounded-3xl bg-white border border-slate-100 shadow-2xl p-6">
+          <DialogHeader className="pb-3 border-b border-slate-100">
+            <DialogTitle className="text-xl font-black text-slate-900 flex items-center gap-2">
+              <span className="p-2 rounded-xl bg-indigo-50 text-indigo-600"><GitCompare className="h-5 w-5" /></span>
+              Trip Audit & Variations
+            </DialogTitle>
+            <DialogDescription className="text-slate-400 text-xs font-semibold mt-1">
+              Comparison log of booking estimates vs actual trip performance for <strong className="text-slate-700 font-extrabold">{variationRideTarget?.bookingId}</strong>.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-              <div className="bg-slate-50 rounded-xl border border-slate-100 text-sm">
-                  <div className="grid grid-cols-var gap-x-2 p-2">
-                      <div className="font-bold text-slate-500 uppercase text-[10px]">Parameter</div>
-                      <div className="font-bold text-slate-500 uppercase text-[10px]">Booked</div>
-                      <div className="font-bold text-slate-500 uppercase text-[10px]">Served</div>
-                      <div className="font-bold text-slate-500 uppercase text-[10px]">Variation</div>
-                  </div>
-                  <div className="grid grid-cols-var gap-x-2 divide-y divide-slate-100">
-                      {(() => {
-                          const booking = variationRideTarget?.originalBooking;
-                          if (!booking) return null;
 
-                          const bookedCarCategory = carCategories.find(c => c.id === booking.carCategoryId)?.name || 'N/A';
-                          const servedCar = booking.carId ? getCar(booking.carId) : null;
-                          const servedCarCategory = carCategories.find(c => c.id === servedCar?.categoryId)?.name || 'N/A';
-
-                          const pickupTime = booking.pickupTime;
-                          const actualPickupTime = booking.eventLog?.find((e: any) => e.toStatus === 'picked_up')?.performedAt;
-                          const pickupTimeDiff = actualPickupTime ? (new Date(actualPickupTime).getTime() - new Date(`${booking.pickupDate}T${booking.pickupTime}`).getTime()) / 60000 : 0;
-
-                          const bookedPackage = booking.tripType === 'rental' ? `${booking.packageHours}h / ${booking.packageKm}km` : booking.tripType === 'outstation' ? `${booking.days} Days` : 'N/A';
-                          const servedPackage = booking.tripType === 'rental' ? `${booking.actualHours || booking.packageHours}h / ${booking.actualKm || booking.packageKm}km` : booking.tripType === 'outstation' ? `${booking.actualDays || booking.days} Days` : 'N/A';
-
-                          const durationDiff = booking.tripType === 'rental' ? (booking.actualHours || 0) - (booking.packageHours || 0) : (booking.actualDays || 0) - (booking.days || 0);
-                          const kmDiff = (booking.actualKm || 0) - (booking.estimatedKm || 0);
-
-                          const bookedDriver = booking.driverId ? getDriver(booking.driverId) : null;
-                          const bookedDriverName = bookedDriver ? bookedDriver.name : 'N/A';
-                          const servedDriverName = bookedDriverName; // standard assignment matching
-
-                          const servedCarModel = servedCar ? `${servedCar.model} (${servedCar.licensePlate})` : 'N/A';
-
-                          const rows = [
-                              { param: 'Pickup Time', booked: `${booking.pickupDate} ${pickupTime}`, served: actualPickupTime ? new Date(actualPickupTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'N/A', variation: `${pickupTimeDiff > 0 ? '+' : ''}${pickupTimeDiff.toFixed(0)} min`, color: pickupTimeDiff > 5 ? 'text-red-600' : 'text-green-600' },
-                              { param: 'Car Category', booked: bookedCarCategory, served: servedCarCategory, variation: bookedCarCategory !== servedCarCategory ? 'Changed' : 'Same', color: bookedCarCategory !== servedCarCategory ? 'text-amber-600' : 'text-slate-500' },
-                              { param: 'Driver Assigned', booked: bookedDriverName, served: servedDriverName, variation: 'Same', color: 'text-slate-500' },
-                              { param: 'Vehicle Assigned', booked: bookedCarCategory, served: servedCarModel, variation: servedCar ? 'Served' : 'N/A', color: 'text-slate-500' },
-                              { param: 'Pickup Location', booked: booking.pickupLocation, served: booking.actualPickupLocation || booking.pickupLocation, variation: booking.actualPickupLocation && booking.actualPickupLocation !== booking.pickupLocation ? 'Redirected' : 'Same', color: booking.actualPickupLocation && booking.actualPickupLocation !== booking.pickupLocation ? 'text-amber-600' : 'text-slate-500' },
-                              { param: 'Drop Location', booked: booking.dropLocation, served: booking.actualDropLocation || booking.dropLocation, variation: booking.actualDropLocation && booking.actualDropLocation !== booking.dropLocation ? 'Redirected' : 'Same', color: booking.actualDropLocation && booking.actualDropLocation !== booking.dropLocation ? 'text-amber-600' : 'text-slate-500' },
-                          ];
-
-                          if (booking.tripType === 'rental') {
-                              rows.push(
-                                  { param: 'Package', booked: bookedPackage, served: servedPackage, variation: durationDiff !== 0 ? 'Changed' : 'Same', color: durationDiff !== 0 ? 'text-amber-600' : 'text-slate-500' },
-                                  { param: 'Duration', booked: `${booking.packageHours} hrs`, served: `${booking.actualHours || booking.packageHours} hrs`, variation: `${durationDiff > 0 ? '+' : ''}${durationDiff} hrs`, color: durationDiff > 0 ? 'text-red-600' : 'text-slate-500' }
-                              );
-                          }
-
-                          if (booking.tripType === 'outstation') {
-                              rows.push(
-                                  { param: 'Package', booked: bookedPackage, served: servedPackage, variation: durationDiff !== 0 ? 'Changed' : 'Same', color: durationDiff !== 0 ? 'text-amber-600' : 'text-slate-500' },
-                                  { param: 'Duration', booked: `${booking.days} Days`, served: `${booking.actualDays || booking.days} Days`, variation: `${durationDiff > 0 ? '+' : ''}${durationDiff} Days`, color: durationDiff > 0 ? 'text-red-600' : 'text-slate-500' }
-                              );
-                          }
-
-                          if (booking.flightNumber || booking.trainNumber) {
-                              rows.push(
-                                  { param: 'Flight/Train', booked: booking.flightNumber || booking.trainNumber || 'N/A', served: booking.flightNumber || booking.trainNumber || 'N/A', variation: 'Same', color: 'text-slate-500' }
-                              );
-                          }
-
-                          rows.push(
-                              { param: 'Distance', booked: `${booking.estimatedKm || 0} km`, served: `${booking.actualKm || booking.estimatedKm || 0} km`, variation: `${kmDiff > 0 ? '+' : ''}${kmDiff.toFixed(1)} km`, color: kmDiff > 0 ? 'text-red-600' : 'text-slate-500' }
-                          );
-
-                          return rows.map((row, i) => (
-                              <div key={i} className="contents">
-                                  <div className="font-bold text-slate-700">{row.param}</div>
-                                  <div className="font-medium text-xs break-all">{row.booked}</div>
-                                  <div className="font-medium text-xs break-all">{row.served}</div>
-                                  <div className={`font-bold ${row.color}`}>{row.variation}</div>
-                              </div>
-                          ));
-                      })()}
-                  </div>
-
-                  <div className="grid grid-cols-var gap-x-2 divide-y divide-slate-100 border-t border-slate-200 mt-4">
-                      {(() => {
-                          const booking = variationRideTarget?.originalBooking;
-                          if (!booking) return null;
-
-                          const baseFareDiff = (booking.actualFare || booking.estimatedFare || 0) - (booking.estimatedFare || 0);
-                          const extraChargesValue = (booking.extraCharges || 0) + (booking.tollCharges || 0) + (booking.parkingCharges || 0);
-                          const gstDiff = (booking.actualGstAmount || booking.gstAmount || 0) - (booking.gstAmount || 0);
-                          const discountDiff = (booking.actualPromoDiscount || booking.promoDiscount || 0) - (booking.promoDiscount || 0);
-
-                          const rows = [
-                              { param: 'Base Fare', booked: `₹ ${booking.estimatedFare || 0}`, served: `₹ ${booking.actualFare || booking.estimatedFare || 0}`, variation: `${baseFareDiff >= 0 ? '+' : '-'} ₹ ${Math.abs(baseFareDiff)}`, color: baseFareDiff > 0 ? 'text-red-600' : 'text-green-600' },
-                              { param: 'GST / Taxes', booked: `₹ ${booking.gstAmount || 0}`, served: `₹ ${booking.actualGstAmount || booking.gstAmount || 0}`, variation: `${gstDiff >= 0 ? '+' : '-'} ₹ ${Math.abs(gstDiff)}`, color: gstDiff > 0 ? 'text-red-600' : 'text-green-600' },
-                              { param: 'Toll Charges', booked: `₹ 0`, served: `₹ ${booking.tollCharges || 0}`, variation: `+ ₹ ${booking.tollCharges || 0}`, color: 'text-amber-600' },
-                              { param: 'Parking & Fees', booked: `₹ 0`, served: `₹ ${booking.parkingCharges || 0}`, variation: `+ ₹ ${booking.parkingCharges || 0}`, color: 'text-amber-600' },
-                              { param: 'Promo Discount', booked: `- ₹ ${booking.promoDiscount || 0}`, served: `- ₹ ${booking.actualPromoDiscount || booking.promoDiscount || 0}`, variation: `${discountDiff >= 0 ? '-' : '+'} ₹ ${Math.abs(discountDiff)}`, color: discountDiff > 0 ? 'text-green-600' : 'text-slate-500' },
-                              { param: 'Extra Charges', booked: '₹ 0', served: `₹ ${booking.extraCharges || 0}`, variation: `+ ₹ ${booking.extraCharges || 0}`, color: 'text-amber-600' },
-                              { param: 'Grand Total', booked: `₹ ${booking.grandTotal || (booking.estimatedFare + (booking.gstAmount || 0))}`, served: `₹ ${booking.grandTotal || (booking.actualFare || booking.estimatedFare) + (booking.gstAmount || 0) + extraChargesValue - (booking.actualPromoDiscount || booking.promoDiscount || 0)}`, variation: `${(baseFareDiff + extraChargesValue) >= 0 ? '+' : '-'} ₹ ${Math.abs(baseFareDiff + extraChargesValue)}`, color: (baseFareDiff + extraChargesValue) > 0 ? 'text-red-600' : 'text-green-600' },
-                          ];
-
-                          return rows.map((row, i) => (
-                              <div key={i} className="contents">
-                                  <div className="font-bold text-slate-700">{row.param}</div>
-                                  <div className="font-medium">{row.booked}</div>
-                                  <div className="font-medium">{row.served}</div>
-                                  <div className={`font-bold ${row.color}`}>{row.variation}</div>
-                              </div>
-                          ));
-                      })()}
-                  </div>
-              </div>
+          <div className="space-y-6 my-4 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
+            
+            {/* Operational Section */}
+            <div>
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Ride & Operational Metrics</h3>
               
-              <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                  <p className="text-xs text-amber-800 font-medium">Variations are calculated automatically when the driver closes the trip and inputs actual KM and extra charges.</p>
+              <div className="border border-slate-100 rounded-2xl overflow-hidden bg-white shadow-sm">
+                <div className="grid grid-cols-4 gap-x-4 p-3 bg-slate-50/70 text-[10px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-100">
+                  <div>Parameter</div>
+                  <div>Booked Details</div>
+                  <div>Served Details</div>
+                  <div className="text-right">Variation</div>
+                </div>
+
+                <div className="divide-y divide-slate-100/50">
+                  {(() => {
+                      const booking = variationRideTarget?.originalBooking;
+                      if (!booking) return null;
+
+                      const bookedCarCategory = carCategories.find(c => c.id === booking.carCategoryId)?.name || 'N/A';
+                      const servedCar = booking.carId ? getCar(booking.carId) : null;
+                      const servedCarCategory = carCategories.find(c => c.id === servedCar?.categoryId)?.name || 'N/A';
+
+                      const pickupTime = booking.pickupTime;
+                      const actualPickupTime = booking.eventLog?.find((e: any) => e.toStatus === 'picked_up')?.performedAt;
+                      const pickupTimeDiff = actualPickupTime ? (new Date(actualPickupTime).getTime() - new Date(`${booking.pickupDate}T${booking.pickupTime}`).getTime()) / 60000 : 0;
+
+                      const bookedPackage = booking.tripType === 'rental' ? `${booking.packageHours}h / ${booking.packageKm}km` : booking.tripType === 'outstation' ? `${booking.days} Days` : 'N/A';
+                      const servedPackage = booking.tripType === 'rental' ? `${booking.actualHours || booking.packageHours}h / ${booking.actualKm || booking.packageKm}km` : booking.tripType === 'outstation' ? `${booking.actualDays || booking.days} Days` : 'N/A';
+
+                      const durationDiff = booking.tripType === 'rental' ? (booking.actualHours || 0) - (booking.packageHours || 0) : (booking.actualDays || 0) - (booking.days || 0);
+                      const kmDiff = (booking.actualKm || 0) - (booking.estimatedKm || 0);
+
+                      const bookedDriver = booking.driverId ? getDriver(booking.driverId) : null;
+                      const bookedDriverName = bookedDriver ? bookedDriver.name : 'N/A';
+                      const servedDriverName = bookedDriverName;
+
+                      const servedCarModel = servedCar ? `${servedCar.model} (${servedCar.licensePlate})` : 'N/A';
+
+                      const rows = [
+                          { param: 'Pickup Time', booked: `${booking.pickupDate} ${pickupTime}`, served: actualPickupTime ? new Date(actualPickupTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'N/A', variation: `${pickupTimeDiff > 0 ? '+' : ''}${pickupTimeDiff.toFixed(0)} min`, color: pickupTimeDiff > 5 ? 'text-red-600' : 'text-green-600' },
+                          { param: 'Car Category', booked: bookedCarCategory, served: servedCarCategory, variation: bookedCarCategory !== servedCarCategory ? 'Changed' : 'Same', color: bookedCarCategory !== servedCarCategory ? 'text-amber-600' : 'text-slate-500' },
+                          { param: 'Driver Assigned', booked: bookedDriverName, served: servedDriverName, variation: 'Same', color: 'text-slate-500' },
+                          { param: 'Vehicle Plate', booked: bookedCarCategory, served: servedCarModel, variation: servedCar ? 'Served' : 'N/A', color: 'text-slate-500' },
+                          { param: 'Pickup Point', booked: booking.pickupLocation, served: booking.actualPickupLocation || booking.pickupLocation, variation: booking.actualPickupLocation && booking.actualPickupLocation !== booking.pickupLocation ? 'Redirected' : 'Same', color: booking.actualPickupLocation && booking.actualPickupLocation !== booking.pickupLocation ? 'text-amber-600' : 'text-slate-500' },
+                          { param: 'Drop Point', booked: booking.dropLocation, served: booking.actualDropLocation || booking.dropLocation, variation: booking.actualDropLocation && booking.actualDropLocation !== booking.dropLocation ? 'Redirected' : 'Same', color: booking.actualDropLocation && booking.actualDropLocation !== booking.dropLocation ? 'text-amber-600' : 'text-slate-500' },
+                      ];
+
+                      if (booking.tripType === 'rental') {
+                          rows.push(
+                              { param: 'Package Limit', booked: bookedPackage, served: servedPackage, variation: durationDiff !== 0 ? 'Changed' : 'Same', color: durationDiff !== 0 ? 'text-amber-600' : 'text-slate-500' },
+                              { param: 'Trip Duration', booked: `${booking.packageHours} hrs`, served: `${booking.actualHours || booking.packageHours} hrs`, variation: `${durationDiff > 0 ? '+' : ''}${durationDiff} hrs`, color: durationDiff > 0 ? 'text-red-600' : 'text-slate-500' }
+                          );
+                      }
+
+                      if (booking.tripType === 'outstation') {
+                          rows.push(
+                              { param: 'Package Limit', booked: bookedPackage, served: servedPackage, variation: durationDiff !== 0 ? 'Changed' : 'Same', color: durationDiff !== 0 ? 'text-amber-600' : 'text-slate-500' },
+                              { param: 'Trip Duration', booked: `${booking.days} Days`, served: `${booking.actualDays || booking.days} Days`, variation: `${durationDiff > 0 ? '+' : ''}${durationDiff} Days`, color: durationDiff > 0 ? 'text-red-600' : 'text-slate-500' }
+                          );
+                      }
+
+                      if (booking.flightNumber || booking.trainNumber) {
+                          rows.push(
+                              { param: 'Flight/Train Ref', booked: booking.flightNumber || booking.trainNumber || 'N/A', served: booking.flightNumber || booking.trainNumber || 'N/A', variation: 'Same', color: 'text-slate-500' }
+                          );
+                      }
+
+                      rows.push(
+                          { param: 'Distance Travelled', booked: `${booking.estimatedKm || 0} km`, served: `${booking.actualKm || booking.estimatedKm || 0} km`, variation: `${kmDiff > 0 ? '+' : ''}${kmDiff.toFixed(1)} km`, color: kmDiff > 0 ? 'text-red-600' : 'text-slate-500' }
+                      );
+
+                      return rows.map((row, i) => (
+                          <div key={i} className="grid grid-cols-4 gap-x-4 p-3 hover:bg-slate-50/50 transition-colors items-center text-xs font-semibold">
+                              <div className="text-slate-800 font-bold">{row.param}</div>
+                              <div className="text-slate-400 font-medium break-all">{row.booked}</div>
+                              <div className="text-slate-700 font-bold break-all">{row.served}</div>
+                              <div className={`text-right font-extrabold ${row.color}`}>{row.variation}</div>
+                          </div>
+                      ));
+                  })()}
+                </div>
               </div>
+            </div>
+
+            {/* Financial Section */}
+            <div>
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Fare & Billing Breakdown</h3>
+              
+              <div className="border border-slate-100 rounded-2xl overflow-hidden bg-white shadow-sm">
+                <div className="grid grid-cols-4 gap-x-4 p-3 bg-slate-50/70 text-[10px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-100">
+                  <div>Fare Item</div>
+                  <div>Estimated (Booked)</div>
+                  <div>Actual (Served)</div>
+                  <div className="text-right">Difference</div>
+                </div>
+
+                <div className="divide-y divide-slate-100/50">
+                  {(() => {
+                      const booking = variationRideTarget?.originalBooking;
+                      if (!booking) return null;
+
+                      const baseFareDiff = (booking.actualFare || booking.estimatedFare || 0) - (booking.estimatedFare || 0);
+                      const extraChargesValue = (booking.extraCharges || 0) + (booking.tollCharges || 0) + (booking.parkingCharges || 0);
+                      const gstDiff = (booking.actualGstAmount || booking.gstAmount || 0) - (booking.gstAmount || 0);
+                      const discountDiff = (booking.actualPromoDiscount || booking.promoDiscount || 0) - (booking.promoDiscount || 0);
+
+                      const rows = [
+                          { param: 'Base Fare', booked: `₹ ${booking.estimatedFare || 0}`, served: `₹ ${booking.actualFare || booking.estimatedFare || 0}`, variation: `${baseFareDiff >= 0 ? '+' : '-'} ₹ ${Math.abs(baseFareDiff)}`, color: baseFareDiff > 0 ? 'text-red-600' : baseFareDiff < 0 ? 'text-green-600' : 'text-slate-500' },
+                          { param: 'GST / Service Tax', booked: `₹ ${booking.gstAmount || 0}`, served: `₹ ${booking.actualGstAmount || booking.gstAmount || 0}`, variation: `${gstDiff >= 0 ? '+' : '-'} ₹ ${Math.abs(gstDiff)}`, color: gstDiff > 0 ? 'text-red-600' : gstDiff < 0 ? 'text-green-600' : 'text-slate-500' },
+                          { param: 'Toll Charges', booked: `₹ 0`, served: `₹ ${booking.tollCharges || 0}`, variation: `+ ₹ ${booking.tollCharges || 0}`, color: booking.tollCharges > 0 ? 'text-amber-600' : 'text-slate-500' },
+                          { param: 'Parking & Fees', booked: `₹ 0`, served: `₹ ${booking.parkingCharges || 0}`, variation: `+ ₹ ${booking.parkingCharges || 0}`, color: booking.parkingCharges > 0 ? 'text-amber-600' : 'text-slate-500' },
+                          { param: 'Promo Discount', booked: `- ₹ ${booking.promoDiscount || 0}`, served: `- ₹ ${booking.actualPromoDiscount || booking.promoDiscount || 0}`, variation: `${discountDiff >= 0 ? '-' : '+'} ₹ ${Math.abs(discountDiff)}`, color: discountDiff > 0 ? 'text-green-600' : 'text-slate-500' },
+                          { param: 'Extra Outstation/Hour', booked: '₹ 0', served: `₹ ${booking.extraCharges || 0}`, variation: `+ ₹ ${booking.extraCharges || 0}`, color: booking.extraCharges > 0 ? 'text-amber-600' : 'text-slate-500' },
+                      ];
+
+                      const estimatedTotal = booking.grandTotal || (booking.estimatedFare + (booking.gstAmount || 0));
+                      const servedTotal = booking.grandTotal || (booking.actualFare || booking.estimatedFare) + (booking.gstAmount || 0) + extraChargesValue - (booking.actualPromoDiscount || booking.promoDiscount || 0);
+                      const totalDiff = servedTotal - estimatedTotal;
+
+                      return (
+                        <>
+                          {rows.map((row, i) => (
+                            <div key={i} className="grid grid-cols-4 gap-x-4 p-3 hover:bg-slate-50/50 transition-colors items-center text-xs font-semibold">
+                              <div className="text-slate-800 font-bold">{row.param}</div>
+                              <div className="text-slate-400 font-medium">{row.booked}</div>
+                              <div className="text-slate-700 font-bold">{row.served}</div>
+                              <div className={`text-right font-extrabold ${row.color}`}>{row.variation}</div>
+                            </div>
+                          ))}
+                          {/* Grand Total Row */}
+                          <div className="grid grid-cols-4 gap-x-4 p-3 bg-indigo-50/40 items-center text-xs font-bold border-t border-indigo-100">
+                            <div className="text-indigo-900 font-black uppercase tracking-wider">Grand Total</div>
+                            <div className="text-slate-500">₹ {estimatedTotal}</div>
+                            <div className="text-indigo-700 font-extrabold">₹ {servedTotal}</div>
+                            <div className={`text-right font-extrabold ${totalDiff > 0 ? 'text-red-600' : totalDiff < 0 ? 'text-green-600' : 'text-slate-500'}`}>
+                              {totalDiff >= 0 ? '+' : '-'} ₹ {Math.abs(totalDiff)}
+                            </div>
+                          </div>
+                        </>
+                      );
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            {/* Warning SOP Panel */}
+            <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-100/70 flex items-start gap-3">
+              <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0 animate-pulse" />
+              <p className="text-xs text-amber-800 font-medium leading-relaxed">
+                Variations are generated dynamically upon driver closing checks. Any base deviations or high extras exceeding B2B caps will trigger a warning.
+              </p>
+            </div>
+
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsVariationDialogOpen(false)} className="rounded-xl">Close</Button>
+
+          <DialogFooter className="border-t border-slate-100 pt-4 gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setIsVariationDialogOpen(false)} 
+              className="rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 font-bold px-6 py-2.5 shadow-sm"
+            >
+              Close Audit
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
