@@ -42,6 +42,17 @@ const allPermissions = [
   { id: 'cancellation_policy', label: 'Cancellation Policy', category: 'Settings' },
   { id: 'roles', label: 'Manage Roles', category: 'Admin' },
   { id: 'admin_users', label: 'Manage Admin Users', category: 'Admin' },
+  { id: 'crm_dashboard', label: 'Access CRM Dashboard', category: 'CRM' },
+  { id: 'crm_tickets', label: 'Manage Support Tickets', category: 'CRM' },
+  { id: 'crm_live_support', label: 'Access Live Ride Support', category: 'CRM' },
+  { id: 'crm_complaints', label: 'Access Complaints Portal', category: 'CRM' },
+  { id: 'crm_refunds', label: 'Access Refund Approvals', category: 'CRM' },
+  { id: 'crm_corporate', label: 'Access Corporate Support', category: 'CRM' },
+  { id: 'crm_feedback', label: 'Access Feedback & NPS', category: 'CRM' },
+  { id: 'crm_timeline', label: 'Access Timeline Explorer', category: 'CRM' },
+  { id: 'crm_kb', label: 'Access Knowledge Base', category: 'CRM' },
+  { id: 'crm_reports', label: 'Access CRM Reports', category: 'CRM' },
+  { id: 'crm_settings', label: 'Access CRM Settings', category: 'CRM' },
   { id: 'all', label: 'Full Access (All Permissions)', category: 'Super' },
 ]
 

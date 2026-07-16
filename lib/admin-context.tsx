@@ -316,9 +316,9 @@ const initialBookingTags: BookingTag[] = [
 
 const initialAdminRoles: AdminRole[] = [
   { id: 'a1111111-1111-4111-a111-111111111111', name: 'Super Admin', description: 'Full system access', permissions: ['all'], isActive: true, createdAt: new Date().toISOString() },
-  { id: 'b2222222-2222-4222-b222-222222222222', name: 'Operations Manager', description: 'Manage bookings and fleet', permissions: ['bookings', 'drivers', 'cars', 'duty_slips'], isActive: true, createdAt: new Date().toISOString() },
-  { id: 'c3333333-3333-4333-c333-333333333333', name: 'Accounts', description: 'Billing and invoices', permissions: ['invoices', 'payments', 'reports'], isActive: true, createdAt: new Date().toISOString() },
-  { id: 'd4444444-4444-4444-d444-444444444444', name: 'Dispatcher', description: 'Dispatch and tracking', permissions: ['bookings', 'live_tracking', 'dispatch'], isActive: true, createdAt: new Date().toISOString() },
+  { id: 'b2222222-2222-4222-b222-222222222222', name: 'Operations Manager', description: 'Manage bookings and fleet', permissions: ['bookings', 'drivers', 'cars', 'duty_slips', 'crm_dashboard', 'crm_tickets', 'crm_live_support', 'crm_complaints', 'crm_feedback', 'crm_timeline', 'crm_kb'], isActive: true, createdAt: new Date().toISOString() },
+  { id: 'c3333333-3333-4333-c333-333333333333', name: 'Accounts', description: 'Billing and invoices', permissions: ['invoices', 'payments', 'reports', 'crm_refunds', 'crm_reports'], isActive: true, createdAt: new Date().toISOString() },
+  { id: 'd4444444-4444-4444-d444-444444444444', name: 'Dispatcher', description: 'Dispatch and tracking', permissions: ['bookings', 'live_tracking', 'dispatch', 'crm_live_support'], isActive: true, createdAt: new Date().toISOString() },
 ]
 
 const initialGstConfig: GSTConfig = {

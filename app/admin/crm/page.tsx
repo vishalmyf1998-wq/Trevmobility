@@ -26,28 +26,17 @@ import { toast } from "sonner"
 // Colors for charts
 const COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"]
 
-// Default Role Permissions
-const DEFAULT_PERMISSIONS = {
-  "CRM Executive": { tickets: true, liveSupport: true, complaints: true, refunds: false, timeline: true, kb: true, reports: false, settings: false },
-  "CRM Team Lead": { tickets: true, liveSupport: true, complaints: true, refunds: true, timeline: true, kb: true, reports: true, settings: false },
-  "CRM Manager": { tickets: true, liveSupport: true, complaints: true, refunds: true, timeline: true, kb: true, reports: true, settings: true },
-  "Finance": { tickets: false, liveSupport: false, complaints: false, refunds: true, timeline: false, kb: true, reports: true, settings: false },
-  "Corporate Manager": { tickets: true, liveSupport: true, complaints: true, refunds: false, timeline: true, kb: true, reports: true, settings: false },
-  "Admin": { tickets: true, liveSupport: true, complaints: true, refunds: true, timeline: true, kb: true, reports: true, settings: true }
-}
-
 export default function CRMModulePage() {
-  const { bookings, supportTickets, addSupportTicket, updateSupportTicket, drivers, cars, b2bClients, b2cCustomers } = useAdmin()
+  const {
+    bookings, supportTickets, addSupportTicket, updateSupportTicket, drivers, cars, b2bClients, b2cCustomers,
+    currentUser, adminUsers = [], adminRoles = []
+  } = useAdmin()
 
   // Tabs state
   const [activeTab, setActiveTab] = useState("dashboard")
 
-  // Role and Permission states
-  const [selectedRole, setSelectedRole] = useState("CRM Manager")
-  const [permissions, setPermissions] = useState(DEFAULT_PERMISSIONS)
-
   // Simulation speed
-  const [simulationSpeed, setSimulationSpeed] = useState(1)
+  const simulationSpeed = 1
 
   // Sub-module Local States
   const [ticketsList, setTicketsList] = useState(() => {
@@ -200,9 +189,38 @@ export default function CRMModulePage() {
 
   // Action helper: check permissions
   const hasPermission = (tab: string) => {
-    const rolePerms = permissions[selectedRole]
-    if (!rolePerms) return false
-    return rolePerms[tab as keyof typeof rolePerms] ?? true
+    // 1. Map tabs to specific permission IDs
+    const permissionMap: Record<string, string> = {
+      dashboard: "crm_dashboard",
+      tickets: "crm_tickets",
+      liveSupport: "crm_live_support",
+      complaints: "crm_complaints",
+      refunds: "crm_refunds",
+      corporate: "crm_corporate",
+      feedback: "crm_feedback",
+      timeline: "crm_timeline",
+      kb: "crm_kb",
+      reports: "crm_reports",
+      settings: "crm_settings"
+    }
+    const neededPermission = permissionMap[tab]
+    if (!neededPermission) return true
+
+    // 2. If no currentUser session exists, default to full access (Super Admin)
+    if (!currentUser) return true
+
+    // 3. Find the user's role
+    const matchedUser = adminUsers.find((u: any) => u.email?.toLowerCase() === currentUser.email?.toLowerCase())
+    const roleId = matchedUser?.roleId || "a1111111-1111-4111-a111-111111111111" // fallback to super admin
+    const matchedRole = adminRoles.find((r: any) => r.id === roleId)
+
+    if (!matchedRole) return true // default to true if role not configured
+
+    // 4. Check if permissions array contains 'all' or the needed permission
+    return (
+      matchedRole.permissions.includes("all") ||
+      matchedRole.permissions.includes(neededPermission)
+    )
   }
 
   // Filtered tickets count
@@ -335,29 +353,6 @@ export default function CRMModulePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 shadow-sm">
-              <span className="text-slate-400">Active Role:</span>
-              <select
-                value={selectedRole}
-                onChange={(e) => {
-                  setSelectedRole(e.target.value)
-                  toast.success(`Role switched to ${e.target.value}`)
-                }}
-                className="bg-transparent border-none text-slate-800 outline-none font-bold cursor-pointer"
-              >
-                {Object.keys(permissions).map(role => (
-                  <option key={role} value={role}>{role}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 shadow-sm">
-              <span className="text-slate-400">Simulation Speed:</span>
-              <button onClick={() => setSimulationSpeed(prev => Math.max(1, prev - 1))} className="text-slate-600 hover:text-slate-900 px-1 font-bold">-</button>
-              <span className="text-indigo-600 font-extrabold">{simulationSpeed}x</span>
-              <button onClick={() => setSimulationSpeed(prev => Math.min(5, prev + 1))} className="text-slate-600 hover:text-slate-900 px-1 font-bold">+</button>
-            </div>
-            
             <Sheet>
               <SheetTrigger asChild>
                 <Button size="sm" className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm px-4 py-2">
@@ -444,8 +439,13 @@ export default function CRMModulePage() {
                 if (allowed) {
                   setActiveTab(e.target.value)
                 } else {
+                  const matchedUser = adminUsers.find((u: any) => u.email?.toLowerCase() === currentUser?.email?.toLowerCase())
+                  const roleId = matchedUser?.roleId || "a1111111-1111-4111-a111-111111111111"
+                  const matchedRole = adminRoles.find((r: any) => r.id === roleId)
+                  const roleName = matchedRole?.name || "assigned role"
+
                   toast.error("Permission Denied", {
-                    description: `Your active role (${selectedRole}) does not have permission to view this section.`
+                    description: `Your active role (${roleName}) does not have permission to view this section.`
                   })
                 }
               }}
@@ -1360,59 +1360,30 @@ export default function CRMModulePage() {
             {activeTab === "settings" && (
               <div className="space-y-6">
                 <div>
-                  <h2 className="text-xl font-bold text-slate-900">CRM Access Control & Settings</h2>
-                  <p className="text-xs text-slate-500">Modify permissions dynamically for each role in the CRM module.</p>
+                  <h2 className="text-xl font-bold text-slate-900">CRM Settings & Access Control</h2>
+                  <p className="text-xs text-slate-500">Global configuration and role permissions guidelines.</p>
                 </div>
 
                 <Card className="bg-white border-slate-100 shadow-sm rounded-2xl">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-slate-800 text-sm font-bold">Role Permission Settings</CardTitle>
-                    <CardDescription className="text-slate-400 text-xs">Toggle workspace access on/off for team members</CardDescription>
+                  <CardHeader>
+                    <CardTitle className="text-slate-800 text-sm font-bold flex items-center gap-2">
+                      <Shield className="h-4.5 w-4.5 text-indigo-600" />
+                      Centrally Managed Role Permissions
+                    </CardTitle>
+                    <CardDescription className="text-slate-400 text-xs">
+                      All CRM submodule permissions are configured globally to maintain role integrity across the portal.
+                    </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-6 mt-4">
-                    
-                    <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                      <span className="text-xs text-slate-500 font-bold">Select Role to Edit:</span>
-                      <select
-                        value={selectedRole}
-                        onChange={(e) => setSelectedRole(e.target.value)}
-                        className="bg-white border border-slate-200 text-slate-800 rounded-lg p-1 text-xs font-bold shadow-sm"
-                      >
-                        {Object.keys(permissions).map(role => (
-                          <option key={role} value={role}>{role}</option>
-                        ))}
-                      </select>
+                  <CardContent className="space-y-4">
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-xs text-slate-600 font-medium leading-relaxed">
+                      To grant or revoke access to CRM sections (Dashboard, Tickets, Refunds, SLA, Complaints, etc.) for various staff roles, please navigate to the main <strong>Roles & Permissions</strong> dashboard.
                     </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {[
-                        { key: "tickets", label: "Access Customer Tickets" },
-                        { key: "liveSupport", label: "Access Live Ride Support" },
-                        { key: "complaints", label: "Access Complaints Register" },
-                        { key: "refunds", label: "Access Refund Approvals" },
-                        { key: "timeline", label: "Access Timeline Explorer" },
-                        { key: "reports", label: "Access Analytics & Reports" }
-                      ].map(perm => (
-                        <div key={perm.key} className="flex items-center gap-3 bg-white p-3.5 rounded-xl border border-slate-100 shadow-sm">
-                          <Checkbox
-                            checked={permissions[selectedRole][perm.key as keyof typeof permissions[string]]}
-                            onCheckedChange={(checked) => {
-                              setPermissions(prev => ({
-                                ...prev,
-                                [selectedRole]: {
-                                  ...prev[selectedRole],
-                                  [perm.key]: !!checked
-                                }
-                              }))
-                              toast.success(`Updated permission for ${selectedRole}: ${perm.label}`)
-                            }}
-                            className="border-slate-350 data-[state=checked]:bg-emerald-600 rounded"
-                          />
-                          <span className="text-xs text-slate-700 font-semibold">{perm.label}</span>
-                        </div>
-                      ))}
-                    </div>
-
+                    <Button
+                      onClick={() => window.location.href = "/roles"}
+                      className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5"
+                    >
+                      Go to Roles & Permissions
+                    </Button>
                   </CardContent>
                 </Card>
               </div>
