@@ -320,7 +320,7 @@ export default function CRMModulePage() {
 
   return (
     <>
-      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
+      <div className="w-full space-y-6">
         
         {/* CRM Module Title & Top Toolbar */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/70 p-6 rounded-2xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl">
