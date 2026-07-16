@@ -433,65 +433,47 @@ export default function CRMModulePage() {
           </div>
         </div>
 
-        {/* Outer Tab Navigation Grid Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          
-          {/* CRM Internal Navigation Drawer/Sidebar */}
-          <div className="lg:col-span-1 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm shrink-0 space-y-1">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-3">CRM Workspaces</p>
-            {[
-              { id: "dashboard", label: "CRM Dashboard", icon: BarChart3 },
-              { id: "tickets", label: "Customer Tickets", icon: Headset, count: stats.open },
-              { id: "liveSupport", label: "Live Ride Support", icon: Activity, alert: stats.liveDelayCount > 0 },
-              { id: "complaints", label: "Complaints Portal", icon: AlertTriangle },
-              { id: "refunds", label: "Refund Requests", icon: DollarSign, count: stats.refundPending },
-              { id: "corporate", label: "Corporate Support", icon: Shield },
-              { id: "feedback", label: "Feedback & NPS", icon: Zap, labelSub: stats.avgRating },
-              { id: "timeline", label: "Timeline Explorer", icon: User },
-              { id: "kb", label: "Knowledge Base", icon: BookOpen },
-              { id: "reports", label: "Analytics & Reports", icon: FileText },
-              { id: "settings", label: "CRM Settings", icon: Settings }
-            ].map(item => {
-              const Icon = item.icon
-              const allowed = hasPermission(item.id)
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    if (allowed) {
-                      setActiveTab(item.id)
-                    } else {
-                      toast.error("Permission Denied", {
-                        description: `Your active role (${selectedRole}) does not have permission to view ${item.label}.`
-                      })
-                    }
-                  }}
-                  className={`w-full flex items-center justify-between px-3 py-3 rounded-xl text-sm transition-all duration-200 font-semibold ${
-                    activeTab === item.id
-                      ? "bg-indigo-55/60 text-indigo-600 border-l-4 border-indigo-500"
-                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
-                  } ${!allowed ? "opacity-35 cursor-not-allowed" : ""}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Icon className="h-4.5 w-4.5 text-inherit" />
-                    <span>{item.label}</span>
-                  </div>
-                  {item.count && item.count > 0 ? (
-                    <Badge variant="destructive" className="h-5 px-1.5 text-xs font-bold bg-red-100 text-red-600">{item.count}</Badge>
-                  ) : null}
-                  {item.alert ? (
-                    <span className="h-2 w-2 rounded-full bg-red-500 animate-ping" />
-                  ) : null}
-                  {item.labelSub ? (
-                    <span className="text-xs text-slate-400 font-bold">★ {item.labelSub}</span>
-                  ) : null}
-                </button>
-              )
-            })}
+        {/* CRM View Selector Bar */}
+        <div className="bg-white/70 p-4 rounded-2xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">CRM Section:</span>
+            <select
+              value={activeTab}
+              onChange={(e) => {
+                const allowed = hasPermission(e.target.value)
+                if (allowed) {
+                  setActiveTab(e.target.value)
+                } else {
+                  toast.error("Permission Denied", {
+                    description: `Your active role (${selectedRole}) does not have permission to view this section.`
+                  })
+                }
+              }}
+              className="bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 text-sm font-bold shadow-sm outline-none cursor-pointer focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 min-w-[260px]"
+            >
+              <option value="dashboard">📊 CRM Dashboard</option>
+              <option value="tickets">🎧 Customer Tickets ({stats.open} open)</option>
+              <option value="liveSupport">⚡ Live Ride Support {stats.liveDelayCount > 0 ? "⚠️" : ""}</option>
+              <option value="complaints">⚠️ Complaints Portal</option>
+              <option value="refunds">💸 Refund Requests ({stats.refundPending} pending)</option>
+              <option value="corporate">🛡️ Corporate Support</option>
+              <option value="feedback">🌟 Feedback & NPS (Avg: {stats.avgRating})</option>
+              <option value="timeline">👤 Timeline Explorer</option>
+              <option value="kb">📖 Knowledge Base</option>
+              <option value="reports">📄 Analytics & Reports</option>
+              <option value="settings">⚙️ CRM Settings</option>
+            </select>
           </div>
+          
+          <div className="flex gap-4 text-xs font-bold text-slate-500 mr-2">
+            <p>Open Tickets: <span className="text-indigo-600 font-extrabold">{stats.open}</span></p>
+            <p>SLA Breached: <span className="text-red-500 font-extrabold">{stats.liveDelayCount}</span></p>
+            <p>Avg Rating: <span className="text-emerald-600 font-extrabold">★ {stats.avgRating}</span></p>
+          </div>
+        </div>
 
-          {/* CRM Primary Render Window */}
-          <div className="lg:col-span-3 w-full bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-6 min-h-[700px]">
+        {/* CRM Primary Render Window */}
+        <div className="w-full bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-6 min-h-[700px]">
             
             {/* Dashboard Tab Content */}
             {activeTab === "dashboard" && (
@@ -1435,8 +1417,6 @@ export default function CRMModulePage() {
                 </Card>
               </div>
             )}
-
-          </div>
 
         </div>
 
