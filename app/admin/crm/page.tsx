@@ -19,7 +19,7 @@ import {
 import {
   Headset, Activity, AlertTriangle, CheckCircle, Clock, Users, Shield, BookOpen,
   DollarSign, FileText, BarChart3, Settings, Phone, Mail,
-  Search, User, Plus, Download, Check, Award
+  Search, User, Plus, Download, Check, Award, Zap
 } from "lucide-react"
 import { toast } from "sonner"
 
