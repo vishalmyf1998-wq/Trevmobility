@@ -122,6 +122,9 @@ export default function CRMModulePage() {
   const [newTicketCategory, setNewTicketCategory] = useState("service")
   const [newTicketPriority, setNewTicketPriority] = useState("medium")
   const [newTicketDesc, setNewTicketDesc] = useState("")
+  const [newTicketBookingId, setNewTicketBookingId] = useState("")
+  const [newTicketMobile, setNewTicketMobile] = useState("")
+  const [newTicketSource, setNewTicketSource] = useState("Call")
 
   // Search timeline state
   const [timelineSearch, setTimelineSearch] = useState("")
@@ -319,7 +322,11 @@ export default function CRMModulePage() {
       type: newTicketCategory,
       priority: newTicketPriority,
       description: newTicketDesc,
-      status: "Open"
+      status: "Open",
+      bookingId: newTicketBookingId,
+      bookingNumber: newTicketBookingId,
+      phone: newTicketMobile,
+      source: newTicketSource
     }
 
     addSupportTicket(ticketPayload)
@@ -330,6 +337,9 @@ export default function CRMModulePage() {
     setNewTicketSubject("")
     setNewTicketCustomer("")
     setNewTicketDesc("")
+    setNewTicketBookingId("")
+    setNewTicketMobile("")
+    setNewTicketSource("Call")
   }
 
   // Handle Search Customer Timeline
@@ -381,27 +391,49 @@ export default function CRMModulePage() {
                   </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleAddNewTicketSubmit} className="space-y-5 mt-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Customer Name *</label>
-                    <Input
-                      value={newTicketCustomer}
-                      onChange={(e) => setNewTicketCustomer(e.target.value)}
-                      placeholder="e.g. Rahul Sharma"
-                      className="border-slate-200 rounded-xl focus-visible:ring-indigo-500"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Subject / Issue Summary *</label>
-                    <Input
-                      value={newTicketSubject}
-                      onChange={(e) => setNewTicketSubject(e.target.value)}
-                      placeholder="e.g. Fare double-debited during ride"
-                      className="border-slate-200 rounded-xl focus-visible:ring-indigo-500"
-                      required
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Customer Name *</label>
+                      <Input
+                        value={newTicketCustomer}
+                        onChange={(e) => setNewTicketCustomer(e.target.value)}
+                        placeholder="e.g. Rahul Sharma"
+                        className="border-slate-200 rounded-xl focus-visible:ring-indigo-500"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Mobile Number</label>
+                      <Input
+                        value={newTicketMobile}
+                        onChange={(e) => setNewTicketMobile(e.target.value)}
+                        placeholder="e.g. +91 98765 43210"
+                        className="border-slate-200 rounded-xl focus-visible:ring-indigo-500"
+                      />
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Subject / Summary *</label>
+                      <Input
+                        value={newTicketSubject}
+                        onChange={(e) => setNewTicketSubject(e.target.value)}
+                        placeholder="e.g. Fare double-debited during ride"
+                        className="border-slate-200 rounded-xl focus-visible:ring-indigo-500"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Booking ID / Ref</label>
+                      <Input
+                        value={newTicketBookingId}
+                        onChange={(e) => setNewTicketBookingId(e.target.value)}
+                        placeholder="e.g. BK20091"
+                        className="border-slate-200 rounded-xl focus-visible:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Category</label>
                       <select
@@ -425,6 +457,19 @@ export default function CRMModulePage() {
                         <option value="low">🟢 Low</option>
                         <option value="medium">🟡 Medium</option>
                         <option value="high">🔴 High</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Raised Via</label>
+                      <select
+                        value={newTicketSource}
+                        onChange={(e) => setNewTicketSource(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-800 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-semibold cursor-pointer"
+                      >
+                        <option value="Call">📞 Call</option>
+                        <option value="WhatsApp">💬 WhatsApp</option>
+                        <option value="Email">✉️ Email</option>
+                        <option value="App">📱 App</option>
                       </select>
                     </div>
                   </div>
