@@ -1,55 +1,40 @@
 // @ts-nocheck
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAdmin } from "@/lib/admin-context"
 import { Booking, PromoCode } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
-import {
-  Plus,
-  Search,
-  XCircle,
-  Car,
-  Phone,
-  Building2,
-  User,
-  Wallet,
-  ArrowLeft,
-  UserPlus,
-  Trash2
-} from "lucide-react"
+import CustomerInfoForm from "./components/CustomerInfoForm"
+import TripDetailsForm from "./components/TripDetailsForm"
+import FareAndPaymentForm from "./components/FareAndPaymentForm"
+import RecurringSettingsForm from "./components/RecurringSettingsForm"
+import { buildOutstationBillingInput, calculateOutstationBilling } from "@/lib/outstation-day-calculation"
 import { toast } from "sonner"
-import { Field, FieldLabel, FieldGroup } from "@/components/ui/field"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+
+type RecurringSettings = {
+  frequency: 'daily' | 'weekly' | 'custom'
+  selectedDays: string[]
+  startDate: Date
+  endDate: Date
+}
+
+import { Textarea } from "@/components/ui/textarea"
+import { Field, FieldGroup, FieldLabel, FieldError } from "@/components/ui/field"
+import { Label } from "@/components/ui/label"
+import { Plane, MapPin, Car, Route, ArrowRight, ArrowLeft, Building2, XCircle, Search, Plus, Trash2, Wallet, User, Phone, Calendar, Clock, StickyNote, ChevronRight, ChevronLeft, Repeat, CheckCircle } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { PhoneInput } from "@/components/ui/phone-input"
 
-type BookingFormData = Omit<Booking, "id" | "createdAt" | "bookingNumber" | "eventLog">
+type BookingFormData = Omit<Booking, "id" | "createdAt" | "bookingNumber" | "eventLog"> & {
+  recurringSettings?: RecurringSettings
+}
 
 const ADMIN_USER = "Admin" // In real app, get from auth context
 
@@ -73,6 +58,7 @@ const initialFormData: BookingFormData = {
   pickupDate: "",
   pickupTime: "",
   returnDate: "",
+  returnTime: "",
   estimatedKm: 0,
   estimatedFare: 0,
   actualKm: 0,
@@ -93,7 +79,12 @@ const initialFormData: BookingFormData = {
   paymentStatus: "pending",
   remarks: "",
   stops: [],
+  recurringSettings: undefined,
 }
+
+type RideType = "airport" | "outstation" | "rental" | "local";
+type AirportDirection = "to" | "from";
+
 
 export default function BookingsPage() {
     const router = useRouter()
@@ -140,12 +131,50 @@ export default function BookingsPage() {
         } as any)
       : null
 
+    const [bookingType, setBookingType] = useState<"trev" | "business" | "recurring">(isB2BUser ? "business" : "trev");
+    const [backend, setBackend] = useState<"myf" | "trev">("myf");
+    const [rideType, setRideType] = useState<RideType>("airport");
+    const [airportDirection, setAirportDirection] = useState<AirportDirection>("to");
+    const [step, setStep] = useState(1);
+    const [showDateTimePopup, setShowDateTimePopup] = useState(false);
+
+    const steps = [
+      { id: 1, label: "Customer", icon: User },
+      { id: 2, label: "Trip Details", icon: MapPin },
+      { id: 3, label: "Select Car", icon: Car },
+      { id: 4, label: "Confirm", icon: CheckCircle },
+    ];
+
     const [formData, setFormData] = useState<BookingFormData>(initialFormData)
-    const [customerType, setCustomerType] = useState<"b2c" | "b2b">(isB2BUser ? "b2b" : "b2c")
+    const [recurringSettings, setRecurringSettings] = useState<RecurringSettings | undefined>()
+    const customerType = useMemo(() => (bookingType === 'business' || bookingType === 'recurring' ? 'b2b' : 'b2c'), [bookingType]);
+
     const [b2cSearchQuery, setB2cSearchQuery] = useState("")
     const [b2cSearchOpen, setB2cSearchOpen] = useState(false)
 
-    const isAirportTrip = formData.tripType === "airport_pickup" || formData.tripType === "airport_drop"
+    useEffect(() => {
+      let newTripType: Booking['tripType'] = 'city_ride';
+      if (rideType === 'airport') {
+        newTripType = airportDirection === 'to' ? 'airport_drop' : 'airport_pickup';
+      } else if (rideType === 'outstation') {
+        newTripType = 'outstation';
+      } else if (rideType === 'rental') {
+        newTripType = 'rental';
+      } else if (rideType === 'local') {
+        newTripType = 'city_ride';
+      }
+      setFormData(prev => ({ ...prev, tripType: newTripType }));
+    }, [rideType, airportDirection]);
+
+    useEffect(() => {
+      setBookingType(isB2BUser ? "business" : "trev");
+    }, [isB2BUser]);
+
+    const handleCustomerTypeChange = (type: "b2c" | "b2b") => {
+      setBookingType(type === 'b2c' ? 'trev' : 'business');
+    }
+
+    const isAirportTrip = rideType === "airport";
     const cityAirports = airports.filter((airport) => airport.cityId === formData.cityId && airport.isActive)
     const selectedAirport = formData.airportId ? getAirport(formData.airportId) : undefined
     const airportTerminals = selectedAirport?.terminals.filter((terminal) => terminal.isActive) || []
@@ -157,6 +186,51 @@ export default function BookingsPage() {
         if (!airport || !terminal) return ""
         return `${airport.name} (${airport.code}) - ${terminal.name}`
     }, [getAirport, getAirportTerminal])
+
+    const rideTypes = [
+      {
+        id: "airport" as RideType,
+        label: "Airport",
+        icon: Plane,
+      },
+      {
+        id: "outstation" as RideType,
+        label: "Outstation",
+        icon: Route,
+      },
+      {
+        id: "rental" as RideType,
+        label: "Rental",
+        icon: Car,
+      },
+      {
+        id: "local" as RideType,
+        label: "Local",
+        icon: MapPin,
+      },
+    ];
+
+    const isStep1Valid = useMemo(() => {
+      if (bookingType === "business") {
+        return formData.b2bClientId && formData.b2bEmployeeId && formData.pickupLocation && formData.dropLocation;
+      }
+      return formData.customerName && formData.customerPhone && formData.pickupLocation && formData.dropLocation;
+    }, [formData, bookingType]);
+
+    const handleNextStep = () => {
+      if (step === 1 && isStep1Valid) {
+        setStep(2);
+      } else if (step === 2 && formData.pickupDate && formData.pickupTime) {
+        setStep(3);
+      } else if (step === 3) {
+        setStep(4);
+      }
+    };
+
+    const handleDateTimeConfirm = () => {
+      setShowDateTimePopup(false);
+      setStep(2);
+    };
 
     const getPromoEligibilityError = useCallback((
       promo: PromoCode,
@@ -325,6 +399,10 @@ export default function BookingsPage() {
                 calculationType: outstationFare.outstationType,
                 routes: outstationFare.routes,
                 driverAllowancePerDay: outstationFare.driverAllowancePerDay,
+                driverAllowanceCalculationMethod: outstationFare.driverAllowanceCalculationMethod,
+                dayCalculationMethod: outstationFare.dayCalculationMethod,
+                graceEndTime: outstationFare.graceEndTime,
+                extraHourCharge: outstationFare.extraHourCharge,
                 minimumKmPerDay: outstationFare.minimumKmPerDay,
                 preBookingCharges: outstationFare.preBookingCharges,
                 urgentBooking: outstationFare.urgentBooking,
@@ -372,14 +450,7 @@ export default function BookingsPage() {
             }
 
             const estKm = formData.estimatedKm || 0
-            let days = 1
-            if (formData.pickupDate && formData.returnDate) {
-            const pDate = new Date(formData.pickupDate)
-            const rDate = new Date(formData.returnDate)
-            if (!isNaN(pDate.getTime()) && !isNaN(rDate.getTime())) {
-                days = Math.ceil(Math.abs(rDate.getTime() - pDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
-            }
-            }
+            let outstationBilling = null
 
             if (fareConfig.calculationType === "fixed" && fareConfig.fixedFare) {
             estimatedFare = fareConfig.fixedFare
@@ -391,11 +462,16 @@ export default function BookingsPage() {
                 estimatedFare = fareConfig.minimumFare
             }
             } else if (formData.tripType === "outstation") {
-            const minKm = (fareConfig.minimumKmPerDay || 250) * days
-            const billableKm = Math.max(estKm, minKm)
             const rate = fareConfig.roundTripPerKmRate || fareConfig.perKmRate || 0
-            const driverAllowance = (fareConfig.driverAllowancePerDay || 0) * days
-            estimatedFare = (billableKm * rate) + driverAllowance
+            outstationBilling = calculateOutstationBilling(buildOutstationBillingInput(fareConfig as any, {
+                pickupDate: formData.pickupDate,
+                pickupTime: formData.pickupTime,
+                dropDate: formData.returnDate || formData.pickupDate,
+                dropTime: (formData as any).returnTime || formData.pickupTime,
+                estimatedKm: estKm,
+                perKmRate: rate,
+            }))
+            estimatedFare = outstationBilling.totalFare
             } else {
             estimatedFare = fareConfig.baseFare || fareConfig.minimumFare || 0
             }
@@ -459,6 +535,10 @@ export default function BookingsPage() {
             estimatedFare,
             returnDiscountAmount,
             returnDiscountLabel,
+            days: outstationBilling?.chargeableDays,
+            extraHours: outstationBilling?.extraHours,
+            minimumChargeableKm: outstationBilling?.minimumChargeableKm,
+            driverAllowanceAmount: outstationBilling?.driverAllowance,
             tollCharges: preBookingToll,
             parkingCharges: preBookingParking,
             extraCharges: urgentCharge, // Store urgent charge as extra charge
@@ -468,7 +548,7 @@ export default function BookingsPage() {
             grandTotal,
             }))
         }
-    }, [formData.cityId, formData.carCategoryId, formData.tripType, (formData as any).isAutoSlotReturn, formData.b2bClientId, formData.airportId, formData.airportTerminalId, formData.promoCodeId, customerType, calculateFareFromConfig, getPromoEligibilityError, calculatePromoDiscount, promoCodes, gstConfig, b2bClients])
+    }, [formData.cityId, formData.carCategoryId, formData.tripType, formData.pickupDate, formData.pickupTime, formData.returnDate, (formData as any).returnTime, formData.estimatedKm, (formData as any).isAutoSlotReturn, formData.b2bClientId, formData.airportId, formData.airportTerminalId, formData.promoCodeId, customerType, calculateFareFromConfig, getPromoEligibilityError, calculatePromoDiscount, promoCodes, gstConfig, b2bClients])
 
     useEffect(() => {
         const actualPickup = formData.tripType === "airport_pickup"
@@ -528,6 +608,124 @@ export default function BookingsPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault()
+
+      if (bookingType === 'recurring' && recurringSettings) {
+        const { frequency, selectedDays, startDate, endDate } = recurringSettings;
+        if (!startDate || !endDate) {
+            toast.error("Please select a start and end date for recurring bookings.");
+            return;
+        }
+
+        const dayMap = { 'Sun': 0, 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6 };
+        const selectedDayNumbers = selectedDays.map(day => dayMap[day]);
+
+        let bookingDates: Date[] = [];
+        let currentDate = new Date(startDate);
+
+        while (currentDate <= endDate) {
+            const dayOfWeek = currentDate.getDay();
+            if (frequency === 'daily') {
+                bookingDates.push(new Date(currentDate));
+            } else if (frequency === 'weekly' || frequency === 'custom') {
+                if (selectedDayNumbers.includes(dayOfWeek)) {
+                    bookingDates.push(new Date(currentDate));
+                }
+            }
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        if (bookingDates.length === 0) {
+            toast.error("No valid dates found for the selected recurring settings.");
+            return;
+        }
+        
+        // Basic validation before creating multiple bookings
+        if (!formData.customerName && customerType === "b2c") {
+          toast.error("Please enter customer name")
+          return
+        }
+        if (!formData.customerPhone && customerType === "b2c") {
+          toast.error("Please enter customer phone number")
+          return
+        }
+        if (customerType === "b2b" && !formData.b2bClientId) {
+          toast.error("Please select a B2B client")
+          return
+        }
+        if (customerType === "b2b" && !formData.b2bEmployeeId) {
+          toast.error("Please select a B2B employee")
+          return
+        }
+        if (!formData.cityId || !formData.carCategoryId) {
+          toast.error("Please select city and car category")
+          return
+        }
+        
+        try {
+            let customerId = formData.b2cCustomerId;
+            if (customerType === "b2c" && !customerId) {
+                const customer = await upsertB2CCustomer({
+                    name: formData.customerName,
+                    phone: formData.customerPhone,
+                    email: formData.customerEmail,
+                    address: formData.customerAddress,
+                });
+                customerId = customer.id;
+            }
+
+            for (const date of bookingDates) {
+                const pickupDate = date.toISOString().split('T')[0]; // format to 'YYYY-MM-DD'
+                
+                let finalData = { 
+                    ...formData, 
+                    pickupDate,
+                    b2cCustomerId: customerId 
+                };
+
+                if (isAirportTrip) {
+                  const airportLocation = formatAirportLocation(formData.airportId, formData.airportTerminalId)
+                  finalData = {
+                      ...finalData,
+                      pickupLocation: formData.tripType === "airport_pickup" ? airportLocation : formData.pickupLocation,
+                      dropLocation: formData.tripType === "airport_drop" ? airportLocation : formData.dropLocation,
+                  }
+                } else {
+                  finalData = { ...finalData, airportId: undefined, airportTerminalId: undefined }
+                }
+
+                if (customerType === "b2b" && formData.b2bClientId && formData.b2bEmployeeId) {
+                  const client = getB2BClient(formData.b2bClientId)
+                  const employee = getB2BEmployee(formData.b2bEmployeeId)
+                  if (client && employee) {
+                      finalData = {
+                          ...finalData,
+                          customerName: employee.name,
+                          customerPhone: employee.phone,
+                          customerEmail: employee.officeEmail,
+                          customerAddress: client.billingAddress || employee.address || '',
+                      }
+                  }
+                }
+                
+                const eventLog = createEventLog("created", "pending", undefined, `Recurring booking created`);
+                addBooking({
+                    ...finalData,
+                    bookingNumber: generateBookingNumber(),
+                    eventLog: [eventLog],
+                    createdBy: ADMIN_USER,
+                });
+            }
+            toast.success(`${bookingDates.length} recurring bookings created successfully!`);
+            setFormData(initialFormData);
+            setRecurringSettings(undefined);
+            setStep(1);
+
+        } catch (error) {
+            toast.error("Failed to create recurring bookings. Please try again.");
+            console.error(error);
+        }
+        return;
+      }
 
       if (!formData.customerName && customerType === "b2c") {
         toast.error("Please enter customer name")
@@ -624,629 +822,413 @@ export default function BookingsPage() {
     }
 
     return (
-        <div className="flex flex-col gap-6 p-4 md:p-8">
-            <div className="flex items-center gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Create New Booking</h1>
-                    <p className="text-muted-foreground">Fill in the details to create a new trip.</p>
+        <div className="min-h-screen bg-[#f7f7f7] flex">
+            {/* Sidebar */}
+            <div className="w-72 bg-white border-r border-gray-200 p-6">
+              <div className="mb-6">
+                <h1 className="text-xl font-bold text-gray-900">New Booking</h1>
+                <p className="text-sm text-gray-500 mt-1">Create a new ride booking</p>
+              </div>
+
+              {/* Booking Type Selector */}
+              <div className="mb-6">
+                <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">Booking Type</Label>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => setBookingType("trev")}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all ${
+                      bookingType === "trev"
+                        ? "bg-blue-50 text-blue-700 border border-blue-200"
+                        : "text-gray-500 hover:bg-gray-50 border border-transparent"
+                    }`}
+                  >
+                    <User className="h-4 w-4" />
+                    <span className="font-medium text-sm">TREV (B2C)</span>
+                  </button>
+                  <button
+                    onClick={() => setBookingType("business")}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all ${
+                      bookingType === "business"
+                        ? "bg-blue-50 text-blue-700 border border-blue-200"
+                        : "text-gray-500 hover:bg-gray-50 border border-transparent"
+                    }`}
+                  >
+                    <Building2 className="h-4 w-4" />
+                    <span className="font-medium text-sm">Business (B2B)</span>
+                  </button>
+                  <button
+                    onClick={() => setBookingType("recurring")}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all ${
+                      bookingType === "recurring"
+                        ? "bg-blue-50 text-blue-700 border border-blue-200"
+                        : "text-gray-500 hover:bg-gray-50 border border-transparent"
+                    }`}
+                  >
+                    <Repeat className="h-4 w-4" />
+                    <span className="font-medium text-sm">Recurring</span>
+                  </button>
                 </div>
+              </div>
+
+              {/* Progress Steps */}
+              <nav className="space-y-2">
+                <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">Steps</Label>
+                {steps.map((s, index) => {
+                  const Icon = s.icon;
+                  const isActive = step === s.id;
+                  const isCompleted = step > s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => {
+                        if (isCompleted || s.id === 1) setStep(s.id);
+                      }}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all ${
+                        isActive
+                          ? "bg-blue-50 text-blue-700 border border-blue-200"
+                          : isCompleted
+                          ? "bg-green-50 text-green-700 border border-green-200"
+                          : "text-gray-500 hover:bg-gray-50 border border-transparent"
+                      }`}
+                    >
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                        isActive ? "bg-blue-500 text-white" : isCompleted ? "bg-green-500 text-white" : "bg-gray-200 text-gray-500"
+                      }`}>
+                        {isCompleted ? <CheckCircle className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                      </div>
+                      <span className="font-medium text-sm">{s.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
             </div>
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 space-y-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Customer Information</CardTitle>
-                            <CardDescription>Select or create a customer for this booking.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-4">
-                            <Field>
-                                <FieldLabel>Customer Type</FieldLabel>
-                                <Select value={customerType} onValueChange={(v) => setCustomerType(v as "b2c" | "b2b")} disabled={isB2BUser}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select customer type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="b2c">Individual (B2C)</SelectItem>
-                                        <SelectItem value="b2b">Business (B2B)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </Field>
 
-                            {customerType === 'b2c' && (
-                              <div className="space-y-4 pt-4 border-t">
-                                <Field>
-                                  <FieldLabel>Search Existing Customer</FieldLabel>
-                                  <Popover open={b2cSearchOpen} onOpenChange={setB2cSearchOpen}>
-                                    <PopoverTrigger asChild>
-                                      <div className="relative">
-                                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                        <Input
-                                          placeholder="Search by name, phone, or code..."
-                                          value={b2cSearchQuery}
-                                          onChange={(e) => {
-                                            setB2cSearchQuery(e.target.value)
-                                            if (e.target.value.length > 0) setB2cSearchOpen(true)
-                                            else setB2cSearchOpen(false)
-                                          }}
-                                          className="pl-10"
-                                        />
-                                      </div>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-                                      <Command>
-                                        <CommandInput placeholder="Type to search..." />
-                                        <CommandList>
-                                          <CommandEmpty>
-                                            <div className="p-4 text-sm text-center">No customers found.</div>
-                                          </CommandEmpty>
-                                          <CommandGroup>
-                                            {b2cCustomers
-                                              .filter(c =>
-                                                !b2cSearchQuery ||
-                                                c.name.toLowerCase().includes(b2cSearchQuery.toLowerCase()) ||
-                                                c.phone.includes(b2cSearchQuery) ||
-                                                (c.customerCode && c.customerCode.toLowerCase().includes(b2cSearchQuery.toLowerCase()))
-                                              ).map((customer) => (
-                                                <CommandItem
-                                                  key={customer.id}
-                                                  onSelect={() => {
-                                                    setFormData(prev => ({
-                                                      ...prev,
-                                                      b2cCustomerId: customer.id,
-                                                      customerName: customer.name,
-                                                      customerPhone: customer.phone,
-                                                      customerEmail: customer.email || "",
-                                                      customerAddress: customer.address || "",
-                                                    }))
-                                                    setB2cSearchQuery(customer.name)
-                                                    setB2cSearchOpen(false)
-                                                    toast.success(`Selected: ${customer.name}`)
-                                                  }}
-                                                >
-                                                  <div className="flex items-center justify-between w-full">
-                                                    <div>
-                                                      <p>{customer.name} <span className="text-muted-foreground text-xs">({customer.customerCode})</span></p>
-                                                      <p className="text-xs text-muted-foreground">{customer.phone}</p>
-                                                    </div>
-                                                  </div>
-                                                </CommandItem>
-                                              ))}
-                                          </CommandGroup>
-                                        </CommandList>
-                                      </Command>
-                                    </PopoverContent>
-                                  </Popover>
-                                </Field>
-                                {formData.b2cCustomerId ? (
-                                  <div className="bg-muted/50 rounded-lg p-3 relative">
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="absolute top-1 right-1 h-6 w-6 text-muted-foreground"
-                                        onClick={() => {
-                                          setFormData(prev => ({
-                                            ...prev,
-                                            b2cCustomerId: undefined,
-                                            customerName: "",
-                                            customerPhone: "",
-                                            customerEmail: "",
-                                            customerAddress: "",
-                                          }))
-                                          setB2cSearchQuery("")
-                                        }}
-                                      >
-                                        <XCircle className="h-4 w-4" />
-                                      </Button>
-                                    <p className="text-sm font-semibold mb-2">Selected Customer</p>
-                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                                      <div><strong className="text-muted-foreground font-normal">Name:</strong> {formData.customerName}</div>
-                                      <div><strong className="text-muted-foreground font-normal">Phone:</strong> {formData.customerPhone}</div>
-                                      {formData.customerEmail && <div className="col-span-2"><strong className="text-muted-foreground font-normal">Email:</strong> {formData.customerEmail}</div>}
-                                      {formData.customerAddress && <div className="col-span-2"><strong className="text-muted-foreground font-normal">Address:</strong> {formData.customerAddress}</div>}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <Field>
-                                      <FieldLabel>Customer Name *</FieldLabel>
-                                      <Input value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} placeholder="Full Name" />
-                                    </Field>
-                                    <Field>
-                                      <FieldLabel>Customer Phone *</FieldLabel>
-                                      <PhoneInput value={formData.customerPhone} onChange={val => setFormData({...formData, customerPhone: val})} placeholder="Phone Number" />
-                                    </Field>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                            {customerType === 'b2b' && (
-                              <div className="space-y-4 pt-4 border-t">
-                                {isB2BUser && (
-                                    <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-                                      <Building2 className="h-5 w-5 text-primary" />
-                                      <div>
-                                        <p className="font-medium text-sm">B2B Booking Only</p>
-                                        <p className="text-xs text-muted-foreground">Your account is restricted to corporate bookings</p>
-                                      </div>
-                                    </div>
-                                  )}
-                                <Field>
-                                    <FieldLabel>Select B2B Client *</FieldLabel>
-                                    <Select
-                                      value={formData.b2bClientId || ""}
-                                      onValueChange={(value) =>
-                                        setFormData({ ...formData, b2bClientId: value, b2bEmployeeId: undefined })
-                                      }
-                                      disabled={isB2BUser}
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Select a B2B client" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {b2bClients
-                                          .filter((c) => c.status === "active")
-                                          .map((client) => (
-                                            <SelectItem key={client.id} value={client.id}>
-                                              {client.companyName} - {client.contactPerson}
-                                            </SelectItem>
-                                          ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </Field>
-                                  {formData.b2bClientId && (
-                                    <Field>
-                                      <FieldLabel>Select Employee {isCorpEmployee && "(Auto-selected)"}</FieldLabel>
-                                      <Select
-                                        value={formData.b2bEmployeeId || ""}
-                                        onValueChange={(value) =>
-                                          setFormData({ ...formData, b2bEmployeeId: value })
-                                        }
-                                        disabled={isCorpEmployee}
-                                      >
-                                        <SelectTrigger>
-                                          <SelectValue placeholder="Select an employee" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {b2bEmployees
-                                            .filter((e) => e.b2bClientId === formData.b2bClientId && e.status === "approved" && e.canLogin)
-                                            .map((employee) => (
-                                              <SelectItem key={employee.id} value={employee.id}>
-                                                {employee.name} - {employee.employeeId} ({employee.officeEmail})
-                                              </SelectItem>
-                                            ))}
-                                          {b2bEmployees.filter((e) => e.b2bClientId === formData.b2bClientId && e.status === "approved" && e.canLogin).length === 0 && (
-                                            <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                                              No approved employees found for this client
-                                            </div>
-                                          )}
-                                        </SelectContent>
-                                      </Select>
-                                      {isB2BUser && currentB2BUser && (
-                                        <p className="text-xs text-muted-foreground mt-1">
-                                          Logged in as: <strong>{currentB2BUser.name}</strong> ({currentB2BUser.employeeId})
-                                        </p>
-                                      )}
-                                    </Field>
-                                  )}
-                              </div>
-                            )}
-                          </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Trip Details</CardTitle>
-                            <CardDescription>Specify the trip route, type, and schedule.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                        <FieldGroup className="grid grid-cols-3 gap-4">
+            {/* Main Content */}
+            <div className="flex-1 p-8">
+              <form onSubmit={handleSubmit}>
+                {step === 1 && (
+                  <div className="max-w-2xl">
+                    <div className="mb-6">
+                      <h2 className="text-2xl font-bold text-gray-900">
+                        {bookingType === "business" ? "Business Customer" : "Customer Information"}
+                      </h2>
+                      <p className="text-gray-500 mt-1">
+                        {bookingType === "business" ? "Select B2B client and employee" : "Enter the customer details for this booking"}
+                      </p>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+                      {bookingType === "business" ? (
+                        <>
                           <Field>
-                            <FieldLabel>City *</FieldLabel>
+                            <FieldLabel>Select B2B Client *</FieldLabel>
                             <Select
-                              value={formData.cityId}
-                              onValueChange={(value) =>
-                                setFormData({
-                                  ...formData,
-                                  cityId: value,
-                                  airportId: undefined,
-                                  airportTerminalId: undefined,
-                                })
-                              }
+                              value={formData.b2bClientId || ""}
+                              onValueChange={(value) => setFormData({ ...formData, b2bClientId: value, b2bEmployeeId: undefined })}
                             >
                               <SelectTrigger>
-                                <SelectValue placeholder="Select city" />
+                                <SelectValue placeholder="Select a B2B client" />
                               </SelectTrigger>
                               <SelectContent>
-                                {cities
-                                  .filter((c) => c.isActive)
-                                  .map((city) => (
-                                    <SelectItem key={city.id} value={city.id}>
-                                      {city.name}
+                                {b2bClients
+                                  .filter((c) => c.status === "active")
+                                  .map((client) => (
+                                    <SelectItem key={client.id} value={client.id}>
+                                      {client.companyName} - {client.contactPerson}
                                     </SelectItem>
                                   ))}
                               </SelectContent>
                             </Select>
                           </Field>
-                          <Field>
-                            <FieldLabel>Car Category *</FieldLabel>
-                            <Select
-                              value={formData.carCategoryId}
-                              onValueChange={(value) =>
-                                setFormData({ ...formData, carCategoryId: value })
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select category" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {carCategories
-                                  .filter((c) => c.isActive)
-                                  .map((cat) => (
-                                    <SelectItem key={cat.id} value={cat.id}>
-                                      {cat.name}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                          </Field>
-                          <Field>
-                            <FieldLabel>Trip Type *</FieldLabel>
-                            <Select
-                              value={formData.tripType}
-                              onValueChange={(value) =>
-                                setFormData({
-                                  ...formData,
-                                  tripType: value as Booking["tripType"],
-                                  airportId: undefined,
-                                  airportTerminalId: undefined,
-                                })
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select trip type" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="city_ride">City Ride</SelectItem>
-                                <SelectItem value="airport_pickup">Airport Pickup</SelectItem>
-                                <SelectItem value="airport_drop">Airport Drop</SelectItem>
-                                <SelectItem value="rental">Rental</SelectItem>
-                                <SelectItem value="outstation">Outstation</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </Field>
-                        </FieldGroup>
-
-                        {isAirportTrip && (
-                          <FieldGroup className="grid grid-cols-2 gap-4">
+                          {formData.b2bClientId && (
                             <Field>
-                              <FieldLabel>Airport *</FieldLabel>
+                              <FieldLabel>Select Employee *</FieldLabel>
                               <Select
-                                value={formData.airportId || ""}
-                                onValueChange={(value) =>
-                                  setFormData({
-                                    ...formData,
-                                    airportId: value,
-                                    airportTerminalId: undefined,
-                                  })
-                                }
+                                value={formData.b2bEmployeeId || ""}
+                                onValueChange={(value) => setFormData({ ...formData, b2bEmployeeId: value })}
                               >
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Select airport" />
+                                  <SelectValue placeholder="Select an employee" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {cityAirports.map((airport) => (
-                                    <SelectItem key={airport.id} value={airport.id}>
-                                      {airport.name} ({airport.code})
-                                    </SelectItem>
-                                  ))}
-                                  {cityAirports.length === 0 && (
+                                  {b2bEmployees
+                                    .filter((e) => e.b2bClientId === formData.b2bClientId && e.status === "approved" && e.canLogin)
+                                    .map((employee) => (
+                                      <SelectItem key={employee.id} value={employee.id}>
+                                        {employee.name} - {employee.employeeId}
+                                      </SelectItem>
+                                    ))}
+                                  {b2bEmployees.filter((e) => e.b2bClientId === formData.b2bClientId && e.status === "approved" && e.canLogin).length === 0 && (
                                     <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                                      No active airports for this city.
+                                      No approved employees found for this client
                                     </div>
                                   )}
                                 </SelectContent>
                               </Select>
-                            </Field>
-                            <Field>
-                              <FieldLabel>Terminal *</FieldLabel>
-                              <Select
-                                value={formData.airportTerminalId || ""}
-                                onValueChange={(value) =>
-                                  setFormData({ ...formData, airportTerminalId: value })
-                                }
-                                disabled={!formData.airportId}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select terminal" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {airportTerminals.map((terminal) => (
-                                    <SelectItem key={terminal.id} value={terminal.id}>
-                                      {terminal.name}
-                                    </SelectItem>
-                                  ))}
-                                  {formData.airportId && airportTerminals.length === 0 && (
-                                     <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                                      No active terminals for this airport.
-                                    </div>
-                                  )}
-                                </SelectContent>
-                              </Select>
-                            </Field>
-                          </FieldGroup>
-                        )}
-                      
-                       <div className="space-y-2">
-                           <Field>
-                                <FieldLabel>{formData.tripType === "airport_pickup" ? "Pickup From" : "Pickup Location *"}</FieldLabel>
-                                <Input
-                                value={
-                                    formData.tripType === "airport_pickup"
-                                    ? formatAirportLocation(formData.airportId, formData.airportTerminalId)
-                                    : formData.pickupLocation
-                                }
-                                onChange={(e) =>
-                                    setFormData({ ...formData, pickupLocation: e.target.value })
-                                }
-                                placeholder={formData.tripType === "airport_pickup" ? "Airport/Terminal selected above" : "Enter pickup location"}
-                                disabled={formData.tripType === "airport_pickup"}
-                                />
-                            </Field>
-                            {(formData.stops || []).length > 0 && (
-                                <div className="space-y-2 pl-4 border-l-2 ml-2">
-                                {(formData.stops || []).map((stop, index) => (
-                                    <Field key={stop.id}>
-                                    <div className="flex items-center gap-2">
-                                        <Label className="text-xs font-semibold text-muted-foreground w-14 shrink-0">Stop {index + 1}</Label>
-                                        <Input
-                                        value={stop.location}
-                                        onChange={(e) => {
-                                            const newStops = [...(formData.stops || [])];
-                                            newStops[index].location = e.target.value;
-                                            setFormData(prev => ({ ...prev, stops: newStops }));
-                                        }}
-                                        placeholder={`Enter stop location`}
-                                        />
-                                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => {
-                                            setFormData(prev => ({ ...prev, stops: (prev.stops || []).filter((_, i) => i !== index) }))
-                                        }}
-                                        ><Trash2 className="h-4 w-4" /></Button>
-                                    </div>
-                                    </Field>
-                                ))}
-                                </div>
-                            )}
-                             <div className="flex items-center justify-end gap-2">
-                                 <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 text-xs"
-                                    onClick={() => {
-                                        setFormData(prev => ({
-                                        ...prev,
-                                        stops: [...(prev.stops || []), { id: `stop_${Date.now()}`, location: '' }]
-                                        }))
-                                    }}
-                                    >
-                                    <Plus className="mr-1 h-3 w-3" /> Add Stop
-                                </Button>
-                             </div>
-                            <Field>
-                                <FieldLabel>{formData.tripType === "airport_drop" ? "Drop At" : "Drop Location *"}</FieldLabel>
-                                <Input
-                                value={
-                                    formData.tripType === "airport_drop"
-                                    ? formatAirportLocation(formData.airportId, formData.airportTerminalId)
-                                    : formData.dropLocation
-                                }
-                                onChange={(e) =>
-                                    setFormData({ ...formData, dropLocation: e.target.value })
-                                }
-                                placeholder={formData.tripType === "airport_drop" ? "Airport/Terminal selected above" : "Enter drop location"}
-                                disabled={formData.tripType === "airport_drop"}
-                                />
-                            </Field>
-                       </div>
-
-                        <FieldGroup className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          <Field>
-                            <FieldLabel>Pickup Date *</FieldLabel>
-                            <Input
-                              type="date"
-                              value={formData.pickupDate}
-                              onChange={(e) =>
-                                setFormData({ ...formData, pickupDate: e.target.value })
-                              }
-                            />
-                          </Field>
-                          <Field>
-                            <FieldLabel>Pickup Time *</FieldLabel>
-                            <Input
-                              type="time"
-                              value={formData.pickupTime}
-                              onChange={(e) =>
-                                setFormData({ ...formData, pickupTime: e.target.value })
-                              }
-                            />
-                          </Field>
-                          {(formData.tripType === "rental" || formData.tripType === "outstation") && (
-                            <Field>
-                              <FieldLabel>Return Date</FieldLabel>
-                              <Input
-                                type="date"
-                                value={formData.returnDate || ""}
-                                onChange={(e) =>
-                                  setFormData({ ...formData, returnDate: e.target.value })
-                                }
-                              />
                             </Field>
                           )}
-                           <Field>
-                            <FieldLabel>Est. Distance (KM)</FieldLabel>
-                            <Input
-                            type="number"
-                            value={formData.estimatedKm || ""}
-                            readOnly
-                            className="bg-muted font-bold"
-                            placeholder="Auto..."
-                            />
+                          <FieldGroup className="grid grid-cols-2 gap-4">
+                            <Field>
+                              <FieldLabel>Pickup Address *</FieldLabel>
+                              <Input value={formData.pickupLocation} onChange={e => setFormData({...formData, pickupLocation: e.target.value})} placeholder="Enter pickup location" />
+                            </Field>
+                            <Field>
+                              <FieldLabel>Drop Address *</FieldLabel>
+                              <Input value={formData.dropLocation} onChange={e => setFormData({...formData, dropLocation: e.target.value})} placeholder="Enter drop location" />
+                            </Field>
+                          </FieldGroup>
+                          <Field>
+                            <FieldLabel>Special Notes</FieldLabel>
+                            <Textarea value={formData.remarks || ""} onChange={e => setFormData({...formData, remarks: e.target.value})} placeholder="Any special instructions..." rows={2} />
                           </Field>
-                        </FieldGroup>
-                         <Field>
-                            <FieldLabel>Remarks / Instructions</FieldLabel>
-                            <Textarea
-                                value={formData.remarks || ""}
-                                onChange={(e) =>
-                                setFormData({ ...formData, remarks: e.target.value })
-                                }
-                                placeholder="e.g., VIP guest, specific route preference"
-                                rows={2}
-                            />
-                        </Field>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                <div className="space-y-6 lg:sticky lg:top-24 h-fit">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Fare & Payment</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                        {formData.cityId && formData.carCategoryId ? (
-                            <div className="space-y-4">
-                                {!isB2BUser && (
-                                <Field>
-                                    <FieldLabel>Promo Code</FieldLabel>
-                                    <Select
-                                    value={formData.promoCodeId || "none"}
-                                    onValueChange={(value) =>
-                                        setFormData({
-                                        ...formData,
-                                        promoCodeId: value === "none" ? undefined : value,
-                                        })
-                                    }
-                                    >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select promo code" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">No promo code</SelectItem>
-                                        {selectedFormPromo && selectedPromoError && (
-                                        <SelectItem value={selectedFormPromo.id} disabled>
-                                            {selectedFormPromo.code} - {selectedPromoError}
-                                        </SelectItem>
-                                        )}
-                                        {eligiblePromoCodes.map((promo) => (
-                                        <SelectItem key={promo.id} value={promo.id}>
-                                            {promo.code} -{" "}
-                                            {promo.discountType === "percentage"
-                                            ? `${promo.discountValue}% off`
-                                            : `Rs. ${promo.discountValue} off`}
-                                        </SelectItem>
-                                        ))}
-                                        {eligiblePromoCodes.length === 0 && <div className="p-2 text-xs text-center text-muted-foreground">No eligible codes</div>}
-                                    </SelectContent>
-                                    </Select>
-                                    {selectedPromoError ? (
-                                    <p className="text-xs text-destructive mt-1">{selectedPromoError}</p>
-                                    ) : selectedFormPromo ? (
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        {selectedFormPromo.description}
-                                    </p>
-                                    ) : null}
-                                </Field>
-                                )}
-                                <Card className="bg-slate-50 dark:bg-slate-900">
-                                <CardHeader className="pb-2">
-                                    <CardTitle className="text-base">Fare Estimate</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-2 text-sm">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-muted-foreground">Base Fare</span>
-                                        <span className="font-medium">₹ {formData.estimatedFare.toFixed(2)}</span>
-                                    </div>
-                                    {formData.tollCharges > 0 && (
-                                        <div className="flex justify-between items-center">
-                                        <span className="text-muted-foreground">Toll (Pre-booked)</span>
-                                        <span>₹ {formData.tollCharges.toFixed(2)}</span>
-                                        </div>
-                                    )}
-                                    {formData.parkingCharges > 0 && (
-                                        <div className="flex justify-between items-center">
-                                        <span className="text-muted-foreground">Parking (Pre-booked)</span>
-                                        <span>₹ {formData.parkingCharges.toFixed(2)}</span>
-                                        </div>
-                                    )}
-                                    {formData.extraCharges > 0 && (
-                                        <div className="flex justify-between items-center">
-                                        <span className="text-muted-foreground">Urgent Booking Fee</span>
-                                        <span>₹ {formData.extraCharges.toFixed(2)}</span>
-                                        </div>
-                                    )}
-                                    <div className="flex justify-between items-center border-t pt-2 mt-2">
-                                        <span className="text-muted-foreground font-medium">Subtotal</span>
-                                        <span className="font-medium">₹ {formData.totalFare.toFixed(2)}</span>
-                                    </div>
-                                    {formData.promoDiscount > 0 && (
-                                        <div className="flex justify-between items-center text-green-600 dark:text-green-500">
-                                        <span>Promo Discount</span>
-                                        <span>- ₹ {formData.promoDiscount.toFixed(2)}</span>
-                                        </div>
-                                    )}
-                                    <div className="flex justify-between items-center text-muted-foreground">
-                                        <span>GST ({gstConfig.cgstRate + gstConfig.sgstRate}%)</span>
-                                        <span>₹ {formData.gstAmount.toFixed(2)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center font-bold text-lg border-t border-border pt-3 mt-3">
-                                        <span>Grand Total</span>
-                                        <span>₹ {formData.grandTotal.toFixed(2)}</span>
-                                    </div>
-                                </CardContent>
-                                </Card>
-
-                                <Field>
-                                    <FieldLabel>Advance Paid (₹)</FieldLabel>
-                                    <Input
-                                    type="number"
-                                    className="w-full mt-1 text-right font-bold"
-                                    value={formData.advancePaid || ""}
-                                    onChange={(e) => setFormData({ ...formData, advancePaid: parseFloat(e.target.value) || 0 })}
-                                    placeholder="0.00"
-                                    />
-                                </Field>
-                                
-                                {(formData.advancePaid || 0) > 0 && (
-                                    <div className="flex justify-between items-center font-bold text-red-600 dark:text-red-500 pt-2 border-t mt-4">
-                                    <span>Balance Due</span>
-                                    <span>₹ {Math.max(formData.grandTotal - (formData.advancePaid || 0), 0).toFixed(2)}</span>
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="text-center text-muted-foreground py-16 px-4">
-                                <Wallet className="mx-auto h-12 w-12 text-gray-400" />
-                                <h3 className="mt-2 text-sm font-medium">Awaiting details</h3>
-                                <p className="mt-1 text-sm text-gray-500">Select City, Car, and Trip Type to see fare estimate.</p>
-                            </div>
-                        )}
-                        </CardContent>
-                    </Card>
-                    <div className="flex gap-2">
-                        <Button type="button" variant="outline" className="w-full" onClick={() => router.push('/')}>
-                            Cancel
+                        </>
+                      ) : (
+                        <>
+                          <FieldGroup className="grid grid-cols-2 gap-4">
+                            <Field>
+                              <FieldLabel>Customer Name *</FieldLabel>
+                              <Input value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} placeholder="Enter full name" />
+                            </Field>
+                            <Field>
+                              <FieldLabel>Mobile Number *</FieldLabel>
+                              <PhoneInput value={formData.customerPhone} onChange={val => setFormData({...formData, customerPhone: val})} placeholder="Enter phone number" />
+                            </Field>
+                          </FieldGroup>
+                          <Field>
+                            <FieldLabel>Pickup Address *</FieldLabel>
+                            <Input value={formData.pickupLocation} onChange={e => setFormData({...formData, pickupLocation: e.target.value})} placeholder="Enter pickup location" />
+                          </Field>
+                          <Field>
+                            <FieldLabel>Drop Address *</FieldLabel>
+                            <Input value={formData.dropLocation} onChange={e => setFormData({...formData, dropLocation: e.target.value})} placeholder="Enter drop location" />
+                          </Field>
+                          <Field>
+                            <FieldLabel>Special Notes</FieldLabel>
+                            <Textarea value={formData.remarks || ""} onChange={e => setFormData({...formData, remarks: e.target.value})} placeholder="Any special instructions..." rows={2} />
+                          </Field>
+                        </>
+                      )}
+                      <div className="flex justify-end pt-4">
+                        <Button type="button" onClick={handleNextStep} disabled={!isStep1Valid} size="lg">
+                          Next: Trip Details <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
-                        <Button type="submit" className="w-full" disabled={!formData.cityId || !formData.carCategoryId || (customerType === 'b2c' && !formData.customerName) || (customerType === 'b2b' && !formData.b2bEmployeeId)}>
-                            Create Booking
-                        </Button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-            </form>
+                )}
+
+                {step === 2 && (
+                  <div className="max-w-2xl">
+                    <div className="mb-6">
+                      <h2 className="text-2xl font-bold text-gray-900">Trip Details</h2>
+                      <p className="text-gray-500 mt-1">
+                        {bookingType === "recurring" ? "Select date, time and recurring schedule" : "Select date and time for your trip"}
+                      </p>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-6">
+                      <FieldGroup className="grid grid-cols-2 gap-4">
+                        <Field>
+                          <FieldLabel>Pickup Date *</FieldLabel>
+                          <Input type="date" value={formData.pickupDate} onChange={e => setFormData({...formData, pickupDate: e.target.value})} />
+                        </Field>
+                        <Field>
+                          <FieldLabel>Pickup Time *</FieldLabel>
+                          <Input type="time" value={formData.pickupTime} onChange={e => setFormData({...formData, pickupTime: e.target.value})} />
+                        </Field>
+                      </FieldGroup>
+                      {bookingType === "recurring" && (
+                        <div className="border-t border-gray-200 pt-6">
+                          <h4 className="text-sm font-medium text-gray-700 mb-4">Recurring Schedule</h4>
+                          <div className="space-y-4">
+                            <Field>
+                              <FieldLabel>Frequency</FieldLabel>
+                              <Select value={recurringSettings?.frequency || "weekly"} onValueChange={(value) => setRecurringSettings(prev => ({ ...prev, frequency: value as any }))}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select frequency" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="daily">Daily</SelectItem>
+                                  <SelectItem value="weekly">Weekly</SelectItem>
+                                  <SelectItem value="custom">Custom</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </Field>
+                            {(recurringSettings?.frequency === "weekly" || recurringSettings?.frequency === "custom") && (
+                              <Field>
+                                <FieldLabel>Select Days</FieldLabel>
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
+                                    <button
+                                      key={day}
+                                      type="button"
+                                      onClick={() => {
+                                        const days = recurringSettings?.selectedDays || [];
+                                        const newDays = days.includes(day) ? days.filter(d => d !== day) : [...days, day];
+                                        setRecurringSettings(prev => ({ ...prev, selectedDays: newDays }));
+                                      }}
+                                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                                        (recurringSettings?.selectedDays || []).includes(day)
+                                          ? "bg-blue-500 text-white"
+                                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                      }`}
+                                    >
+                                      {day}
+                                    </button>
+                                  ))}
+                                </div>
+                              </Field>
+                            )}
+                            <FieldGroup className="grid grid-cols-2 gap-4">
+                              <Field>
+                                <FieldLabel>Start Date</FieldLabel>
+                                <Input type="date" onChange={(e) => setRecurringSettings(prev => ({ ...prev, startDate: new Date(e.target.value) }))} />
+                              </Field>
+                              <Field>
+                                <FieldLabel>End Date</FieldLabel>
+                                <Input type="date" onChange={(e) => setRecurringSettings(prev => ({ ...prev, endDate: new Date(e.target.value) }))} />
+                              </Field>
+                            </FieldGroup>
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex justify-between pt-4">
+                        <Button type="button" variant="outline" onClick={() => setStep(1)} size="lg">
+                          <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                        </Button>
+                        <Button type="button" onClick={handleNextStep} disabled={!formData.pickupDate || !formData.pickupTime} size="lg">
+                          Next: Select Car <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {step === 3 && (
+                  <div className="max-w-3xl">
+                    <div className="mb-6">
+                      <h2 className="text-2xl font-bold text-gray-900">Select City & Car</h2>
+                      <p className="text-gray-500 mt-1">Choose city and car category to see available options</p>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-6">
+                      <Field>
+                        <FieldLabel>City *</FieldLabel>
+                        <Select value={formData.cityId} onValueChange={value => setFormData({...formData, cityId: value})}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select city" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {cities.map(city => (
+                              <SelectItem key={city.id} value={city.id}>{city.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700 mb-3">Select Car Category</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {carCategories.map(cat => {
+                            const isSelected = formData.carCategoryId === cat.id;
+                            return (
+                              <button
+                                key={cat.id}
+                                type="button"
+                                onClick={() => setFormData({...formData, carCategoryId: cat.id})}
+                                className={`p-6 rounded-2xl border-2 text-left transition-all ${
+                                  isSelected
+                                    ? "border-blue-500 bg-blue-50 shadow-lg"
+                                    : "border-gray-200 bg-white hover:border-gray-300 hover:shadow"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-3">
+                                  <Car className={`h-8 w-8 ${isSelected ? "text-blue-500" : "text-gray-400"}`} />
+                                  {isSelected && <CheckCircle className="h-5 w-5 text-blue-500" />}
+                                </div>
+                                <h3 className="font-semibold text-gray-900">{cat.name}</h3>
+                                <p className="text-sm text-gray-500 mt-1">{cat.description || "Standard sedan"}</p>
+                                <div className="mt-4 pt-4 border-t border-gray-200">
+                                  <span className="text-2xl font-bold text-gray-900">₹ {formData.estimatedFare > 0 ? formData.estimatedFare.toFixed(0) : "---"}</span>
+                                  <span className="text-sm text-gray-500 ml-1">est.</span>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="flex justify-between pt-4">
+                        <Button type="button" variant="outline" onClick={() => setStep(2)} size="lg">
+                          <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                        </Button>
+                        <Button type="button" onClick={handleNextStep} disabled={!formData.cityId || !formData.carCategoryId} size="lg">
+                          Next: Review <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {step === 4 && (
+                  <div className="max-w-2xl">
+                    <div className="mb-6">
+                      <h2 className="text-2xl font-bold text-gray-900">Booking Summary</h2>
+                      <p className="text-gray-500 mt-1">Review all details before confirming</p>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-6">
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Customer</h4>
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-gray-400" />
+                              <span className="text-sm text-gray-900">{formData.customerName}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-4 w-4 text-gray-400" />
+                              <span className="text-sm text-gray-900">{formData.customerPhone}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Trip</h4>
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-gray-400" />
+                              <span className="text-sm text-gray-900">{formData.pickupDate} at {formData.pickupTime}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-4 w-4 text-gray-400" />
+                              <span className="text-sm text-gray-900">{formData.pickupLocation} → {formData.dropLocation}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="border-t border-gray-200 pt-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <Car className="h-5 w-5 text-gray-400" />
+                            <span className="font-medium text-gray-900">{carCategories.find(c => c.id === formData.carCategoryId)?.name}</span>
+                          </div>
+                          <span className="text-2xl font-bold text-gray-900">₹ {formData.grandTotal.toFixed(2)}</span>
+                        </div>
+                        {formData.remarks && (
+                          <div className="flex items-start gap-2 bg-gray-50 rounded-lg p-3">
+                            <StickyNote className="h-4 w-4 text-gray-400 mt-0.5" />
+                            <span className="text-sm text-gray-600">{formData.remarks}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex justify-between pt-4">
+                        <Button type="button" variant="outline" onClick={() => setStep(3)} size="lg">
+                          <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                        </Button>
+                        <Button type="submit" size="lg" className="bg-green-600 hover:bg-green-700">
+                          <CheckCircle className="mr-2 h-4 w-4" /> Confirm Booking
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </form>
+            </div>
         </div>
-    )
+    );
 }
+

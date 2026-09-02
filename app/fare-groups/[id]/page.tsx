@@ -5,7 +5,7 @@ import { useAdmin, defaultPeakHour, defaultNightCharge } from '@/lib/admin-conte
 import { 
   AirportFareConfig, RailwayFareConfig, RentalFareConfig, CityRideFareConfig, OutstationFareConfig,
   FareCalculationType, SlabConfig, PeakHourConfig, NightChargeConfig, ChargeType, RentalType, OutstationType,
-  RouteConfig, PreBookingCharges
+  RouteConfig, PreBookingCharges, DriverAllowanceCalculationMethod, OutstationDayCalculationMethod
 } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -49,7 +49,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Separator } from '@/components/ui/separator'
-import { ArrowLeft, Plus, Pencil, Trash2, Plane, Train, Car, MapPin, Navigation, X, Settings } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, Plane, Train, Car, MapPin, Navigation, X, Settings, ChevronDown, ChevronRight, Zap, Clock, Tag, CalendarDays, Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import Link from 'next/link'
@@ -72,56 +72,760 @@ const defaultShortNoticeCharge = {
   chargeValue: 0
 }
 
-function FareGroupSettingsTab({ fareGroup, cities, onUpdate }: { fareGroup: any, cities: any[], onUpdate: (data: any) => void }) {
+const dayCalculationLabels: Record<OutstationDayCalculationMethod, string> = {
+  calendar_day_night_grace: 'Calendar Day + Night Grace',
+  rolling_24_hours: 'Rolling 24 Hours',
+  strict_calendar_day: 'Strict Calendar Day',
+}
+
+const driverAllowanceLabels: Record<DriverAllowanceCalculationMethod, string> = {
+  per_chargeable_day: 'Per Chargeable Day',
+  per_overnight_halt: 'Per Overnight Halt',
+  fixed_per_trip: 'Fixed Per Trip',
+}
+
+function FareGroupSettingsTab({ fareGroup, cities, categories, onUpdate }: { fareGroup: any, cities: any[], categories: any[], onUpdate: (data: any) => void }) {
   const [cityHours, setCityHours] = useState<Record<string, number>>(fareGroup.cityAdvanceHours || {})
   const [globalHours, setGlobalHours] = useState<number | ''>(fareGroup.minAdvanceBookingHours ?? '')
+
+  const [filterCategoryId, setFilterCategoryId] = useState<string>('all')
+
+  type PeakPeriod = {
+    id: string
+    value: number
+    chargeType: ChargeType
+    startTime: string
+    endTime: string
+    startDate: string
+    endDate: string
+  }
+
+  type DiscountPeriod = {
+    id: string
+    value: number
+    chargeType: ChargeType
+    startTime: string
+    endTime: string
+    startDate: string
+    endDate: string
+  }
+
+  type ServiceSetting = {
+    peaks: PeakPeriod[]
+    advanceHours: number | ''
+    DISCOUNTS: DiscountPeriod[]
+    bookingWindow: number | ''
+    urgentBookingCharge: number | ''
+    urgentWithinTime: number | ''
+    urgentChargeType: ChargeType
+  }
+
+  type ServiceType = 'airport_pickup' | 'airport_drop' | 'railway' | 'rental' | 'city' | 'outstation'
+
+  const defaultPeakPeriod: PeakPeriod = {
+    id: '',
+    value: 0,
+    chargeType: 'percentage',
+    startTime: '09:00',
+    endTime: '18:00',
+    startDate: '',
+    endDate: '',
+  }
+
+  const defaultSetting: ServiceSetting = {
+    peaks: [],
+    advanceHours: '',
+    DISCOUNTS: [],
+    bookingWindow: '',
+    urgentBookingCharge: '',
+    urgentWithinTime: '',
+    urgentChargeType: 'percentage',
+  }
+
+  const generatePeakId = () => Math.random().toString(36).substring(2, 9)
+  const generateDiscountId = () => Math.random().toString(36).substring(2, 9)
+
+  const serviceTypes: { key: ServiceType; label: string; icon: any }[] = [
+    { key: 'airport_pickup', label: 'Airport Pickup', icon: Plane },
+    { key: 'airport_drop', label: 'Airport Drop', icon: Plane },
+    { key: 'railway', label: 'Railway', icon: Train },
+    { key: 'rental', label: 'Rental', icon: Car },
+    { key: 'city', label: 'City Ride', icon: MapPin },
+    { key: 'outstation', label: 'Outstation', icon: Navigation },
+  ]
+
+  const [expandedCities, setExpandedCities] = useState<Set<string>>(new Set())
+  const [activeServiceTabs, setActiveServiceTabs] = useState<Record<string, ServiceType>>(
+    Object.fromEntries(cities.map(city => [city.id, 'airport_pickup' as ServiceType]))
+  )
+
+  const toggleCityExpanded = (cityId: string) => {
+    setExpandedCities(prev => {
+      const next = new Set(prev)
+      if (next.has(cityId)) {
+        next.delete(cityId)
+      } else {
+        next.add(cityId)
+      }
+      return next
+    })
+  }
+
+  const setActiveServiceTab = (cityId: string, serviceType: ServiceType) => {
+    setActiveServiceTabs(prev => ({
+      ...prev,
+      [cityId]: serviceType
+    }))
+  }
+
+  const [citySettings, setCitySettings] = useState<Record<string, Record<ServiceType, ServiceSetting>>>(
+    Object.fromEntries(cities.map(city => [
+      city.id,
+      Object.fromEntries(serviceTypes.map(st => [st.key, { ...defaultSetting }])) as Record<ServiceType, ServiceSetting>
+    ]))
+  )
+
+  const handleServiceSettingChange = (cityId: string, serviceType: ServiceType, field: string, value: any) => {
+    setCitySettings(prev => ({
+      ...prev,
+      [cityId]: {
+        ...prev[cityId],
+        [serviceType]: {
+          ...prev[cityId][serviceType],
+          [field]: value
+        }
+      }
+    }))
+  }
+
+  const handleApplyAll = () => {
+    const updates: any = {}
+    let updateCount = 0
+
+    const applySetting = (fare: any, settings: ServiceSetting) => {
+      if (!settings) return fare
+      
+      const hasChanges = (settings.peaks && settings.peaks.length > 0) || settings.advanceHours !== '' || (settings.DISCOUNTS && settings.DISCOUNTS.length > 0) || settings.bookingWindow !== '' || settings.urgentBookingCharge !== '' || settings.urgentWithinTime !== ''
+      if (!hasChanges) return fare
+
+      updateCount++
+      const updated = { ...fare }
+      
+      if (settings.peaks && settings.peaks.length > 0) {
+        updated.peakHours = settings.peaks.map(peak => ({
+          enabled: true,
+          chargeType: peak.chargeType,
+          chargeValue: peak.value,
+          startTime: peak.startTime,
+          endTime: peak.endTime,
+          startDate: peak.startDate || undefined,
+          endDate: peak.endDate || undefined,
+        }))
+        updated.peakHour = {
+          ...updated.peakHour,
+          enabled: true,
+          chargeType: settings.peaks[0].chargeType,
+          chargeValue: settings.peaks[0].value,
+          startTime: settings.peaks[0].startTime,
+          endTime: settings.peaks[0].endTime,
+          startDate: settings.peaks[0].startDate || undefined,
+          endDate: settings.peaks[0].endDate || undefined,
+        }
+      }
+      if (settings.advanceHours !== '') {
+        updated.minAdvanceBookingHours = settings.advanceHours
+      }
+      if (settings.DISCOUNTS && settings.DISCOUNTS.length > 0 && updated.autoSlotReturn) {
+        updated.autoSlotReturn = {
+          ...updated.autoSlotReturn,
+          discountEnabled: true,
+          discountType: settings.DISCOUNTS[0].chargeType,
+          discountValue: settings.DISCOUNTS[0].value
+        }
+      }
+      if (settings.bookingWindow !== '') {
+        updated.minAdvanceBookingHours = settings.bookingWindow
+      }
+      if (settings.urgentBookingCharge !== '') {
+        updated.urgentBookingCharge = settings.urgentBookingCharge
+      }
+      if (settings.urgentWithinTime !== '') {
+        updated.urgentWithinTime = settings.urgentWithinTime
+      }
+      if (settings.urgentChargeType) {
+        updated.urgentChargeType = settings.urgentChargeType
+      }
+      return updated
+    }
+
+    const applyUpdates = (fares: any[], serviceType: ServiceType) => {
+      if (!fares) return fares
+      
+      return fares.map((fare: any) => {
+        if (filterCategoryId !== 'all' && fare.carCategoryId !== filterCategoryId) {
+          return fare
+        }
+        
+        const settings = citySettings[fare.cityId]?.[serviceType]
+        return applySetting(fare, settings)
+      })
+    }
+
+    updates.airportFares = (fareGroup.airportFares || []).map((fare: any) => {
+      if (filterCategoryId !== 'all' && fare.carCategoryId !== filterCategoryId) return fare
+      const settings = citySettings[fare.cityId]?.[fare.type === 'drop' ? 'airport_drop' : 'airport_pickup']
+      return applySetting(fare, settings)
+    })
+    updates.railwayFares = applyUpdates(fareGroup.railwayFares || [], 'railway')
+    updates.rentalFares = applyUpdates(fareGroup.rentalFares || [], 'rental')
+    updates.cityRideFares = applyUpdates(fareGroup.cityRideFares || [], 'city')
+    updates.outstationFares = applyUpdates(fareGroup.outstationFares || [], 'outstation')
+
+    if (updateCount === 0) {
+      toast.error('No changes to apply')
+      return
+    }
+
+    onUpdate(updates)
+    toast.success(`Updated ${updateCount} fare configuration(s)`)
+  }
 
   const handleSave = () => {
     onUpdate({ cityAdvanceHours: cityHours, minAdvanceBookingHours: globalHours === '' ? 0 : globalHours })
   }
 
   return (
-    <Card>
-      <CardHeader>
-         <CardTitle>Advance Booking Rules</CardTitle>
-         <CardDescription>Set global or city-wise minimum advance booking hours for this fare group. Specific fare configurations can override these.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-         <FieldGroup>
-           <Field>
-             <FieldLabel>Default Global Advance Booking (Hours)</FieldLabel>
-             <Input type="number" placeholder="e.g. 2" value={globalHours} onChange={e => setGlobalHours(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)} className="w-64" />
-           </Field>
-         </FieldGroup>
-         
-         <div>
-           <h3 className="text-sm font-medium mb-3">City-wise Overrides</h3>
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-             {cities.map(city => (
-               <div key={city.id} className="flex items-center gap-3 bg-muted/50 p-3 rounded-lg border">
-                 <span className="flex-1 text-sm font-medium">{city.name}</span>
-                 <Input 
-                   type="number" 
-                   className="w-24 h-8" 
-                   placeholder="Default"
-                   value={cityHours[city.id] !== undefined ? cityHours[city.id] : ''} 
-                   onChange={e => setCityHours(prev => { 
-                     const val = e.target.value; 
-                     const next = { ...prev };
-                     if (val === '') delete next[city.id];
-                     else next[city.id] = parseFloat(val) || 0;
-                     return next;
-                   })} 
-                 />
-                 <span className="text-xs text-muted-foreground">hrs</span>
-               </div>
-             ))}
-           </div>
-         </div>
-         
-         <Button onClick={handleSave}>Save Settings</Button>
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      {false && (
+      <Card>
+        <CardHeader>
+            <CardTitle>Advance Booking Rules</CardTitle>
+            <CardDescription>Set global or city-wise minimum advance booking hours for this fare group. Specific fare configurations can override these.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+            <FieldGroup>
+              <Field>
+                <FieldLabel>Default Global Advance Booking (Hours)</FieldLabel>
+                <Input type="number" placeholder="e.g. 2" value={globalHours} onChange={e => setGlobalHours(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)} className="w-64" />
+              </Field>
+            </FieldGroup>
+            
+            <div>
+              <h3 className="text-sm font-medium mb-3">City-wise Overrides</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {cities.map(city => (
+                  <div key={city.id} className="flex items-center gap-3 bg-muted/50 p-3 rounded-lg border">
+                    <span className="flex-1 text-sm font-medium">{city.name}</span>
+                    <Input 
+                      type="number" 
+                      className="w-24 h-8" 
+                      placeholder="Default"
+                      value={cityHours[city.id] !== undefined ? cityHours[city.id] : ''} 
+                      onChange={e => setCityHours(prev => { 
+                        const val = e.target.value; 
+                        const next = { ...prev };
+                        if (val === '') delete next[city.id];
+                        else next[city.id] = parseFloat(val) || 0;
+                        return next;
+                      })} 
+                    />
+                    <span className="text-xs text-muted-foreground">hrs</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <Button onClick={handleSave}>Save Settings</Button>
+        </CardContent>
+      </Card>
+      )}
+
+      <Card className="border-0 shadow-lg bg-gradient-to-br from-slate-50 to-white">
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg shadow-violet-200">
+                <Settings className="h-5 w-5 text-black" />
+              </div>
+              <div>
+                <CardTitle className="text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">City & Service Settings</CardTitle>
+                <CardDescription className="text-sm">Configure PEAK CHARGES, DISCOUNTS, and booking rules per city</CardDescription>
+              </div>
+            </div>
+            <Button size="sm" variant="outline" className="rounded-full px-4" onClick={() => setExpandedCities(new Set(expandedCities.size === cities.length ? [] : cities.map(c => c.id)))}>
+              {expandedCities.size === cities.length ? 'Collapse All' : 'Expand All'}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex flex-wrap items-center gap-3 p-4 bg-white rounded-2xl border shadow-sm">
+            <MapPin className="h-4 w-4 text-slate-400" />
+            <span className="text-sm font-medium text-slate-600">Filter:</span>
+            <div className="w-44">
+              <Select value={filterCategoryId} onValueChange={setFilterCategoryId}>
+                <SelectTrigger className="h-9 rounded-lg border-slate-200">
+                  <SelectValue placeholder="All categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All categories</SelectItem>
+                  {categories.map((cat: any) => (
+                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid gap-4">
+            {cities.map((city) => {
+              const cityServiceSettings = citySettings[city.id]
+              if (!cityServiceSettings) return null
+              const isExpanded = expandedCities.has(city.id)
+              const activeService = activeServiceTabs[city.id] || 'airport_pickup'
+              const activeSettings = cityServiceSettings[activeService]
+              const serviceTypeInfo = serviceTypes.find(st => st.key === activeService)
+              const totalPeaks = Object.values(cityServiceSettings).reduce((acc, s) => acc + (s.peaks?.length || 0), 0)
+              const totalDISCOUNTS = Object.values(cityServiceSettings).reduce((acc, s) => acc + (s.DISCOUNTS?.length || 0), 0)
+
+              return (
+                <div key={city.id} className="rounded-2xl border-0 shadow-md bg-white overflow-hidden transition-all duration-300 hover:shadow-lg">
+                  <button
+                    type="button"
+                    className={`w-full flex items-center justify-between px-5 py-4 transition-all duration-300 ${
+                      isExpanded 
+                        ? 'bg-gradient-to-r from-violet-50 to-purple-50' 
+                        : 'bg-gradient-to-r from-slate-50 to-gray-50 hover:from-slate-100 hover:to-gray-100'
+                    }`}
+                    onClick={() => toggleCityExpanded(city.id)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`p-1.5 rounded-lg transition-all ${isExpanded ? 'bg-violet-100' : 'bg-slate-100'}`}>
+                        {isExpanded ? <ChevronDown className="h-4 w-4 text-violet-600" /> : <ChevronRight className="h-4 w-4 text-slate-500" />}
+                      </div>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${isExpanded ? 'bg-gradient-to-br from-violet-500 to-purple-600 text-black' : 'bg-slate-200 text-slate-600'}`}>
+                        {city.name.charAt(0)}
+                      </div>
+                      <span className="font-semibold text-base">{city.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {totalPeaks > 0 && (
+                        <Badge className="bg-gradient-to-r from-gray-800 to-gray-900 text-black border-0 gap-1 h-7 px-2.5 rounded-full shadow-sm">
+                          <Zap className="h-3 w-3" /> {totalPeaks} Peak{totalPeaks > 1 ? 's' : ''}
+                        </Badge>
+                      )}
+                      {totalDISCOUNTS > 0 && (
+                        <Badge className="bg-gradient-to-r from-emerald-400 to-green-500 text-black border-0 gap-1 h-7 px-2.5 rounded-full shadow-sm">
+                          <Tag className="h-3 w-3" /> {totalDISCOUNTS} Disc
+                        </Badge>
+                      )}
+                    </div>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="border-t border-slate-100">
+                      <div className="flex gap-2 p-3 bg-slate-50/50 overflow-x-auto">
+                        {serviceTypes.map((serviceType) => {
+                          const Icon = serviceType.icon
+                          const isActive = activeService === serviceType.key
+                          const hasSettings = cityServiceSettings[serviceType.key]?.peaks?.length > 0 || cityServiceSettings[serviceType.key]?.DISCOUNTS?.length > 0
+                          return (
+                            <button
+                              key={serviceType.key}
+                              type="button"
+                              onClick={() => setActiveServiceTab(city.id, serviceType.key)}
+                              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
+                                isActive
+                                  ? 'bg-white shadow-md text-violet-700 ring-1 ring-violet-200'
+                                  : 'hover:bg-white/60 text-slate-500'
+                              }`}
+                            >
+                              <Icon className={`h-4 w-4 ${isActive ? 'text-violet-500' : ''}`} />
+                              {serviceType.label}
+                              {hasSettings && <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-200" />}
+                            </button>
+                          )
+                        })}
+                      </div>
+
+                      {activeSettings && serviceTypeInfo && (
+                          
+                          <div className="space-y-4">
+                            <div className="rounded-lg border border-gray-200 bg-white p-4">
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+                                    <Zap className="h-4 w-4 text-amber-600" />
+                                  </div>
+                                  <span className="font-semibold text-sm text-gray-800">Peak Charges</span>
+                                </div>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="h-7 px-3 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-xs"
+                                  onClick={() => {
+                                    const newPeak: PeakPeriod = { ...defaultPeakPeriod, id: generatePeakId() }
+                                    const currentPeaks = activeSettings.peaks || []
+                                    handleServiceSettingChange(city.id, activeService, 'peaks', [...currentPeaks, newPeak])
+                                  }}
+                                >
+                                  <Plus className="h-3 w-3 mr-1" /> Add Period
+                                </Button>
+                              </div>
+                              {(!activeSettings.peaks || activeSettings.peaks.length === 0) ? (
+                                <div className="text-center py-6 text-gray-400 text-sm">No peak periods configured</div>
+                              ) : (
+                                <div className="space-y-2 max-h-48 overflow-y-auto">
+                                  {activeSettings.peaks.map((peak, index) => (
+                                    <div key={peak.id} className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <span className="w-6 h-6 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center justify-center">{index + 1}</span>
+                                        <span className="text-xs font-medium text-gray-700 flex-1">Peak Period</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const newPeaks = activeSettings.peaks.filter(p => p.id !== peak.id)
+                                            handleServiceSettingChange(city.id, activeService, 'peaks', newPeaks)
+                                          }}
+                                          className="w-6 h-6 rounded-md bg-red-100 text-red-500 hover:bg-red-200 flex items-center justify-center"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                      <FieldGroup className="grid grid-cols-3 gap-3 mb-2">
+                                        <Field>
+                                          <FieldLabel>Charge Type</FieldLabel>
+                                          <Select
+                                            value={peak.chargeType}
+                                            onValueChange={(value: ChargeType) => {
+                                              const newPeaks = [...activeSettings.peaks]
+                                              newPeaks[index] = { ...peak, chargeType: value }
+                                              handleServiceSettingChange(city.id, activeService, 'peaks', newPeaks)
+                                            }}
+                                          >
+                                            <SelectTrigger className="h-8 text-sm w-full">
+                                              <SelectValue placeholder="Select" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="percentage">Percentage (%)</SelectItem>
+                                              <SelectItem value="flat">Flat (Rs)</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </Field>
+                                        <Field>
+                                          <FieldLabel>Value</FieldLabel>
+                                          <Input
+                                            type="number"
+                                            value={peak.value}
+                                            onChange={e => {
+                                              const newPeaks = [...activeSettings.peaks]
+                                              newPeaks[index] = { ...peak, value: parseFloat(e.target.value) || 0 }
+                                              handleServiceSettingChange(city.id, activeService, 'peaks', newPeaks)
+                                            }}
+                                            placeholder="0"
+                                            className="h-8 text-sm"
+                                          />
+                                        </Field>
+                                        <Field>
+                                          <FieldLabel>Start Time</FieldLabel>
+                                          <Input
+                                            type="time"
+                                            value={peak.startTime}
+                                            onChange={e => {
+                                              const newPeaks = [...activeSettings.peaks]
+                                              newPeaks[index] = { ...peak, startTime: e.target.value }
+                                              handleServiceSettingChange(city.id, activeService, 'peaks', newPeaks)
+                                            }}
+                                            className="h-8 text-sm"
+                                          />
+                                        </Field>
+                                      </FieldGroup>
+                                      <FieldGroup className="grid grid-cols-3 gap-3">
+                                        <Field>
+                                          <FieldLabel>End Time</FieldLabel>
+                                          <Input
+                                            type="time"
+                                            value={peak.endTime}
+                                            onChange={e => {
+                                              const newPeaks = [...activeSettings.peaks]
+                                              newPeaks[index] = { ...peak, endTime: e.target.value }
+                                              handleServiceSettingChange(city.id, activeService, 'peaks', newPeaks)
+                                            }}
+                                            className="h-8 text-sm"
+                                          />
+                                        </Field>
+                                        <Field>
+                                          <FieldLabel>Start Date</FieldLabel>
+                                          <Input
+                                            type="date"
+                                            value={peak.startDate}
+                                            onChange={e => {
+                                              const newPeaks = [...activeSettings.peaks]
+                                              newPeaks[index] = { ...peak, startDate: e.target.value }
+                                              handleServiceSettingChange(city.id, activeService, 'peaks', newPeaks)
+                                            }}
+                                            className="h-8 text-sm"
+                                          />
+                                        </Field>
+                                        <Field>
+                                          <FieldLabel>End Date</FieldLabel>
+                                          <Input
+                                            type="date"
+                                            value={peak.endDate}
+                                            onChange={e => {
+                                              const newPeaks = [...activeSettings.peaks]
+                                              newPeaks[index] = { ...peak, endDate: e.target.value }
+                                              handleServiceSettingChange(city.id, activeService, 'peaks', newPeaks)
+                                            }}
+                                            className="h-8 text-sm"
+                                          />
+                                        </Field>
+                                      </FieldGroup>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="rounded-lg border border-gray-200 bg-white p-4">
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                                    <Tag className="h-4 w-4 text-emerald-600" />
+                                  </div>
+                                  <span className="font-semibold text-sm text-gray-800">Discounts</span>
+                                </div>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="h-7 px-3 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-xs"
+                                  onClick={() => {
+                                    const newDiscount: DiscountPeriod = { id: generateDiscountId(), value: 0, chargeType: 'percentage', startTime: '', endTime: '', startDate: '', endDate: '' }
+                                    const currentDiscounts = activeSettings.DISCOUNTS || []
+                                    handleServiceSettingChange(city.id, activeService, 'DISCOUNTS', [...currentDiscounts, newDiscount])
+                                  }}
+                                >
+                                  <Plus className="h-3 w-3 mr-1" /> Add Period
+                                </Button>
+                              </div>
+                              {(!activeSettings.DISCOUNTS || activeSettings.DISCOUNTS.length === 0) ? (
+                                <div className="text-center py-6 text-gray-400 text-sm">No discounts configured</div>
+                              ) : (
+                                <div className="space-y-2 max-h-48 overflow-y-auto">
+                                  {activeSettings.DISCOUNTS.map((discount, index) => (
+                                    <div key={discount.id} className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <span className="w-6 h-6 rounded-full bg-emerald-500 text-white text-xs font-bold flex items-center justify-center">{index + 1}</span>
+                                        <span className="text-xs font-medium text-gray-700 flex-1">Discount Period</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const newDiscounts = activeSettings.DISCOUNTS.filter(d => d.id !== discount.id)
+                                            handleServiceSettingChange(city.id, activeService, 'DISCOUNTS', newDiscounts)
+                                          }}
+                                          className="w-6 h-6 rounded-md bg-red-100 text-red-500 hover:bg-red-200 flex items-center justify-center"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                      <FieldGroup className="grid grid-cols-3 gap-3 mb-2">
+                                        <Field>
+                                          <FieldLabel>Discount Type</FieldLabel>
+                                          <Select
+                                            value={discount.chargeType}
+                                            onValueChange={(value: ChargeType) => {
+                                              const newDiscounts = [...activeSettings.DISCOUNTS]
+                                              newDiscounts[index] = { ...discount, chargeType: value }
+                                              handleServiceSettingChange(city.id, activeService, 'DISCOUNTS', newDiscounts)
+                                            }}
+                                          >
+                                            <SelectTrigger className="h-8 text-sm w-full">
+                                              <SelectValue placeholder="Select" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="percentage">Percentage (%)</SelectItem>
+                                              <SelectItem value="flat">Flat (Rs)</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </Field>
+                                        <Field>
+                                          <FieldLabel>Value</FieldLabel>
+                                          <Input
+                                            type="number"
+                                            value={discount.value}
+                                            onChange={e => {
+                                              const newDiscounts = [...activeSettings.DISCOUNTS]
+                                              newDiscounts[index] = { ...discount, value: parseFloat(e.target.value) || 0 }
+                                              handleServiceSettingChange(city.id, activeService, 'DISCOUNTS', newDiscounts)
+                                            }}
+                                            placeholder="0"
+                                            className="h-8 text-sm"
+                                          />
+                                        </Field>
+                                        <Field>
+                                          <FieldLabel>Start Time</FieldLabel>
+                                          <Input
+                                            type="time"
+                                            value={discount.startTime}
+                                            onChange={e => {
+                                              const newDiscounts = [...activeSettings.DISCOUNTS]
+                                              newDiscounts[index] = { ...discount, startTime: e.target.value }
+                                              handleServiceSettingChange(city.id, activeService, 'DISCOUNTS', newDiscounts)
+                                            }}
+                                            className="h-8 text-sm"
+                                          />
+                                        </Field>
+                                      </FieldGroup>
+                                      <FieldGroup className="grid grid-cols-3 gap-3">
+                                        <Field>
+                                          <FieldLabel>End Time</FieldLabel>
+                                          <Input
+                                            type="time"
+                                            value={discount.endTime}
+                                            onChange={e => {
+                                              const newDiscounts = [...activeSettings.DISCOUNTS]
+                                              newDiscounts[index] = { ...discount, endTime: e.target.value }
+                                              handleServiceSettingChange(city.id, activeService, 'DISCOUNTS', newDiscounts)
+                                            }}
+                                            className="h-8 text-sm"
+                                          />
+                                        </Field>
+                                        <Field>
+                                          <FieldLabel>Start Date</FieldLabel>
+                                          <Input
+                                            type="date"
+                                            value={discount.startDate}
+                                            onChange={e => {
+                                              const newDiscounts = [...activeSettings.DISCOUNTS]
+                                              newDiscounts[index] = { ...discount, startDate: e.target.value }
+                                              handleServiceSettingChange(city.id, activeService, 'DISCOUNTS', newDiscounts)
+                                            }}
+                                            className="h-8 text-sm"
+                                          />
+                                        </Field>
+                                        <Field>
+                                          <FieldLabel>End Date</FieldLabel>
+                                          <Input
+                                            type="date"
+                                            value={discount.endDate}
+                                            onChange={e => {
+                                              const newDiscounts = [...activeSettings.DISCOUNTS]
+                                              newDiscounts[index] = { ...discount, endDate: e.target.value }
+                                              handleServiceSettingChange(city.id, activeService, 'DISCOUNTS', newDiscounts)
+                                            }}
+                                            className="h-8 text-sm"
+                                          />
+                                        </Field>
+                                      </FieldGroup>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-4">
+                              <div className="rounded-lg border border-gray-200 bg-white p-4">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                                    <Clock className="h-4 w-4 text-blue-600" />
+                                  </div>
+                                  <span className="font-semibold text-sm text-gray-800">Advance Payment</span>
+                                </div>
+                                <Field>
+                                  <FieldLabel>Minimum Payment (%)</FieldLabel>
+                                  <Input
+                                    type="number"
+                                    value={activeSettings.advanceHours}
+                                    onChange={e => handleServiceSettingChange(city.id, activeService, 'advanceHours', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                    placeholder="e.g. 20"
+                                    className="h-8 text-sm"
+                                  />
+                                </Field>
+                              </div>
+
+                              <div className="rounded-lg border border-gray-200 bg-white p-4">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                                    <CalendarDays className="h-4 w-4 text-purple-600" />
+                                  </div>
+                                  <span className="font-semibold text-sm text-gray-800">Booking Window</span>
+                                </div>
+                                <Field>
+                                  <FieldLabel>Window Hours</FieldLabel>
+                                  <Input
+                                    type="number"
+                                    value={activeSettings.bookingWindow}
+                                    onChange={e => handleServiceSettingChange(city.id, activeService, 'bookingWindow', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                    placeholder="e.g. 4"
+                                    className="h-8 text-sm"
+                                  />
+                                </Field>
+                              </div>
+
+                              <div className="rounded-lg border border-gray-200 bg-white p-4">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
+                                    <Zap className="h-4 w-4 text-red-600" />
+                                  </div>
+                                  <span className="font-semibold text-sm text-gray-800">Urgent Booking</span>
+                                </div>
+                                <div className="space-y-2">
+                                  <Field>
+                                    <FieldLabel>Within Time (Hours)</FieldLabel>
+                                    <Input
+                                      type="number"
+                                      value={activeSettings.urgentWithinTime}
+                                      onChange={e => handleServiceSettingChange(city.id, activeService, 'urgentWithinTime', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                      placeholder="Hours"
+                                      className="h-8 text-sm"
+                                    />
+                                  </Field>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <Field>
+                                      <FieldLabel>Type</FieldLabel>
+                                      <Select
+                                        value={activeSettings.urgentChargeType}
+                                        onValueChange={(value: ChargeType) => handleServiceSettingChange(city.id, activeService, 'urgentChargeType', value)}
+                                      >
+                                        <SelectTrigger className="h-8 text-sm w-full">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="percentage">%</SelectItem>
+                                          <SelectItem value="flat">Rs</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </Field>
+                                    <Field>
+                                      <FieldLabel>Amount</FieldLabel>
+                                      <Input
+                                        type="number"
+                                        value={activeSettings.urgentBookingCharge}
+                                        onChange={e => handleServiceSettingChange(city.id, activeService, 'urgentBookingCharge', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                        placeholder="Charge"
+                                        className="h-8 text-sm"
+                                      />
+                                    </Field>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                        )}
+
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+            <Button onClick={handleApplyAll} size="lg" className="rounded-full px-8 bg-gradient-to-r from-violet-600 to-purple-600 text-black border-0 shadow-lg shadow-violet-200 hover:shadow-xl hover:shadow-violet-300 transition-all">
+              Apply All Changes
+            </Button>
+        </CardContent>
+      </Card>
+    </div>
   )
 }
 
@@ -256,7 +960,7 @@ export default function FareConfigPage({ params }: { params: Promise<{ id: strin
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-5 max-w-3xl">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-6 lg:max-w-5xl">
           <TabsTrigger value="airport" className="flex items-center gap-2">
             <Plane className="h-4 w-4" />
             Airport
@@ -353,7 +1057,7 @@ export default function FareConfigPage({ params }: { params: Promise<{ id: strin
         </TabsContent>
 
         <TabsContent value="settings" className="mt-6">
-          <FareGroupSettingsTab fareGroup={fareGroup} cities={activeCities} onUpdate={(updates) => updateFareGroup(fareGroup.id, updates)} />
+          <FareGroupSettingsTab fareGroup={fareGroup} cities={activeCities} categories={activeCategories} onUpdate={(updates) => updateFareGroup(fareGroup.id, updates)} />
         </TabsContent>
       </Tabs>
 
@@ -897,6 +1601,7 @@ function OutstationFaresTab({
                 <TableHead>City</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Type</TableHead>
+                <TableHead>Day Method</TableHead>
                 <TableHead>Rates</TableHead>
                 <TableHead>Driver Allowance</TableHead>
                 <TableHead>Min KM/Day</TableHead>
@@ -912,11 +1617,24 @@ function OutstationFaresTab({
                     <Badge variant="outline">{fare.outstationType.replace('_', ' ')}</Badge>
                   </TableCell>
                   <TableCell>
+                    <div className="text-sm">{dayCalculationLabels[fare.dayCalculationMethod || 'calendar_day_night_grace']}</div>
+                    {fare.dayCalculationMethod === 'calendar_day_night_grace' && (
+                      <div className="text-xs text-muted-foreground">
+                        Grace {fare.graceEndTime || '04:00'} / Rs. {fare.extraHourCharge || 0}/hr
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     {fare.outstationType === 'one_way' && `${fare.slabs?.length || 0} slabs`}
                     {fare.outstationType === 'round_trip' && `Rs. ${fare.roundTripPerKmRate}/km`}
                     {fare.outstationType === 'route_wise' && `${fare.routes?.length || 0} routes`}
                   </TableCell>
-                  <TableCell>Rs. {fare.driverAllowancePerDay}/day</TableCell>
+                  <TableCell>
+                    <div>Rs. {fare.driverAllowancePerDay}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {driverAllowanceLabels[fare.driverAllowanceCalculationMethod || 'per_chargeable_day']}
+                    </div>
+                  </TableCell>
                   <TableCell>{fare.minimumKmPerDay} km</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
@@ -1069,6 +1787,10 @@ function FareConfigDialog({
     outstationType: 'one_way',
     oneWayPerKmRate: 12,
     roundTripPerKmRate: 10,
+    dayCalculationMethod: 'calendar_day_night_grace',
+    graceEndTime: '04:00',
+    extraHourCharge: 0,
+    driverAllowanceCalculationMethod: 'per_chargeable_day',
     driverAllowancePerDay: 400,
     nightHaltCharge: 700,
     minimumKmPerDay: 250,
@@ -1133,6 +1855,10 @@ function FareConfigDialog({
           case 'outstation':
             setOutstationForm({
               ...(editingFare as OutstationFareConfig),
+              dayCalculationMethod: (editingFare as OutstationFareConfig).dayCalculationMethod || 'calendar_day_night_grace',
+              graceEndTime: (editingFare as OutstationFareConfig).graceEndTime || '04:00',
+              extraHourCharge: (editingFare as OutstationFareConfig).extraHourCharge || 0,
+              driverAllowanceCalculationMethod: (editingFare as OutstationFareConfig).driverAllowanceCalculationMethod || 'per_chargeable_day',
               freeWaitingMinutes: (editingFare as OutstationFareConfig).freeWaitingMinutes || 0,
               preBookingCharges: (editingFare as OutstationFareConfig).preBookingCharges || { ...defaultPreBookingCharges },
               slabs: (editingFare as OutstationFareConfig).slabs || [],
@@ -1225,6 +1951,10 @@ function FareConfigDialog({
           outstationType: 'one_way',
           oneWayPerKmRate: 12,
           roundTripPerKmRate: 10,
+          dayCalculationMethod: 'calendar_day_night_grace',
+          graceEndTime: '04:00',
+          extraHourCharge: 0,
+          driverAllowanceCalculationMethod: 'per_chargeable_day',
           driverAllowancePerDay: 400,
           nightHaltCharge: 700,
           minimumKmPerDay: 250,
@@ -1523,7 +2253,7 @@ function FareConfigDialog({
           />
         </div>
         {currentConfig.enabled && (
-          <div className="space-y-4">
+          <div className="space-y-2">
             <div className="flex items-center gap-4">
               <div className="flex-1">
                 <p className="text-sm font-medium">Slot Open Buffer (min)</p>
@@ -1604,7 +2334,7 @@ function FareConfigDialog({
         <p className="font-medium text-sm">Pre-Booking Charges (Optional)</p>
         <p className="text-xs text-muted-foreground">Add toll, parking, or miscellaneous charges</p>
       </div>
-      <div className="space-y-4">
+      <div className="space-y-2">
         {/* Toll Charges */}
         <div className="flex items-center gap-4">
           <Switch
@@ -2459,6 +3189,44 @@ function FareConfigDialog({
                   </Select>
                 </Field>
 
+                <Field>
+                  <FieldLabel>Day Calculation Method</FieldLabel>
+                  <Select
+                    value={outstationForm.dayCalculationMethod || 'calendar_day_night_grace'}
+                    onValueChange={(value: OutstationDayCalculationMethod) => setOutstationForm(f => ({ ...f, dayCalculationMethod: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="calendar_day_night_grace">Calendar Day + Night Grace</SelectItem>
+                      <SelectItem value="rolling_24_hours">Rolling 24 Hours</SelectItem>
+                      <SelectItem value="strict_calendar_day">Strict Calendar Day</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                {outstationForm.dayCalculationMethod === 'calendar_day_night_grace' && (
+                  <FieldGroup className="grid grid-cols-2 gap-4">
+                    <Field>
+                      <FieldLabel>Grace End Time</FieldLabel>
+                      <Input
+                        type="time"
+                        value={outstationForm.graceEndTime || '04:00'}
+                        onChange={(e) => setOutstationForm(f => ({ ...f, graceEndTime: e.target.value }))}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>Extra Hour Charge (Rs./hr)</FieldLabel>
+                      <Input
+                        type="number"
+                        value={outstationForm.extraHourCharge || 0}
+                        onChange={(e) => setOutstationForm(f => ({ ...f, extraHourCharge: parseFloat(e.target.value) || 0 }))}
+                      />
+                    </Field>
+                  </FieldGroup>
+                )}
+
                 {outstationForm.outstationType === 'one_way' && (
                   renderSlabConfig(outstationForm.slabs || [], (slabs) => setOutstationForm(f => ({ ...f, slabs })))
                 )}
@@ -2488,25 +3256,39 @@ function FareConfigDialog({
                   </div>
                 )}
 
-                <FieldGroup className={outstationForm.outstationType === 'one_way' ? "grid grid-cols-1 gap-4" : "grid grid-cols-2 gap-4"}>
+                <FieldGroup className="grid grid-cols-3 gap-4">
                   <Field>
-                    <FieldLabel>Driver Allowance/Day (Rs.)</FieldLabel>
+                    <FieldLabel>Driver Allowance</FieldLabel>
+                    <Select
+                      value={outstationForm.driverAllowanceCalculationMethod || 'per_chargeable_day'}
+                      onValueChange={(value: DriverAllowanceCalculationMethod) => setOutstationForm(f => ({ ...f, driverAllowanceCalculationMethod: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="per_chargeable_day">Per Chargeable Day</SelectItem>
+                        <SelectItem value="per_overnight_halt">Per Overnight Halt</SelectItem>
+                        <SelectItem value="fixed_per_trip">Fixed Per Trip</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field>
+                    <FieldLabel>Driver Allowance Amount (Rs.)</FieldLabel>
                     <Input
                       type="number"
                       value={outstationForm.driverAllowancePerDay}
                       onChange={(e) => setOutstationForm(f => ({ ...f, driverAllowancePerDay: parseFloat(e.target.value) }))}
                     />
                   </Field>
-                  {outstationForm.outstationType !== 'one_way' && (
-                    <Field>
-                      <FieldLabel>Min KM/Day</FieldLabel>
-                      <Input
-                        type="number"
-                        value={outstationForm.minimumKmPerDay}
-                        onChange={(e) => setOutstationForm(f => ({ ...f, minimumKmPerDay: parseInt(e.target.value) }))}
-                      />
-                    </Field>
-                  )}
+                  <Field>
+                    <FieldLabel>Minimum KM Per Day</FieldLabel>
+                    <Input
+                      type="number"
+                      value={outstationForm.minimumKmPerDay}
+                      onChange={(e) => setOutstationForm(f => ({ ...f, minimumKmPerDay: parseInt(e.target.value) || 0 }))}
+                    />
+                  </Field>
                 </FieldGroup>
 
                 <FieldGroup className="grid grid-cols-2 gap-4">

@@ -1,13 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ComponentType, type FormEvent } from 'react'
+import Link from 'next/link'
+import { Building2, Pencil, Plus, Settings2, Trash2, Users } from 'lucide-react'
+import { toast } from 'sonner'
 import { useAdmin } from '@/lib/admin-context'
-import { FareGroup } from '@/lib/types'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Textarea } from '@/components/ui/textarea'
+import type { FareGroup } from '@/lib/types'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import {
   Dialog,
   DialogContent,
@@ -24,21 +33,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
-import { Plus, Pencil, Trash2, Settings2, Users, Building2, Star } from 'lucide-react'
-import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
 import { Field, FieldLabel } from '@/components/ui/field'
-import Link from 'next/link'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 
 type FareGroupFormData = {
   name: string
@@ -54,294 +52,304 @@ const initialFormData: FareGroupFormData = {
   isDefault: false,
 }
 
+const makeFareGroupCode = (fareGroup: FareGroup) =>
+  fareGroup.name
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || fareGroup.id
+
 export default function FareGroupsPage() {
   const { fareGroups, addFareGroup, updateFareGroup, deleteFareGroup, b2bClients } = useAdmin()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingGroup, setEditingGroup] = useState<FareGroup | null>(null)
+  const [editingFareGroup, setEditingFareGroup] = useState<FareGroup | null>(null)
   const [formData, setFormData] = useState<FareGroupFormData>(initialFormData)
 
-  const b2cGroups = fareGroups.filter(g => g.type === 'B2C')
-  const b2bGroups = fareGroups.filter(g => g.type === 'B2B')
+  const b2cGroups = fareGroups.filter((group) => group.type === 'B2C')
+  const b2bGroups = fareGroups.filter((group) => group.type === 'B2B')
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (editingGroup) {
-      updateFareGroup(editingGroup.id, formData)
+  const openCreateDialog = () => {
+    setEditingFareGroup(null)
+    setFormData(initialFormData)
+    setIsDialogOpen(true)
+  }
+
+  const openEditDialog = (fareGroup: FareGroup) => {
+    setEditingFareGroup(fareGroup)
+    setFormData({
+      name: fareGroup.name,
+      description: fareGroup.description,
+      type: fareGroup.type === 'B2B' ? 'B2B' : 'B2C',
+      isDefault: fareGroup.isDefault,
+    })
+    setIsDialogOpen(true)
+  }
+
+  const closeDialog = () => {
+    setIsDialogOpen(false)
+    setEditingFareGroup(null)
+    setFormData(initialFormData)
+  }
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault()
+
+    if (editingFareGroup) {
+      updateFareGroup(editingFareGroup.id, formData)
       toast.success('Fare group updated successfully')
     } else {
       addFareGroup({
         ...formData,
         airportFares: [],
+        railwayFares: [],
         rentalFares: [],
         cityRideFares: [],
         outstationFares: [],
-        railwayFares: [],
       })
       toast.success('Fare group created successfully')
     }
-    handleCloseDialog()
+
+    closeDialog()
   }
 
-  const handleEdit = (group: FareGroup) => {
-    setEditingGroup(group)
-    setFormData({
-      name: group.name,
-      description: group.description,
-      type: group.type,
-      isDefault: group.isDefault,
-    })
-    setIsDialogOpen(true)
-  }
-
-  const handleDelete = (id: string) => {
-    const clientsUsingGroup = b2bClients.filter(c => c.fareGroupId === id)
+  const handleDelete = (fareGroup: FareGroup) => {
+    const clientsUsingGroup = b2bClients.filter((client) => client.fareGroupId === fareGroup.id)
     if (clientsUsingGroup.length > 0) {
       toast.error('Cannot delete fare group assigned to B2B clients')
       return
     }
-    deleteFareGroup(id)
+    if (fareGroup.isDefault) {
+      toast.error('Default fare group cannot be deleted')
+      return
+    }
+
+    deleteFareGroup(fareGroup.id)
     toast.success('Fare group deleted successfully')
   }
 
-  const handleCloseDialog = () => {
-    setIsDialogOpen(false)
-    setEditingGroup(null)
-    setFormData(initialFormData)
-  }
-
-  const getClientsCount = (groupId: string) => {
-    return b2bClients.filter(c => c.fareGroupId === groupId).length
-  }
-
-  const getFaresCount = (group: FareGroup) => {
-    return (
-      group.airportFares.length +
-      group.rentalFares.length +
-      group.cityRideFares.length +
-      group.outstationFares.length +
-      (group.railwayFares?.length || 0)
-    )
-  }
-
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Fare Groups</h1>
-          <p className="text-muted-foreground">Create and manage fare groups for B2C and B2B clients</p>
-        </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => setFormData(initialFormData)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Fare Group
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editingGroup ? 'Edit Fare Group' : 'Create New Fare Group'}</DialogTitle>
-              <DialogDescription>
-                {editingGroup ? 'Update fare group details' : 'Create a new fare group for B2C or B2B pricing'}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit}>
-              <div className="grid gap-4 py-4">
-                <Field>
-                  <FieldLabel>Group Name</FieldLabel>
-                  <Input
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="e.g., Corporate Premium Rates"
-                    required
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel>Description</FieldLabel>
-                  <Textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Brief description of this fare group"
-                    rows={2}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel>Group Type</FieldLabel>
-                  <Select
-                    value={formData.type}
-                    onValueChange={(value: 'B2C' | 'B2B') => setFormData({ ...formData, type: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="B2C">
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4" />
-                          <span>B2C (Direct Customers)</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="B2B">
-                        <div className="flex items-center gap-2">
-                          <Building2 className="h-4 w-4" />
-                          <span>B2B (Corporate Clients)</span>
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </Field>
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={handleCloseDialog}>
-                  Cancel
-                </Button>
-                <Button type="submit">
-                  {editingGroup ? 'Update Group' : 'Create Group'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+    <div className="min-h-screen bg-[#F8F9FA] -m-6 p-6 font-sans text-gray-900 antialiased sm:p-8">
+      <div className="mx-auto max-w-[1400px] space-y-8">
+        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-950">Fare Groups</h1>
+            <p className="mt-1 text-xs text-gray-500 sm:text-sm">
+              Create and manage fare groups for B2C and B2B clients.
+            </p>
+          </div>
 
-      {/* B2C Groups */}
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <Users className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-semibold">B2C Fare Groups</h2>
-          <Badge variant="secondary">{b2cGroups.length}</Badge>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <button
+                type="button"
+                onClick={openCreateDialog}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#22C55E] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-[#16A34A] active:bg-[#15803D] sm:w-auto"
+              >
+                <Plus className="h-4 w-4" />
+                Create Fare Group
+              </button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{editingFareGroup ? 'Edit Fare Group' : 'Create Fare Group'}</DialogTitle>
+                <DialogDescription>
+                  Create and manage fare groups for B2C and B2B clients.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSubmit}>
+                <div className="grid gap-4 py-4">
+                  <Field>
+                    <FieldLabel>Group Name</FieldLabel>
+                    <Input
+                      value={formData.name}
+                      onChange={(event) => setFormData({ ...formData, name: event.target.value })}
+                      placeholder="e.g., MMT"
+                      required
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Description</FieldLabel>
+                    <Textarea
+                      value={formData.description}
+                      onChange={(event) => setFormData({ ...formData, description: event.target.value })}
+                      placeholder="Brief description of this fare group"
+                      rows={2}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Group Type</FieldLabel>
+                    <Select
+                      value={formData.type}
+                      onValueChange={(value) => setFormData({ ...formData, type: value as FareGroupFormData['type'] })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="B2C">B2C</SelectItem>
+                        <SelectItem value="B2B">B2B</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={closeDialog}>
+                    Cancel
+                  </Button>
+                  <Button type="submit">{editingFareGroup ? 'Update Group' : 'Create Group'}</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {b2cGroups.length === 0 ? (
-            <Card className="col-span-full">
-              <CardContent className="flex flex-col items-center justify-center py-8">
-                <Users className="h-12 w-12 text-muted-foreground/50 mb-2" />
-                <p className="text-muted-foreground">No B2C fare groups yet</p>
-                <p className="text-sm text-muted-foreground">Create one to configure pricing for direct customers</p>
-              </CardContent>
-            </Card>
-          ) : (
-            b2cGroups.map((group) => (
-              <FareGroupCard
-                key={group.id}
-                group={group}
-                faresCount={getFaresCount(group)}
-                clientsCount={0}
-                onEdit={() => handleEdit(group)}
-                onDelete={() => handleDelete(group.id)}
-              />
-            ))
-          )}
-        </div>
-      </div>
 
-      {/* B2B Groups */}
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <Building2 className="h-5 w-5 text-accent" />
-          <h2 className="text-lg font-semibold">B2B Fare Groups</h2>
-          <Badge variant="secondary">{b2bGroups.length}</Badge>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {b2bGroups.length === 0 ? (
-            <Card className="col-span-full">
-              <CardContent className="flex flex-col items-center justify-center py-8">
-                <Building2 className="h-12 w-12 text-muted-foreground/50 mb-2" />
-                <p className="text-muted-foreground">No B2B fare groups yet</p>
-                <p className="text-sm text-muted-foreground">Create one to configure special pricing for corporate clients</p>
-              </CardContent>
-            </Card>
-          ) : (
-            b2bGroups.map((group) => (
-              <FareGroupCard
-                key={group.id}
-                group={group}
-                faresCount={getFaresCount(group)}
-                clientsCount={getClientsCount(group.id)}
-                onEdit={() => handleEdit(group)}
-                onDelete={() => handleDelete(group.id)}
-              />
-            ))
-          )}
+        <div className="space-y-8">
+          <FareGroupSection
+            title="B2C Fare Groups"
+            icon={Users}
+            count={b2cGroups.length}
+            fareGroups={b2cGroups}
+            onEdit={openEditDialog}
+            onDelete={handleDelete}
+          />
+
+          <FareGroupSection
+            title="B2B Fare Groups"
+            icon={Building2}
+            count={b2bGroups.length}
+            fareGroups={b2bGroups}
+            onEdit={openEditDialog}
+            onDelete={handleDelete}
+          />
         </div>
       </div>
     </div>
   )
 }
 
-function FareGroupCard({
-  group,
-  faresCount,
-  clientsCount,
+function FareGroupSection({
+  title,
+  icon: Icon,
+  count,
+  fareGroups,
   onEdit,
   onDelete,
 }: {
-  group: FareGroup
-  faresCount: number
-  clientsCount: number
+  title: string
+  icon: ComponentType<{ className?: string }>
+  count: number
+  fareGroups: FareGroup[]
+  onEdit: (fareGroup: FareGroup) => void
+  onDelete: (fareGroup: FareGroup) => void
+}) {
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center gap-2.5">
+        <Icon className="h-4 w-4 text-gray-600" />
+        <h2 className="text-base font-bold text-gray-900">{title}</h2>
+        <span className="ml-0.5 text-xs font-medium text-gray-500">{count}</span>
+      </div>
+
+      {fareGroups.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-6 py-10 text-center">
+          <p className="text-sm text-gray-500">No {title.toLowerCase()} yet.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {fareGroups.map((fareGroup) => (
+            <FareGroupCard
+              key={fareGroup.id}
+              fareGroup={fareGroup}
+              onEdit={() => onEdit(fareGroup)}
+              onDelete={() => onDelete(fareGroup)}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function FareGroupCard({
+  fareGroup,
+  onEdit,
+  onDelete,
+}: {
+  fareGroup: FareGroup
   onEdit: () => void
   onDelete: () => void
 }) {
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2">
-            {group.isDefault && (
-              <Star className="h-4 w-4 text-warning fill-warning" />
-            )}
-            <CardTitle className="text-base">{group.name}</CardTitle>
+    <div className="flex min-h-[160px] flex-col justify-between rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+      <div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate text-sm font-bold tracking-wide text-gray-900">{fareGroup.name}</h3>
+            <p className="mt-0.5 truncate font-mono text-[11px] text-gray-500">
+              {makeFareGroupCode(fareGroup)}
+            </p>
           </div>
-          <Badge variant={group.type === 'B2C' ? 'default' : 'secondary'}>
-            {group.type}
-          </Badge>
+          <span className="shrink-0 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-[10px] font-semibold text-gray-600">
+            {fareGroup.type}
+          </span>
         </div>
-        <CardDescription className="line-clamp-2">
-          {group.description || 'No description'}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
-          <span>{faresCount} fare config{faresCount !== 1 ? 's' : ''}</span>
-          {group.type === 'B2B' && (
-            <span>{clientsCount} client{clientsCount !== 1 ? 's' : ''}</span>
+
+        <div className="mt-3">
+          {fareGroup.description ? (
+            <p className="line-clamp-2 text-xs text-gray-600">{fareGroup.description}</p>
+          ) : (
+            <p className="text-xs italic text-gray-400">No description</p>
           )}
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="flex-1" asChild>
-            <Link href={`/fare-groups/${group.id}`}>
-              <Settings2 className="mr-2 h-4 w-4" />
-              Configure Fares
-            </Link>
-          </Button>
-          <Button variant="ghost" size="icon" onClick={onEdit}>
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="icon" disabled={clientsCount > 0 || group.isDefault}>
-                <Trash2 className={`h-4 w-4 ${clientsCount > 0 || group.isDefault ? 'text-muted-foreground' : 'text-destructive'}`} />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Fare Group</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to delete {group.name}? This will remove all fare configurations in this group.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={onDelete}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      <div className="mt-auto flex items-center gap-2 pt-4">
+        <Link
+          href={`/fare-groups/${fareGroup.id}`}
+          className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-gray-300 bg-white px-4 py-2 text-xs font-semibold text-gray-800 transition-colors hover:bg-gray-50"
+        >
+          <Settings2 className="h-4 w-4" />
+          Configure Fares
+        </Link>
+
+        <button
+          type="button"
+          onClick={onEdit}
+          className="rounded-full p-2.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+          title="Edit"
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
+
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <button
+              type="button"
+              className="rounded-full p-2.5 text-red-400 transition-colors hover:bg-red-50 hover:text-red-600"
+              title="Delete"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Fare Group</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete "{fareGroup.name}"?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={onDelete}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </div>
   )
 }
