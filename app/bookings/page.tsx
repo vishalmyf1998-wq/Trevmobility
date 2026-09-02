@@ -976,24 +976,31 @@ export default function BookingsPage() {
     const selectedFareGroup = selectedB2BClient?.fareGroupId ? fareGroups.find(fg => fg.id === selectedB2BClient.fareGroupId) : null
 
     return (
-        <div className="min-h-screen bg-[#f7f7f7] flex">
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50 flex">
             {/* Sidebar */}
-            <div className="w-72 bg-white border-r border-gray-200 p-6">
-              <div className="mb-6">
-                <h1 className="text-xl font-bold text-gray-900">New Booking</h1>
-                <p className="text-sm text-gray-500 mt-1">Create a new ride booking</p>
+            <div className="w-72 bg-gradient-to-b from-slate-900 to-slate-800 text-white p-6 shadow-2xl">
+              <div className="mb-8">
+                <div className="flex items-center gap-3 mb-1">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
+                    <Car className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h1 className="text-lg font-bold text-white">New Booking</h1>
+                    <p className="text-xs text-slate-400">Create a new ride</p>
+                  </div>
+                </div>
               </div>
 
               {/* Booking Type Selector */}
-              <div className="mb-6">
-                <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">Booking Type</Label>
+              <div className="mb-8">
+                <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-3 block">Booking Type</Label>
                 <div className="space-y-2">
                   <button
                     onClick={() => setBookingType("trev")}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all ${
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 ${
                       bookingType === "trev"
-                        ? "bg-blue-50 text-blue-700 border border-blue-200"
-                        : "text-gray-500 hover:bg-gray-50 border border-transparent"
+                        ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/30 border border-indigo-400/50"
+                        : "text-slate-300 hover:bg-slate-800/60 border border-transparent hover:text-white"
                     }`}
                   >
                     <User className="h-4 w-4" />
@@ -1001,10 +1008,10 @@ export default function BookingsPage() {
                   </button>
                   <button
                     onClick={() => setBookingType("business")}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all ${
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 ${
                       bookingType === "business"
-                        ? "bg-blue-50 text-blue-700 border border-blue-200"
-                        : "text-gray-500 hover:bg-gray-50 border border-transparent"
+                        ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/30 border border-indigo-400/50"
+                        : "text-slate-300 hover:bg-slate-800/60 border border-transparent hover:text-white"
                     }`}
                   >
                     <Building2 className="h-4 w-4" />
@@ -1012,10 +1019,10 @@ export default function BookingsPage() {
                   </button>
                   <button
                     onClick={() => setBookingType("recurring")}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all ${
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 ${
                       bookingType === "recurring"
-                        ? "bg-blue-50 text-blue-700 border border-blue-200"
-                        : "text-gray-500 hover:bg-gray-50 border border-transparent"
+                        ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/30 border border-indigo-400/50"
+                        : "text-slate-300 hover:bg-slate-800/60 border border-transparent hover:text-white"
                     }`}
                   >
                     <Repeat className="h-4 w-4" />
@@ -1025,8 +1032,8 @@ export default function BookingsPage() {
               </div>
 
               {/* Progress Steps */}
-              <nav className="space-y-2">
-                <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">Steps</Label>
+              <nav className="space-y-3">
+                <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-3 block">Progress</Label>
                 {steps.map((s, index) => {
                   const Icon = s.icon;
                   const isActive = step === s.id;
@@ -1037,40 +1044,44 @@ export default function BookingsPage() {
                       onClick={() => {
                         if (isCompleted || s.id === 1) setStep(s.id);
                       }}
-                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all ${
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 ${
                         isActive
-                          ? "bg-blue-50 text-blue-700 border border-blue-200"
+                          ? "bg-white/80 backdrop-blur-sm/10 text-white border border-white/20 shadow-lg"
                           : isCompleted
-                          ? "bg-green-50 text-green-700 border border-green-200"
-                          : "text-gray-500 hover:bg-gray-50 border border-transparent"
+                          ? "text-emerald-400 hover:bg-white/80 backdrop-blur-sm/5 border border-transparent"
+                          : "text-slate-400 hover:bg-slate-800/40 border border-transparent"
                       }`}
                     >
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        isActive ? "bg-blue-500 text-white" : isCompleted ? "bg-green-500 text-white" : "bg-gray-200 text-gray-500"
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                        isActive ? "bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-md" : isCompleted ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-700/50 text-slate-400"
                       }`}>
                         {isCompleted ? <CheckCircle className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
                       </div>
                       <span className="font-medium text-sm">{s.label}</span>
+                      {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />}
                     </button>
                   );
                 })}
               </nav>
+
+              {/* Bottom accent */}
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
             </div>
 
-            {/* Main Content */}
-            <div className="flex-1 p-8">
-              <form onSubmit={handleSubmit}>
+             {/* Main Content */}
+             <div className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-slate-50 via-white to-indigo-50/30">
+               <form onSubmit={handleSubmit}>
                 {step === 1 && (
                   <div className="max-w-2xl">
                     <div className="mb-6">
-                      <h2 className="text-2xl font-bold text-gray-900">
+                      <h2 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
                         {bookingType === "business" ? "Business Customer" : "Customer Information"}
                       </h2>
-                      <p className="text-gray-500 mt-1">
+                      <p className="text-slate-500 mt-1">
                         {bookingType === "business" ? "Select B2B client and employee" : "Enter the customer details for this booking"}
                       </p>
                     </div>
-                    <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+                    <div className="bg-white/80 backdrop-blur-sm/80 backdrop-blur-sm rounded-2xl border border-slate-200/60 shadow-lg shadow-slate-200/20 p-6 space-y-4">
                       {bookingType === "business" ? (
                         <>
                            <Field>
@@ -1179,15 +1190,15 @@ export default function BookingsPage() {
                                  </PopoverContent>
                                </Popover>
                              </Field>
-                            <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-3">
+                            <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white/80 backdrop-blur-sm p-3">
                               <div>
-                                <p className="text-sm font-medium text-gray-900">Use custom customer</p>
-                                <p className="text-xs text-gray-500">Override auto-filled employee details</p>
+                                <p className="text-sm font-medium text-slate-900">Use custom customer</p>
+                                <p className="text-xs text-slate-500">Override auto-filled employee details</p>
                               </div>
                               <Switch checked={useCustomB2BCustomer} onCheckedChange={setUseCustomB2BCustomer} />
                             </div>
                             {useCustomB2BCustomer && (
-                              <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
+                              <div className="rounded-lg border border-slate-200 bg-white/80 backdrop-blur-sm p-4 space-y-4">
                                 <FieldGroup className="grid grid-cols-2 gap-4">
                                   <Field>
                                     <FieldLabel>Customer Name *</FieldLabel>
@@ -1209,19 +1220,19 @@ export default function BookingsPage() {
                               </div>
                             )}
                             {selectedB2BClient ? (
-                              <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-4 space-y-2">
-                                <div className="flex items-center gap-2 text-sm font-semibold text-blue-900">
+                              <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-4 space-y-2">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-indigo-900">
                                   <Building2 className="h-4 w-4" />
                                   {selectedB2BClient.companyName}
                                 </div>
-                                <div className="grid grid-cols-2 gap-2 text-xs text-gray-700">
-                                  <div><span className="text-gray-500">Contact:</span> {selectedB2BClient.contactPerson}</div>
-                                  <div><span className="text-gray-500">Fare Group:</span> {selectedFareGroup?.name || 'Default'}</div>
-                                  <div><span className="text-gray-500">Credit Limit:</span> ₹{selectedB2BClient.creditLimit?.toLocaleString() || 0}</div>
-                                  <div><span className="text-gray-500">Balance:</span> ₹{selectedB2BClient.currentBalance?.toLocaleString() || 0}</div>
-                                  <div><span className="text-gray-500">Payment:</span> {selectedB2BClient.paymentModel?.replace('_', ' ') || 'N/A'}</div>
-                                  <div><span className="text-gray-500">GST:</span> {selectedB2BClient.isGSTEnabled ? 'Enabled' : 'Disabled'}</div>
-                                  {selectedB2BEmployee && <div className="col-span-2"><span className="text-gray-500">Cost Centre:</span> {selectedB2BEmployee.costCentre || 'N/A'}</div>}
+                                <div className="grid grid-cols-2 gap-2 text-xs text-slate-700">
+                                  <div><span className="text-slate-500">Contact:</span> {selectedB2BClient.contactPerson}</div>
+                                  <div><span className="text-slate-500">Fare Group:</span> {selectedFareGroup?.name || 'Default'}</div>
+                                  <div><span className="text-slate-500">Credit Limit:</span> ₹{selectedB2BClient.creditLimit?.toLocaleString() || 0}</div>
+                                  <div><span className="text-slate-500">Balance:</span> ₹{selectedB2BClient.currentBalance?.toLocaleString() || 0}</div>
+                                  <div><span className="text-slate-500">Payment:</span> {selectedB2BClient.paymentModel?.replace('_', ' ') || 'N/A'}</div>
+                                  <div><span className="text-slate-500">GST:</span> {selectedB2BClient.isGSTEnabled ? 'Enabled' : 'Disabled'}</div>
+                                  {selectedB2BEmployee && <div className="col-span-2"><span className="text-slate-500">Cost Centre:</span> {selectedB2BEmployee.costCentre || 'N/A'}</div>}
                                 </div>
                               </div>
                             ) : null}
@@ -1279,9 +1290,9 @@ export default function BookingsPage() {
                         </>
                       )}
                       <div className="flex justify-end pt-4">
-                        <Button type="button" onClick={handleNextStep} disabled={!isStep1Valid} size="lg">
-                          Next: Trip Details <ArrowRight className="ml-2 h-4 w-4" />
-                        </Button>
+                         <Button type="button" onClick={handleNextStep} disabled={!isStep1Valid} size="lg" className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/30">
+                           Next: Trip Details <ArrowRight className="ml-2 h-4 w-4" />
+                         </Button>
                       </div>
                     </div>
                   </div>
@@ -1290,16 +1301,16 @@ export default function BookingsPage() {
                 {step === 2 && (
                   <div className="max-w-2xl">
                     <div className="mb-6">
-                      <h2 className="text-2xl font-bold text-gray-900">Trip Details</h2>
-                      <p className="text-gray-500 mt-1">
+                      <h2 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Trip Details</h2>
+                      <p className="text-slate-500 mt-1">
                         {bookingType === "recurring" ? "Set up your recurring schedule" : "Select date and time for your trip"}
                       </p>
                     </div>
-                    <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-6">
+                     <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200/60 shadow-lg shadow-slate-200/20 p-6 space-y-6">
                       {bookingType === "recurring" ? (
                         <>
                           <div className="space-y-4">
-                            <h4 className="text-sm font-medium text-gray-700 mb-2">Recurring Schedule</h4>
+                            <h4 className="text-sm font-medium text-slate-700 mb-2">Recurring Schedule</h4>
                             <Field>
                               <FieldLabel>Frequency</FieldLabel>
                               <Select value={recurringSettings?.frequency || "daily"} onValueChange={(value) => setRecurringSettings(prev => ({ ...prev, frequency: value as any }))}>
@@ -1325,11 +1336,11 @@ export default function BookingsPage() {
                                         const newDays = days.includes(day) ? days.filter(d => d !== day) : [...days, day];
                                         setRecurringSettings(prev => ({ ...prev, selectedDays: newDays }));
                                       }}
-                                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                                        (recurringSettings?.selectedDays || []).includes(day)
-                                          ? "bg-blue-500 text-white"
-                                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                                      }`}
+                                       className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                                         (recurringSettings?.selectedDays || []).includes(day)
+                                           ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md"
+                                           : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                       }`}
                                     >
                                       {day}
                                     </button>
@@ -1354,10 +1365,10 @@ export default function BookingsPage() {
                               <Input type="time" value={formData.pickupTime} onChange={e => setFormData({...formData, pickupTime: e.target.value})} />
                             </Field>
                             <Field>
-                              <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-3 mt-6">
+                              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white/80 backdrop-blur-sm p-3 mt-6">
                                 <div>
-                                  <p className="text-sm font-medium text-gray-900">Return also required?</p>
-                                  <p className="text-xs text-gray-500">Enable if you need a return trip</p>
+                                  <p className="text-sm font-medium text-slate-900">Return also required?</p>
+                                  <p className="text-xs text-slate-500">Enable if you need a return trip</p>
                                 </div>
                                 <Switch checked={returnRequired} onCheckedChange={setReturnRequired} />
                               </div>
@@ -1404,7 +1415,7 @@ export default function BookingsPage() {
                           bookingType === "recurring"
                             ? !recurringSettings?.frequency || !recurringSettings?.startDate || !recurringSettings?.endDate || !formData.pickupTime || (returnRequired && !(formData as any).returnTime)
                             : !formData.pickupDate || !formData.pickupTime
-                        } size="lg">
+                        } size="lg" className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/30">
                           Next: Select Car <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                       </div>
@@ -1415,14 +1426,14 @@ export default function BookingsPage() {
                 {step === 3 && (
                   <div className="max-w-3xl">
                     <div className="mb-6">
-                      <h2 className="text-2xl font-bold text-gray-900">
+                      <h2 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
                         {bookingType === "recurring" ? "Select Fare & Car" : "Select Car"}
                       </h2>
-                      <p className="text-gray-500 mt-1">
+                      <p className="text-slate-500 mt-1">
                         {bookingType === "recurring" ? "Choose a fare group, then select a car category" : "Choose a car category for your trip"}
                       </p>
                     </div>
-                    <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-6">
+                     <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200/60 shadow-lg shadow-slate-200/20 p-6 space-y-6">
                       {bookingType === "recurring" && (
                         <Field>
                           <FieldLabel>Fare Group *</FieldLabel>
@@ -1444,7 +1455,7 @@ export default function BookingsPage() {
                         </Field>
                       )}
                       <div>
-                        <h4 className="text-sm font-medium text-gray-700 mb-3">Select Car Category</h4>
+                        <h4 className="text-sm font-medium text-slate-700 mb-3">Select Car Category</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                           {carCategories.map(cat => {
                             const isSelected = formData.carCategoryId === cat.id;
@@ -1453,21 +1464,21 @@ export default function BookingsPage() {
                                 key={cat.id}
                                 type="button"
                                 onClick={() => setFormData({...formData, carCategoryId: cat.id})}
-                                className={`p-6 rounded-2xl border-2 text-left transition-all ${
+                                className={`p-6 rounded-2xl border-2 text-left transition-all duration-200 ${
                                   isSelected
-                                    ? "border-blue-500 bg-blue-50 shadow-lg"
-                                    : "border-gray-200 bg-white hover:border-gray-300 hover:shadow"
+                                    ? "border-indigo-500 bg-indigo-50 shadow-lg shadow-indigo-500/20"
+                                    : "border-slate-200 bg-white/80 backdrop-blur-sm hover:border-indigo-300 hover:shadow-lg hover:shadow-indigo-500/10"
                                 }`}
                               >
                                 <div className="flex items-center justify-between mb-3">
-                                  <Car className={`h-8 w-8 ${isSelected ? "text-blue-500" : "text-gray-400"}`} />
-                                  {isSelected && <CheckCircle className="h-5 w-5 text-blue-500" />}
+                                  <Car className={`h-8 w-8 ${isSelected ? "text-indigo-500" : "text-slate-400"}`} />
+                                  {isSelected && <CheckCircle className="h-5 w-5 text-indigo-500" />}
                                 </div>
-                                <h3 className="font-semibold text-gray-900">{cat.name}</h3>
-                                <p className="text-sm text-gray-500 mt-1">{cat.description || "Standard sedan"}</p>
-                                <div className="mt-4 pt-4 border-t border-gray-200">
-                                  <span className="text-2xl font-bold text-gray-900">₹ {formData.estimatedFare > 0 ? formData.estimatedFare.toFixed(0) : "---"}</span>
-                                  <span className="text-sm text-gray-500 ml-1">est.</span>
+                                <h3 className="font-semibold text-slate-900">{cat.name}</h3>
+                                <p className="text-sm text-slate-500 mt-1">{cat.description || "Standard sedan"}</p>
+                                <div className="mt-4 pt-4 border-t border-slate-200">
+                                  <span className="text-2xl font-bold text-slate-900">₹ {formData.estimatedFare > 0 ? formData.estimatedFare.toFixed(0) : "---"}</span>
+                                  <span className="text-sm text-slate-500 ml-1">est.</span>
                                 </div>
                               </button>
                             );
@@ -1482,7 +1493,7 @@ export default function BookingsPage() {
                           bookingType === "recurring"
                             ? !formData.fareGroupId || !formData.carCategoryId
                             : !formData.carCategoryId
-                        } size="lg">
+                        } size="lg" className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/30">
                           Next: Review <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                       </div>
@@ -1493,38 +1504,38 @@ export default function BookingsPage() {
                 {step === 4 && (
                   <div className="max-w-2xl">
                     <div className="mb-6">
-                      <h2 className="text-2xl font-bold text-gray-900">Booking Summary</h2>
-                      <p className="text-gray-500 mt-1">Review all details before confirming</p>
+                      <h2 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Booking Summary</h2>
+                      <p className="text-slate-500 mt-1">Review all details before confirming</p>
                     </div>
-                    <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-6">
+                     <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200/60 shadow-lg shadow-slate-200/20 p-6 space-y-6">
                       <div className="grid grid-cols-2 gap-6">
                         {bookingType === "business" && b2bClientInfoCard}
                         <div>
-                          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Trip</h4>
+                          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Trip</h4>
                           <div className="space-y-2">
                             <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4 text-gray-400" />
-                              <span className="text-sm text-gray-900">{formData.pickupDate} at {formData.pickupTime}</span>
+                              <Calendar className="h-4 w-4 text-slate-400" />
+                              <span className="text-sm text-slate-900">{formData.pickupDate} at {formData.pickupTime}</span>
                             </div>
                             <div className="flex items-center gap-2">
-                              <MapPin className="h-4 w-4 text-gray-400" />
-                              <span className="text-sm text-gray-900">{formData.pickupLocation} → {formData.dropLocation}</span>
+                              <MapPin className="h-4 w-4 text-slate-400" />
+                              <span className="text-sm text-slate-900">{formData.pickupLocation} → {formData.dropLocation}</span>
                             </div>
                           </div>
                         </div>
                       </div>
-                      <div className="border-t border-gray-200 pt-6">
+                      <div className="border-t border-slate-200 pt-6">
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-3">
-                            <Car className="h-5 w-5 text-gray-400" />
-                            <span className="font-medium text-gray-900">{carCategories.find(c => c.id === formData.carCategoryId)?.name}</span>
+                            <Car className="h-5 w-5 text-slate-400" />
+                            <span className="font-medium text-slate-900">{carCategories.find(c => c.id === formData.carCategoryId)?.name}</span>
                           </div>
-                          <span className="text-2xl font-bold text-gray-900">₹ {formData.grandTotal.toFixed(2)}</span>
+                          <span className="text-2xl font-bold text-slate-900">₹ {formData.grandTotal.toFixed(2)}</span>
                         </div>
                         {formData.remarks && (
-                          <div className="flex items-start gap-2 bg-gray-50 rounded-lg p-3">
-                            <StickyNote className="h-4 w-4 text-gray-400 mt-0.5" />
-                            <span className="text-sm text-gray-600">{formData.remarks}</span>
+                          <div className="flex items-start gap-2 bg-slate-50 rounded-lg p-3">
+                            <StickyNote className="h-4 w-4 text-slate-400 mt-0.5" />
+                            <span className="text-sm text-slate-600">{formData.remarks}</span>
                           </div>
                         )}
                       </div>
@@ -1532,7 +1543,7 @@ export default function BookingsPage() {
                         <Button type="button" variant="outline" onClick={() => setStep(3)} size="lg">
                           <ArrowLeft className="mr-2 h-4 w-4" /> Back
                         </Button>
-                        <Button type="submit" size="lg" className="bg-green-600 hover:bg-green-700">
+                        <Button type="submit" size="lg" className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-lg shadow-emerald-500/30">
                           <CheckCircle className="mr-2 h-4 w-4" /> Confirm Booking
                         </Button>
                       </div>
