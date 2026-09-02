@@ -54,6 +54,7 @@ const initialFormData: BookingFormData = {
   carId: undefined,
   cityId: "",
   carCategoryId: "",
+  fareGroupId: "",
   tripType: "city_ride",
   airportId: undefined,
   airportTerminalId: undefined,
@@ -249,6 +250,10 @@ export default function BookingsPage() {
         }
         setStep(3);
       } else if (step === 3) {
+        if (!formData.cityId || !formData.fareGroupId || !formData.carCategoryId) {
+          toast.error("Please select city, fare group and car category")
+          return
+        }
         setStep(4);
       }
     };
@@ -327,10 +332,14 @@ export default function BookingsPage() {
       notes,
     })
 
-    const calculateFareFromConfig = useCallback((cityId: string, carCategoryId: string, tripType: string, clientType: "b2c" | "b2b", b2bClientId?: string, airportId?: string, airportTerminalId?: string) => {
+    const calculateFareFromConfig = useCallback((cityId: string, carCategoryId: string, tripType: string, clientType: "b2c" | "b2b", b2bClientId?: string, airportId?: string, airportTerminalId?: string, selectedFareGroupId?: string) => {
         let fareGroup = null
 
-        if (clientType === "b2b" && b2bClientId) {
+        if (selectedFareGroupId) {
+            fareGroup = fareGroups.find(fg => fg.id === selectedFareGroupId)
+        }
+
+        if (!fareGroup && clientType === "b2b" && b2bClientId) {
             const client = b2bClients.find(c => c.id === b2bClientId)
             if (client?.fareGroupId) {
                 fareGroup = fareGroups.find(fg => fg.id === client.fareGroupId)
@@ -459,7 +468,8 @@ export default function BookingsPage() {
             customerType,
             formData.b2bClientId,
             formData.airportId,
-            formData.airportTerminalId
+            formData.airportTerminalId,
+            formData.fareGroupId
             )
 
             let estimatedFare = 0
@@ -574,7 +584,7 @@ export default function BookingsPage() {
             grandTotal,
             }))
         }
-    }, [formData.cityId, formData.carCategoryId, formData.tripType, formData.pickupDate, formData.pickupTime, formData.returnDate, (formData as any).returnTime, formData.estimatedKm, (formData as any).isAutoSlotReturn, formData.b2bClientId, formData.airportId, formData.airportTerminalId, formData.promoCodeId, customerType, calculateFareFromConfig, getPromoEligibilityError, calculatePromoDiscount, promoCodes, gstConfig, b2bClients])
+    }, [formData.cityId, formData.carCategoryId, formData.tripType, formData.pickupDate, formData.pickupTime, formData.returnDate, (formData as any).returnTime, formData.estimatedKm, (formData as any).isAutoSlotReturn, formData.b2bClientId, formData.airportId, formData.airportTerminalId, formData.promoCodeId, formData.fareGroupId, customerType, calculateFareFromConfig, getPromoEligibilityError, calculatePromoDiscount, promoCodes, gstConfig, b2bClients])
 
     useEffect(() => {
         const actualPickup = formData.tripType === "airport_pickup"
@@ -1386,8 +1396,8 @@ export default function BookingsPage() {
                 {step === 3 && (
                   <div className="max-w-3xl">
                     <div className="mb-6">
-                      <h2 className="text-2xl font-bold text-gray-900">Select City & Car</h2>
-                      <p className="text-gray-500 mt-1">Choose city and car category to see available options</p>
+                      <h2 className="text-2xl font-bold text-gray-900">Select Fare & Car</h2>
+                      <p className="text-gray-500 mt-1">Choose a fare group, then select a car category</p>
                     </div>
                     <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-6">
                       <Field>
@@ -1403,42 +1413,70 @@ export default function BookingsPage() {
                           </SelectContent>
                         </Select>
                       </Field>
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-700 mb-3">Select Car Category</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {carCategories.map(cat => {
-                            const isSelected = formData.carCategoryId === cat.id;
-                            return (
-                              <button
-                                key={cat.id}
-                                type="button"
-                                onClick={() => setFormData({...formData, carCategoryId: cat.id})}
-                                className={`p-6 rounded-2xl border-2 text-left transition-all ${
-                                  isSelected
-                                    ? "border-blue-500 bg-blue-50 shadow-lg"
-                                    : "border-gray-200 bg-white hover:border-gray-300 hover:shadow"
-                                }`}
-                              >
-                                <div className="flex items-center justify-between mb-3">
-                                  <Car className={`h-8 w-8 ${isSelected ? "text-blue-500" : "text-gray-400"}`} />
-                                  {isSelected && <CheckCircle className="h-5 w-5 text-blue-500" />}
-                                </div>
-                                <h3 className="font-semibold text-gray-900">{cat.name}</h3>
-                                <p className="text-sm text-gray-500 mt-1">{cat.description || "Standard sedan"}</p>
-                                <div className="mt-4 pt-4 border-t border-gray-200">
-                                  <span className="text-2xl font-bold text-gray-900">₹ {formData.estimatedFare > 0 ? formData.estimatedFare.toFixed(0) : "---"}</span>
-                                  <span className="text-sm text-gray-500 ml-1">est.</span>
-                                </div>
-                              </button>
-                            );
-                          })}
+                      <Field>
+                        <FieldLabel>Fare Group *</FieldLabel>
+                        <Select value={formData.fareGroupId || ""} onValueChange={(value) => setFormData({...formData, fareGroupId: value, carCategoryId: ""})}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select fare group" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {fareGroups
+                              .filter(fg => {
+                                if (bookingType === "business") return fg.type === "B2B"
+                                if (bookingType === "recurring") return fg.type === "Recurring"
+                                return fg.type === "B2C"
+                              })
+                              .map(fg => (
+                                <SelectItem key={fg.id} value={fg.id}>{fg.name}</SelectItem>
+                              ))}
+                            {fareGroups.filter(fg => {
+                              if (bookingType === "business") return fg.type === "B2B"
+                              if (bookingType === "recurring") return fg.type === "Recurring"
+                              return fg.type === "B2C"
+                            }).length === 0 && (
+                              <div className="px-2 py-1.5 text-sm text-muted-foreground">No fare groups available</div>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      {formData.fareGroupId && (
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-700 mb-3">Select Car Category</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {carCategories.map(cat => {
+                              const isSelected = formData.carCategoryId === cat.id;
+                              return (
+                                <button
+                                  key={cat.id}
+                                  type="button"
+                                  onClick={() => setFormData({...formData, carCategoryId: cat.id})}
+                                  className={`p-6 rounded-2xl border-2 text-left transition-all ${
+                                    isSelected
+                                      ? "border-blue-500 bg-blue-50 shadow-lg"
+                                      : "border-gray-200 bg-white hover:border-gray-300 hover:shadow"
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between mb-3">
+                                    <Car className={`h-8 w-8 ${isSelected ? "text-blue-500" : "text-gray-400"}`} />
+                                    {isSelected && <CheckCircle className="h-5 w-5 text-blue-500" />}
+                                  </div>
+                                  <h3 className="font-semibold text-gray-900">{cat.name}</h3>
+                                  <p className="text-sm text-gray-500 mt-1">{cat.description || "Standard sedan"}</p>
+                                  <div className="mt-4 pt-4 border-t border-gray-200">
+                                    <span className="text-2xl font-bold text-gray-900">₹ {formData.estimatedFare > 0 ? formData.estimatedFare.toFixed(0) : "---"}</span>
+                                    <span className="text-sm text-gray-500 ml-1">est.</span>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
+                      )}
                       <div className="flex justify-between pt-4">
                         <Button type="button" variant="outline" onClick={() => setStep(2)} size="lg">
                           <ArrowLeft className="mr-2 h-4 w-4" /> Back
                         </Button>
-                        <Button type="button" onClick={handleNextStep} disabled={!formData.cityId || !formData.carCategoryId} size="lg">
+                        <Button type="button" onClick={handleNextStep} disabled={!formData.cityId || !formData.fareGroupId || !formData.carCategoryId} size="lg">
                           Next: Review <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                       </div>

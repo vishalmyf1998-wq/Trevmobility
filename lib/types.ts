@@ -547,6 +547,7 @@ export interface Booking {
   dropLatitude?: number
   dropLongitude?: number
   carCategoryId: string
+  fareGroupId?: string
   tripType: 'airport_pickup' | 'airport_drop' | 'rental' | 'city_ride' | 'outstation' | 'railway_pickup' | 'railway_drop'
   airportId?: string
   airportTerminalId?: string
