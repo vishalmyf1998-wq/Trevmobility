@@ -183,6 +183,15 @@ export default function BookingsPage() {
     }, [isB2BUser]);
 
     useEffect(() => {
+      if (!formData.cityId && cities.length > 0) {
+        const activeCity = cities.find(c => c.isActive) || cities[0]
+        if (activeCity) {
+          setFormData(prev => ({ ...prev, cityId: activeCity.id }))
+        }
+      }
+    }, [cities, formData.cityId]);
+
+    useEffect(() => {
       if (bookingType !== "recurring") {
         setFormData(prev => ({ ...prev, fareGroupId: "" }))
       }
@@ -256,8 +265,12 @@ export default function BookingsPage() {
         }
         setStep(3);
       } else if (step === 3) {
-        if (!formData.cityId || !formData.fareGroupId || !formData.carCategoryId) {
-          toast.error("Please select city, fare group and car category")
+        if (bookingType === "recurring" && (!formData.fareGroupId || !formData.carCategoryId)) {
+          toast.error("Please select fare group and car category")
+          return
+        }
+        if (bookingType !== "recurring" && !formData.carCategoryId) {
+          toast.error("Please select car category")
           return
         }
         setStep(4);
@@ -698,8 +711,8 @@ export default function BookingsPage() {
           toast.error("Please select a B2B employee")
           return
         }
-        if (!formData.cityId || !formData.carCategoryId) {
-          toast.error("Please select city and car category")
+        if (!formData.carCategoryId) {
+          toast.error("Please select car category")
           return
         }
         
@@ -836,8 +849,8 @@ export default function BookingsPage() {
         toast.error("Please select a B2B employee")
         return
       }
-      if (!formData.cityId || !formData.carCategoryId) {
-        toast.error("Please select city and car category")
+      if (!formData.carCategoryId) {
+        toast.error("Please select car category")
         return
       }
       if (isAirportTrip && (!formData.airportId || !formData.airportTerminalId)) {
@@ -1410,19 +1423,6 @@ export default function BookingsPage() {
                       </p>
                     </div>
                     <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-6">
-                      <Field>
-                        <FieldLabel>City *</FieldLabel>
-                        <Select value={formData.cityId} onValueChange={value => setFormData({...formData, cityId: value})}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select city" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {cities.map(city => (
-                              <SelectItem key={city.id} value={city.id}>{city.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </Field>
                       {bookingType === "recurring" && (
                         <Field>
                           <FieldLabel>Fare Group *</FieldLabel>
@@ -1480,8 +1480,8 @@ export default function BookingsPage() {
                         </Button>
                         <Button type="button" onClick={handleNextStep} disabled={
                           bookingType === "recurring"
-                            ? !formData.cityId || !formData.fareGroupId || !formData.carCategoryId
-                            : !formData.cityId || !formData.carCategoryId
+                            ? !formData.fareGroupId || !formData.carCategoryId
+                            : !formData.carCategoryId
                         } size="lg">
                           Next: Review <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
