@@ -1,0 +1,3 @@
+The URL for the admin dashboard is:
+
+http://localhost:3000/admin

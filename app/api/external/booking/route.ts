@@ -45,6 +45,8 @@ export async function POST(req: Request) {
       dropLocation: body.dropLocation,
       pickupDate: body.pickupDate,
       pickupTime: body.pickupTime,
+      returnDate: body.returnDate || null,
+      returnTime: body.returnTime || null,
       isAutoSlotReturn: body.isAutoSlotReturn || body.autoSlotReturn || false,
       returnDiscountAmount: body.returnDiscountAmount || 0,
       returnDiscountLabel: body.returnDiscountLabel || null,

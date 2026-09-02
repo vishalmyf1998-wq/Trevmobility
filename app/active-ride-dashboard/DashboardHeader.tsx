@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Download, RefreshCw, Search, Settings } from "lucide-react";
 import Link from "next/link";
 
-export function DashboardHeader({
+export function ControlCenterHeader({
   isRefreshing,
   handleRefresh,
   statusFilter,
@@ -71,7 +71,7 @@ export function DashboardHeader({
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Active Rides</h1>
+          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Control Center</h1>
           <p className="text-slate-500 text-sm">Real-time operational dashboard</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">

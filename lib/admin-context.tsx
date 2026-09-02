@@ -279,7 +279,7 @@ const initialFareGroups: FareGroup[] = [
       { id: 'demo-cityfare-1', cityId: 'demo-city-mumbai', carCategoryId: 'demo-cat-sedan', calculationType: 'per_km', perKmRate: 18, peakHour: defaultPeakHour, nightCharge: defaultNightCharge, baseFare: 199, minimumFare: 299, perMinuteRate: 2, freeWaitingMinutes: 10 },
     ],
     outstationFares: [
-      { id: 'demo-outstation-1', cityId: 'demo-city-mumbai', carCategoryId: 'demo-cat-sedan', outstationType: 'one_way', calculationType: 'per_km', baseFare: 1200, oneWayPerKmRate: 22, roundTripPerKmRate: 18, driverAllowancePerDay: 500, nightHaltCharge: 800, peakHour: defaultPeakHour, nightCharge: defaultNightCharge, minimumKmPerDay: 250, freeWaitingMinutes: 15, autoSlotReturn: { enabled: true, bufferMinutes: 60, discountEnabled: true, discountType: 'percentage', discountValue: 15, maxDiscount: 1000 } },
+      { id: 'demo-outstation-1', cityId: 'demo-city-mumbai', carCategoryId: 'demo-cat-sedan', outstationType: 'one_way', calculationType: 'per_km', baseFare: 1200, oneWayPerKmRate: 22, roundTripPerKmRate: 18, dayCalculationMethod: 'calendar_day_night_grace', graceEndTime: '04:00', extraHourCharge: 200, driverAllowanceCalculationMethod: 'per_chargeable_day', driverAllowancePerDay: 500, nightHaltCharge: 800, peakHour: defaultPeakHour, nightCharge: defaultNightCharge, minimumKmPerDay: 250, freeWaitingMinutes: 15, autoSlotReturn: { enabled: true, bufferMinutes: 60, discountEnabled: true, discountType: 'percentage', discountValue: 15, maxDiscount: 1000 } },
     ],
     createdAt: demoNow,
   },

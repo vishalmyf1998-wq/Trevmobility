@@ -41,6 +41,7 @@ interface DashboardHeaderProps {
     priority: number;
     lowSoc: number;
     loginDelay: number;
+    freeDrivers: number;
   };
   lastAllocationTime: Date | null;
   nextAllocationTime: Date | null;
@@ -197,6 +198,9 @@ export function DashboardHeader({
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setStatusFilter('login_delay')} className={`h-8 px-4 rounded-full text-[15px] font-bold transition-all duration-300 ${statusFilter === 'login_delay' ? 'bg-sky-500 text-white shadow-md shadow-sky-500/25' : 'bg-white/40 text-sky-700 hover:bg-white/80 border border-sky-200 backdrop-blur-md shadow-sm'}`}>
               Login Delay <Badge variant="secondary" className={`ml-1.5 px-1.5 min-w-[20px] rounded-full border-none ${statusFilter === 'login_delay' ? 'bg-white/30 text-white' : 'bg-sky-100 text-sky-800'}`}>{counts.loginDelay}</Badge>
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setStatusFilter('free_drivers')} className={`h-8 px-4 rounded-full text-[15px] font-bold transition-all duration-300 ${statusFilter === 'free_drivers' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25' : 'bg-white/40 text-emerald-700 hover:bg-white/80 border border-emerald-200 backdrop-blur-md shadow-sm'}`}>
+              Free Drivers <Badge variant="secondary" className={`ml-1.5 px-1.5 min-w-[20px] rounded-full border-none ${statusFilter === 'free_drivers' ? 'bg-white/30 text-white' : 'bg-emerald-100 text-emerald-800'}`}>{counts.freeDrivers}</Badge>
             </Button>
           </div>
         </div>

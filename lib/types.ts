@@ -265,6 +265,8 @@ export type FareCalculationType = 'fixed' | 'slab' | 'per_km'
 export type ChargeType = 'flat' | 'percentage'
 export type RentalType = 'with_capping' | 'without_capping'
 export type OutstationType = 'one_way' | 'round_trip' | 'route_wise'
+export type OutstationDayCalculationMethod = 'calendar_day_night_grace' | 'rolling_24_hours' | 'strict_calendar_day'
+export type DriverAllowanceCalculationMethod = 'per_chargeable_day' | 'per_overnight_halt' | 'fixed_per_trip'
 
 export interface SlabConfig {
   id: string
@@ -420,6 +422,10 @@ export interface OutstationFareConfig {
   oneWayPerKmRate?: number
   roundTripPerKmRate?: number
   routes?: RouteConfig[]
+  dayCalculationMethod?: OutstationDayCalculationMethod
+  graceEndTime?: string
+  extraHourCharge?: number
+  driverAllowanceCalculationMethod?: DriverAllowanceCalculationMethod
   driverAllowancePerDay: number
   nightHaltCharge: number
   peakHour: PeakHourConfig
@@ -444,7 +450,7 @@ export interface FareGroup {
   id: string
   name: string
   description: string
-  type: 'B2C' | 'B2B'
+  type: 'B2C' | 'B2B' | 'Recurring'
   isDefault: boolean
   airportFares: AirportFareConfig[]
   railwayFares: RailwayFareConfig[]
@@ -553,6 +559,7 @@ export interface Booking {
   pickupDate: string
   pickupTime: string
   returnDate?: string
+  returnTime?: string
   isAutoSlotReturn?: boolean
   returnDiscountAmount?: number
   returnDiscountLabel?: string
@@ -703,3 +710,11 @@ export interface B2BApprovalRule {
   isActive: boolean;
   createdAt: string;
 }
+
+export type RecurringSettings = {
+  frequency: 'daily' | 'weekly' | 'custom'
+  selectedDays: string[]
+  startDate: Date
+  endDate: Date
+}
+
