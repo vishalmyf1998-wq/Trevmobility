@@ -157,6 +157,7 @@ export default function BookingsPage() {
     const [b2bClientSearchOpen, setB2bClientSearchOpen] = useState(false)
     const [employeeSearch, setEmployeeSearch] = useState("")
     const [employeeSearchOpen, setEmployeeSearchOpen] = useState(false)
+    const [returnRequired, setReturnRequired] = useState(false)
     const customerType = useMemo(() => (bookingType === 'business' || bookingType === 'recurring' ? 'b2b' : 'b2c'), [bookingType]);
 
     const [b2cSearchQuery, setB2cSearchQuery] = useState("")
@@ -230,7 +231,22 @@ export default function BookingsPage() {
     const handleNextStep = () => {
       if (step === 1 && isStep1Valid) {
         setStep(2);
-      } else if (step === 2 && formData.pickupDate && formData.pickupTime) {
+      } else if (step === 2) {
+        if (bookingType === "recurring") {
+          if (!recurringSettings?.frequency || !recurringSettings?.startDate || !recurringSettings?.endDate || !formData.pickupTime) {
+            toast.error("Please fill all recurring schedule fields")
+            return
+          }
+          if (returnRequired && !(formData as any).returnTime) {
+            toast.error("Please set return time")
+            return
+          }
+        } else {
+          if (!formData.pickupDate || !formData.pickupTime) {
+            toast.error("Please select pickup date and time")
+            return
+          }
+        }
         setStep(3);
       } else if (step === 3) {
         setStep(4);
@@ -778,6 +794,7 @@ export default function BookingsPage() {
             toast.success(`${bookingDates.length} recurring bookings created successfully!`);
             setFormData(initialFormData);
             setRecurringSettings(undefined);
+            setReturnRequired(false);
             setStep(1);
 
         } catch (error) {
@@ -922,6 +939,7 @@ export default function BookingsPage() {
       toast.success("Booking created successfully")
       // Reset form after successful submission
       setFormData(initialFormData)
+      setReturnRequired(false)
     }
 
     const selectedB2BClient = formData.b2bClientId ? b2bClients.find(c => c.id === formData.b2bClientId) : null
@@ -1245,38 +1263,27 @@ export default function BookingsPage() {
                     <div className="mb-6">
                       <h2 className="text-2xl font-bold text-gray-900">Trip Details</h2>
                       <p className="text-gray-500 mt-1">
-                        {bookingType === "recurring" ? "Select date, time and recurring schedule" : "Select date and time for your trip"}
+                        {bookingType === "recurring" ? "Set up your recurring schedule" : "Select date and time for your trip"}
                       </p>
                     </div>
                     <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-6">
-                      <FieldGroup className="grid grid-cols-2 gap-4">
-                        <Field>
-                          <FieldLabel>Pickup Date *</FieldLabel>
-                          <Input type="date" value={formData.pickupDate} onChange={e => setFormData({...formData, pickupDate: e.target.value})} />
-                        </Field>
-                        <Field>
-                          <FieldLabel>Pickup Time *</FieldLabel>
-                          <Input type="time" value={formData.pickupTime} onChange={e => setFormData({...formData, pickupTime: e.target.value})} />
-                        </Field>
-                      </FieldGroup>
-                      {bookingType === "recurring" && (
-                        <div className="border-t border-gray-200 pt-6">
-                          <h4 className="text-sm font-medium text-gray-700 mb-4">Recurring Schedule</h4>
+                      {bookingType === "recurring" ? (
+                        <>
                           <div className="space-y-4">
+                            <h4 className="text-sm font-medium text-gray-700 mb-2">Recurring Schedule</h4>
                             <Field>
                               <FieldLabel>Frequency</FieldLabel>
-                              <Select value={recurringSettings?.frequency || "weekly"} onValueChange={(value) => setRecurringSettings(prev => ({ ...prev, frequency: value as any }))}>
+                              <Select value={recurringSettings?.frequency || "daily"} onValueChange={(value) => setRecurringSettings(prev => ({ ...prev, frequency: value as any }))}>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select frequency" />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="daily">Daily</SelectItem>
-                                  <SelectItem value="weekly">Weekly</SelectItem>
                                   <SelectItem value="custom">Custom</SelectItem>
                                 </SelectContent>
                               </Select>
                             </Field>
-                            {(recurringSettings?.frequency === "weekly" || recurringSettings?.frequency === "custom") && (
+                            {recurringSettings?.frequency === "custom" && (
                               <Field>
                                 <FieldLabel>Select Days</FieldLabel>
                                 <div className="flex flex-wrap gap-2 mt-2">
@@ -1303,22 +1310,72 @@ export default function BookingsPage() {
                             )}
                             <FieldGroup className="grid grid-cols-2 gap-4">
                               <Field>
-                                <FieldLabel>Start Date</FieldLabel>
+                                <FieldLabel>Start Date *</FieldLabel>
                                 <Input type="date" onChange={(e) => setRecurringSettings(prev => ({ ...prev, startDate: new Date(e.target.value) }))} />
                               </Field>
                               <Field>
-                                <FieldLabel>End Date</FieldLabel>
+                                <FieldLabel>End Date *</FieldLabel>
                                 <Input type="date" onChange={(e) => setRecurringSettings(prev => ({ ...prev, endDate: new Date(e.target.value) }))} />
                               </Field>
                             </FieldGroup>
                           </div>
-                        </div>
+                          <FieldGroup className="grid grid-cols-2 gap-4">
+                            <Field>
+                              <FieldLabel>Pickup Time *</FieldLabel>
+                              <Input type="time" value={formData.pickupTime} onChange={e => setFormData({...formData, pickupTime: e.target.value})} />
+                            </Field>
+                            <Field>
+                              <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-3 mt-6">
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">Return also required?</p>
+                                  <p className="text-xs text-gray-500">Enable if you need a return trip</p>
+                                </div>
+                                <Switch checked={returnRequired} onCheckedChange={setReturnRequired} />
+                              </div>
+                            </Field>
+                          </FieldGroup>
+                          {returnRequired && (
+                            <Field>
+                              <FieldLabel>Return Time</FieldLabel>
+                              <Input type="time" value={(formData as any).returnTime || ""} onChange={(e) => setFormData({ ...formData, returnTime: e.target.value } as any)} />
+                            </Field>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <FieldGroup className="grid grid-cols-2 gap-4">
+                            <Field>
+                              <FieldLabel>Pickup Date *</FieldLabel>
+                              <Input type="date" value={formData.pickupDate} onChange={e => setFormData({...formData, pickupDate: e.target.value})} />
+                            </Field>
+                            <Field>
+                              <FieldLabel>Pickup Time *</FieldLabel>
+                              <Input type="time" value={formData.pickupTime} onChange={e => setFormData({...formData, pickupTime: e.target.value})} />
+                            </Field>
+                          </FieldGroup>
+                          {(formData.tripType === "rental" || formData.tripType === "outstation") && (
+                            <FieldGroup className="grid grid-cols-2 gap-4">
+                              <Field>
+                                <FieldLabel>Return Date</FieldLabel>
+                                <Input type="date" value={formData.returnDate || ""} onChange={(e) => setFormData({ ...formData, returnDate: e.target.value })} />
+                              </Field>
+                              <Field>
+                                <FieldLabel>Return Time</FieldLabel>
+                                <Input type="time" value={(formData as any).returnTime || ""} onChange={(e) => setFormData({ ...formData, returnTime: e.target.value } as any)} />
+                              </Field>
+                            </FieldGroup>
+                          )}
+                        </>
                       )}
                       <div className="flex justify-between pt-4">
                         <Button type="button" variant="outline" onClick={() => setStep(1)} size="lg">
                           <ArrowLeft className="mr-2 h-4 w-4" /> Back
                         </Button>
-                        <Button type="button" onClick={handleNextStep} disabled={!formData.pickupDate || !formData.pickupTime} size="lg">
+                        <Button type="button" onClick={handleNextStep} disabled={
+                          bookingType === "recurring"
+                            ? !recurringSettings?.frequency || !recurringSettings?.startDate || !recurringSettings?.endDate || !formData.pickupTime || (returnRequired && !(formData as any).returnTime)
+                            : !formData.pickupDate || !formData.pickupTime
+                        } size="lg">
                           Next: Select Car <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                       </div>
