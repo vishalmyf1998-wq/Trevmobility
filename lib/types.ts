@@ -595,6 +595,9 @@ export interface Booking {
   approvalStatus?: 'pending' | 'approved' | 'rejected'
   pendingEdits?: any
   originalStatus?: string
+  poNumber?: string
+  referenceNumber?: string
+  costCentre?: string
 }
 
 export interface DutySlip {

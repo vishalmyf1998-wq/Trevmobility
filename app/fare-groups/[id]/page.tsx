@@ -145,6 +145,14 @@ function FareGroupSettingsTab({ fareGroup, cities, categories, onUpdate }: { far
   const generatePeakId = () => Math.random().toString(36).substring(2, 9)
   const generateDiscountId = () => Math.random().toString(36).substring(2, 9)
 
+  const [settingTab, setSettingTab] = useState<'daily_hustle' | 'universal' | 'summary' | 'history'>('daily_hustle')
+
+  const [history, setHistory] = useState<{ time: Date; action: string; details: string }[]>([])
+
+  const addHistory = (action: string, details: string) => {
+    setHistory(prev => [{ time: new Date(), action, details }, ...prev].slice(0, 50))
+  }
+
   const serviceTypes: { key: ServiceType; label: string; icon: any }[] = [
     { key: 'airport_pickup', label: 'Airport Pickup', icon: Plane },
     { key: 'airport_drop', label: 'Airport Drop', icon: Plane },
@@ -196,6 +204,8 @@ function FareGroupSettingsTab({ fareGroup, cities, categories, onUpdate }: { far
         }
       }
     }))
+    const cityName = cities.find(c => c.id === cityId)?.name || cityId
+    addHistory('Setting Updated', `${cityName} / ${serviceType}: ${field}`)
   }
 
   const handleApplyAll = () => {
@@ -288,10 +298,12 @@ function FareGroupSettingsTab({ fareGroup, cities, categories, onUpdate }: { far
 
     onUpdate(updates)
     toast.success(`Updated ${updateCount} fare configuration(s)`)
+    addHistory('Bulk Update', `Applied settings to ${updateCount} configuration(s)`)
   }
 
   const handleSave = () => {
     onUpdate({ cityAdvanceHours: cityHours, minAdvanceBookingHours: globalHours === '' ? 0 : globalHours })
+    addHistory('Advance Booking Saved', 'Global and city-wise advance booking hours updated')
   }
 
   return (
@@ -447,16 +459,56 @@ function FareGroupSettingsTab({ fareGroup, cities, categories, onUpdate }: { far
                         })}
                       </div>
 
-                      {activeSettings && serviceTypeInfo && (
-                          
-                          <div className="space-y-4">
-                            <div className="rounded-lg border border-gray-200 bg-white p-4">
-                              <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
-                                    <Zap className="h-4 w-4 text-amber-600" />
+                       {activeSettings && serviceTypeInfo && (
+                            <Tabs value={settingTab} onValueChange={(v) => setSettingTab(v as 'daily_hustle' | 'universal' | 'summary' | 'history')}>
+                              <TabsList>
+                                <TabsTrigger value="summary">Summary</TabsTrigger>
+                                <TabsTrigger value="daily_hustle">Daily Hustle Setting</TabsTrigger>
+                                <TabsTrigger value="universal">Universal Setting</TabsTrigger>
+                                <TabsTrigger value="history">History</TabsTrigger>
+                              </TabsList>
+                              <TabsContent value="summary">
+                                <div className="rounded-lg border border-gray-200 bg-white p-6">
+                                  <h3 className="text-sm font-semibold text-gray-800 mb-4">Settings Summary</h3>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                      <span className="text-gray-500">Peak Charges</span>
+                                      <p className="font-medium">
+                                        {activeSettings.peaks?.length ? activeSettings.peaks.map(p => `${p.chargeType === 'percentage' ? p.value + '%' : 'Rs ' + p.value} (${p.startTime}-${p.endTime})`).join(', ') : 'Not configured'}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-500">Discounts</span>
+                                      <p className="font-medium">
+                                        {activeSettings.DISCOUNTS?.length ? activeSettings.DISCOUNTS.map(d => `${d.chargeType === 'percentage' ? d.value + '%' : 'Rs ' + d.value} (${d.startTime || '--:--'}-${d.endTime || '--:--'})`).join(', ') : 'Not configured'}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-500">Advance Payment</span>
+                                      <p className="font-medium">{activeSettings.advanceHours ? `${activeSettings.advanceHours}%` : 'Not set'}</p>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-500">Booking Window</span>
+                                      <p className="font-medium">{activeSettings.bookingWindow ? `${activeSettings.bookingWindow} hrs` : 'Not set'}</p>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-500">Urgent Booking</span>
+                                      <p className="font-medium">
+                                        {activeSettings.urgentBookingCharge ? `Within ${activeSettings.urgentWithinTime || '?'} hrs: ${activeSettings.urgentChargeType === 'percentage' ? activeSettings.urgentBookingCharge + '%' : 'Rs ' + activeSettings.urgentBookingCharge}` : 'Not configured'}
+                                      </p>
+                                    </div>
                                   </div>
-                                  <span className="font-semibold text-sm text-gray-800">Peak Charges</span>
+                                </div>
+                              </TabsContent>
+                              <TabsContent value="daily_hustle">
+                               <div className="space-y-4">
+                                 <div className="rounded-lg border border-gray-200 bg-white p-4">
+                                   <div className="flex items-center justify-between mb-3">
+                                     <div className="flex items-center gap-2">
+                                       <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+                                         <Zap className="h-4 w-4 text-amber-600" />
+                                       </div>
+                                       <span className="font-semibold text-sm text-gray-800">Peak Charges</span>
                                 </div>
                                 <Button
                                   type="button"
@@ -720,9 +772,12 @@ function FareGroupSettingsTab({ fareGroup, cities, categories, onUpdate }: { far
                                   ))}
                                 </div>
                               )}
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-4">
+                             </div>
+                               </div>
+                             </TabsContent>
+                             <TabsContent value="universal">
+                               <div className="space-y-4">
+                             <div className="grid grid-cols-3 gap-4">
                               <div className="rounded-lg border border-gray-200 bg-white p-4">
                                 <div className="flex items-center gap-2 mb-3">
                                   <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
@@ -808,8 +863,30 @@ function FareGroupSettingsTab({ fareGroup, cities, categories, onUpdate }: { far
                                   </div>
                                 </div>
                               </div>
-                            </div>
-                          </div>
+                             </div>
+                           </div>
+                           </TabsContent>
+                               <TabsContent value="history">
+                                <div className="rounded-lg border border-gray-200 bg-white p-6">
+                                  <h3 className="text-sm font-semibold text-gray-800 mb-4">Change History</h3>
+                                  {history.length === 0 ? (
+                                    <p className="text-sm text-gray-500">No changes recorded yet.</p>
+                                  ) : (
+                                    <div className="space-y-3">
+                                      {history.map((h, i) => (
+                                        <div key={i} className="flex items-start gap-3 text-sm border-b border-gray-100 pb-2 last:border-0">
+                                          <div className="flex-1">
+                                            <span className="font-medium text-gray-800">{h.action}</span>
+                                            <p className="text-gray-600">{h.details}</p>
+                                          </div>
+                                          <span className="text-xs text-gray-400 whitespace-nowrap">{h.time.toLocaleTimeString()}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </TabsContent>
+                        </Tabs>
 
                         )}
 

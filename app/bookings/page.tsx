@@ -16,6 +16,7 @@ import { buildOutstationBillingInput, calculateOutstationBilling } from "@/lib/o
 import { toast } from "sonner"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 
 type RecurringSettings = {
   frequency: 'daily' | 'weekly' | 'custom'
@@ -46,6 +47,9 @@ const initialFormData: BookingFormData = {
   customerAddress: "",
   b2bClientId: undefined,
   b2bEmployeeId: undefined,
+  poNumber: "",
+  referenceNumber: "",
+  costCentre: "",
   driverId: undefined,
   carId: undefined,
   cityId: "",
@@ -107,6 +111,7 @@ export default function BookingsPage() {
       getAirportTerminal,
       getB2BClient,
       getB2BEmployee,
+      addB2BEmployeeWithSync,
       userType,
       currentUser,
       tollLocations,
@@ -147,6 +152,7 @@ export default function BookingsPage() {
 
     const [formData, setFormData] = useState<BookingFormData>(initialFormData)
     const [recurringSettings, setRecurringSettings] = useState<RecurringSettings | undefined>()
+    const [useCustomB2BCustomer, setUseCustomB2BCustomer] = useState(false)
     const customerType = useMemo(() => (bookingType === 'business' || bookingType === 'recurring' ? 'b2b' : 'b2c'), [bookingType]);
 
     const [b2cSearchQuery, setB2cSearchQuery] = useState("")
@@ -673,6 +679,30 @@ export default function BookingsPage() {
                 customerId = customer.id;
             }
 
+            let newB2BEmployeeId: string | undefined
+            if (customerType === "b2b" && useCustomB2BCustomer && formData.b2bClientId && formData.b2bEmployeeId) {
+              const client = getB2BClient(formData.b2bClientId)
+              const employee = getB2BEmployee(formData.b2bEmployeeId)
+              if (client && employee) {
+                const newEmployeeId = `emp-${generateBookingNumber().toLowerCase()}`
+                const newEmployee = {
+                  b2bClientId: client.id,
+                  name: formData.customerName || employee.name,
+                  phone: formData.customerPhone || employee.phone,
+                  officeEmail: formData.customerEmail || employee.officeEmail,
+                  employeeId: newEmployeeId,
+                  approverEmail: employee.approverEmail || client.contactPerson,
+                  costCentre: employee.costCentre || '',
+                  entity: employee.entity || '',
+                  status: 'approved' as const,
+                  canLogin: true,
+                  address: formData.customerAddress || employee.address || '',
+                }
+                await addB2BEmployeeWithSync(newEmployee)
+                newB2BEmployeeId = newEmployeeId
+              }
+            }
+
             for (const date of bookingDates) {
                 const pickupDate = date.toISOString().split('T')[0]; // format to 'YYYY-MM-DD'
                 
@@ -693,17 +723,43 @@ export default function BookingsPage() {
                   finalData = { ...finalData, airportId: undefined, airportTerminalId: undefined }
                 }
 
-                if (customerType === "b2b" && formData.b2bClientId && formData.b2bEmployeeId) {
+                finalData = { ...finalData, poNumber: formData.poNumber, referenceNumber: formData.referenceNumber }
+
+                if (customerType === "b2b" && formData.b2bClientId) {
                   const client = getB2BClient(formData.b2bClientId)
-                  const employee = getB2BEmployee(formData.b2bEmployeeId)
-                  if (client && employee) {
-                      finalData = {
-                          ...finalData,
-                          customerName: employee.name,
-                          customerPhone: employee.phone,
-                          customerEmail: employee.officeEmail,
-                          customerAddress: client.billingAddress || employee.address || '',
+                  const employee = formData.b2bEmployeeId ? getB2BEmployee(formData.b2bEmployeeId) : null
+                  if (client) {
+                      if (useCustomB2BCustomer && newB2BEmployeeId && employee) {
+                        finalData = {
+                            ...finalData,
+                            b2bEmployeeId: newB2BEmployeeId,
+                            customerName: formData.customerName || employee.name,
+                            customerPhone: formData.customerPhone || employee.phone,
+                            customerEmail: formData.customerEmail || employee.officeEmail,
+                            customerAddress: formData.customerAddress || client.billingAddress || employee.address || '',
+                            costCentre: employee.costCentre,
+                        }
+                      } else if (employee) {
+                        finalData = {
+                            ...finalData,
+                            customerName: employee.name,
+                            customerPhone: employee.phone,
+                            customerEmail: employee.officeEmail,
+                            customerAddress: client.billingAddress || employee.address || '',
+                            costCentre: employee.costCentre,
+                        }
                       }
+                  }
+                }
+
+                if (customerType === "b2b" && formData.b2bClientId) {
+                  const client = getB2BClient(formData.b2bClientId)
+                  if (client && client.creditLimit) {
+                    const newBalance = (client.currentBalance || 0) + finalData.grandTotal
+                    if (newBalance > client.creditLimit) {
+                      toast.error(`Credit limit exceeded for ${client.companyName}. Available: ₹${(client.creditLimit - (client.currentBalance || 0)).toFixed(2)}`)
+                      return
+                    }
                   }
                 }
                 
@@ -796,13 +852,56 @@ export default function BookingsPage() {
         const client = getB2BClient(formData.b2bClientId)
         const employee = getB2BEmployee(formData.b2bEmployeeId)
         if (client && employee) {
-            finalData = {
-                ...finalData,
-                customerName: employee.name,
-                customerPhone: employee.phone,
-                customerEmail: employee.officeEmail,
-                customerAddress: client.billingAddress || employee.address || '',
+            if (useCustomB2BCustomer) {
+              const newEmployeeId = generateBookingNumber().toLowerCase()
+              const newEmployee = {
+                b2bClientId: client.id,
+                name: formData.customerName || employee.name,
+                phone: formData.customerPhone || employee.phone,
+                officeEmail: formData.customerEmail || employee.officeEmail,
+                employeeId: `emp-${newEmployeeId}`,
+                approverEmail: employee.approverEmail || client.contactPerson,
+                costCentre: employee.costCentre || '',
+                entity: employee.entity || '',
+                status: 'approved' as const,
+                canLogin: true,
+                address: formData.customerAddress || employee.address || '',
+              }
+              await addB2BEmployeeWithSync(newEmployee)
+              finalData = {
+                  ...finalData,
+                  b2bEmployeeId: newEmployee.employeeId,
+                  customerName: newEmployee.name,
+                  customerPhone: newEmployee.phone,
+                  customerEmail: newEmployee.officeEmail,
+                  customerAddress: newEmployee.address,
+                  poNumber: formData.poNumber,
+                  referenceNumber: formData.referenceNumber,
+                  costCentre: newEmployee.costCentre,
+              }
+            } else {
+              finalData = {
+                  ...finalData,
+                  customerName: employee.name,
+                  customerPhone: employee.phone,
+                  customerEmail: employee.officeEmail,
+                  customerAddress: client.billingAddress || employee.address || '',
+                  poNumber: formData.poNumber,
+                  referenceNumber: formData.referenceNumber,
+                  costCentre: employee.costCentre,
+              }
             }
+        }
+      }
+
+      if (customerType === "b2b" && formData.b2bClientId) {
+        const client = getB2BClient(formData.b2bClientId)
+        if (client) {
+          const newBalance = (client.currentBalance || 0) + finalData.grandTotal
+          if (client.creditLimit && newBalance > client.creditLimit) {
+            toast.error(`Booking amount ₹${finalData.grandTotal.toFixed(2)} exceeds credit limit. Available: ₹${(client.creditLimit - (client.currentBalance || 0)).toFixed(2)}`)
+            return
+          }
         }
       }
 
@@ -820,6 +919,10 @@ export default function BookingsPage() {
       // Reset form after successful submission
       setFormData(initialFormData)
     }
+
+    const selectedB2BClient = formData.b2bClientId ? b2bClients.find(c => c.id === formData.b2bClientId) : null
+    const selectedB2BEmployee = formData.b2bEmployeeId ? b2bEmployees.find(e => e.id === formData.b2bEmployeeId) : null
+    const selectedFareGroup = selectedB2BClient?.fareGroupId ? fareGroups.find(fg => fg.id === selectedB2BClient.fareGroupId) : null
 
     return (
         <div className="min-h-screen bg-[#f7f7f7] flex">
@@ -940,6 +1043,7 @@ export default function BookingsPage() {
                             </Select>
                           </Field>
                           {formData.b2bClientId && (
+                            <>
                             <Field>
                               <FieldLabel>Select Employee *</FieldLabel>
                               <Select
@@ -965,8 +1069,63 @@ export default function BookingsPage() {
                                 </SelectContent>
                               </Select>
                             </Field>
-                          )}
-                          <FieldGroup className="grid grid-cols-2 gap-4">
+                            <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-3">
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">Use custom customer</p>
+                                <p className="text-xs text-gray-500">Override auto-filled employee details</p>
+                              </div>
+                              <Switch checked={useCustomB2BCustomer} onCheckedChange={setUseCustomB2BCustomer} />
+                            </div>
+                            {useCustomB2BCustomer && (
+                              <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
+                                <FieldGroup className="grid grid-cols-2 gap-4">
+                                  <Field>
+                                    <FieldLabel>Customer Name *</FieldLabel>
+                                    <Input value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} placeholder="Enter full name" />
+                                  </Field>
+                                  <Field>
+                                    <FieldLabel>Mobile Number *</FieldLabel>
+                                    <PhoneInput value={formData.customerPhone} onChange={val => setFormData({...formData, customerPhone: val})} placeholder="Phone Number" />
+                                  </Field>
+                                </FieldGroup>
+                                <Field>
+                                  <FieldLabel>Email</FieldLabel>
+                                  <Input value={formData.customerEmail || ""} onChange={e => setFormData({...formData, customerEmail: e.target.value})} placeholder="Email" />
+                                </Field>
+                                <Field>
+                                  <FieldLabel>Address</FieldLabel>
+                                  <Input value={formData.customerAddress || ""} onChange={e => setFormData({...formData, customerAddress: e.target.value})} placeholder="Address" />
+                                </Field>
+                              </div>
+                            )}
+                            {selectedB2BClient ? (
+                              <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-4 space-y-2">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-blue-900">
+                                  <Building2 className="h-4 w-4" />
+                                  {selectedB2BClient.companyName}
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 text-xs text-gray-700">
+                                  <div><span className="text-gray-500">Contact:</span> {selectedB2BClient.contactPerson}</div>
+                                  <div><span className="text-gray-500">Fare Group:</span> {selectedFareGroup?.name || 'Default'}</div>
+                                  <div><span className="text-gray-500">Credit Limit:</span> ₹{selectedB2BClient.creditLimit?.toLocaleString() || 0}</div>
+                                  <div><span className="text-gray-500">Balance:</span> ₹{selectedB2BClient.currentBalance?.toLocaleString() || 0}</div>
+                                  <div><span className="text-gray-500">Payment:</span> {selectedB2BClient.paymentModel?.replace('_', ' ') || 'N/A'}</div>
+                                  <div><span className="text-gray-500">GST:</span> {selectedB2BClient.isGSTEnabled ? 'Enabled' : 'Disabled'}</div>
+                                  {selectedB2BEmployee && <div className="col-span-2"><span className="text-gray-500">Cost Centre:</span> {selectedB2BEmployee.costCentre || 'N/A'}</div>}
+                                </div>
+                              </div>
+                            ) : null}
+                            <FieldGroup className="grid grid-cols-2 gap-4">
+                              <Field>
+                                <FieldLabel>PO / Reference Number</FieldLabel>
+                                <Input value={formData.poNumber || ""} onChange={e => setFormData({...formData, poNumber: e.target.value})} placeholder="PO / Ref #" />
+                              </Field>
+                              <Field>
+                                <FieldLabel>Internal Reference</FieldLabel>
+                                <Input value={formData.referenceNumber || ""} onChange={e => setFormData({...formData, referenceNumber: e.target.value})} placeholder="Ref #" />
+                              </Field>
+                            </FieldGroup>
+                            <FieldGroup className="grid grid-cols-2 gap-4">
                             <Field>
                               <FieldLabel>Pickup Address *</FieldLabel>
                               <Input value={formData.pickupLocation} onChange={e => setFormData({...formData, pickupLocation: e.target.value})} placeholder="Enter pickup location" />
@@ -976,12 +1135,14 @@ export default function BookingsPage() {
                               <Input value={formData.dropLocation} onChange={e => setFormData({...formData, dropLocation: e.target.value})} placeholder="Enter drop location" />
                             </Field>
                           </FieldGroup>
-                          <Field>
-                            <FieldLabel>Special Notes</FieldLabel>
-                            <Textarea value={formData.remarks || ""} onChange={e => setFormData({...formData, remarks: e.target.value})} placeholder="Any special instructions..." rows={2} />
-                          </Field>
-                        </>
-                      ) : (
+                           <Field>
+                             <FieldLabel>Special Notes</FieldLabel>
+                             <Textarea value={formData.remarks || ""} onChange={e => setFormData({...formData, remarks: e.target.value})} placeholder="Any special instructions..." rows={2} />
+                           </Field>
+                           </>
+                         )}
+                       </>
+                       ) : (
                         <>
                           <FieldGroup className="grid grid-cols-2 gap-4">
                             <Field>
@@ -1173,19 +1334,7 @@ export default function BookingsPage() {
                     </div>
                     <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-6">
                       <div className="grid grid-cols-2 gap-6">
-                        <div>
-                          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Customer</h4>
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <User className="h-4 w-4 text-gray-400" />
-                              <span className="text-sm text-gray-900">{formData.customerName}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Phone className="h-4 w-4 text-gray-400" />
-                              <span className="text-sm text-gray-900">{formData.customerPhone}</span>
-                            </div>
-                          </div>
-                        </div>
+                        {bookingType === "business" && b2bClientInfoCard}
                         <div>
                           <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Trip</h4>
                           <div className="space-y-2">

@@ -2155,6 +2155,31 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
     setB2BEmployees(prev => [...prev, ...newEmployees])
   }, [])
 
+  const addB2BEmployeeWithSync = useCallback(async (employee: Omit<B2BEmployee, 'id' | 'createdAt'>) => {
+    const newEmployee = { ...employee, id: generateId(), createdAt: new Date().toISOString() }
+    setB2BEmployees(prev => [...prev, newEmployee])
+    const payload = {
+      b2b_client_id: newEmployee.b2bClientId,
+      name: newEmployee.name,
+      phone: newEmployee.phone,
+      office_email: newEmployee.officeEmail,
+      employee_id: newEmployee.employeeId,
+      approver_email: newEmployee.approverEmail,
+      cost_centre: newEmployee.costCentre,
+      entity: newEmployee.entity,
+      status: newEmployee.status,
+      approved_by: newEmployee.approvedBy,
+      approved_at: newEmployee.approvedAt,
+      can_login: newEmployee.canLogin,
+      created_at: newEmployee.createdAt,
+      address: newEmployee.address,
+    }
+    const { error } = await supabase.from('b2b_employees').insert([payload])
+    if (error) {
+      console.error('Error adding B2B employee to Supabase:', error)
+    }
+  }, [])
+
   // B2B Approval Rule actions
   const addB2BApprovalRule = useCallback((rule: Omit<B2BApprovalRule, 'id' | 'createdAt'>) => {
     setB2BApprovalRules(prev => [...prev, { ...rule, id: generateId(), createdAt: new Date().toISOString() }])
@@ -2524,7 +2549,7 @@ const upsertB2CCustomer = useCallback(async (customer: Omit<B2CCustomer, 'id' | 
       addPromoCode, updatePromoCode, deletePromoCode,
       addCityPolygon, updateCityPolygon, deleteCityPolygon,
       updateCarLocation,
-      addB2BEmployee, updateB2BEmployee, deleteB2BEmployee, bulkAddB2BEmployees,
+      addB2BEmployee, addB2BEmployeeWithSync, updateB2BEmployee, deleteB2BEmployee, bulkAddB2BEmployees,
       addB2BApprovalRule, updateB2BApprovalRule, deleteB2BApprovalRule,
       addCommunicationTemplate, updateCommunicationTemplate, deleteCommunicationTemplate,
       addAdminRole, updateAdminRole, deleteAdminRole,
