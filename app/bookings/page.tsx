@@ -153,6 +153,10 @@ export default function BookingsPage() {
     const [formData, setFormData] = useState<BookingFormData>(initialFormData)
     const [recurringSettings, setRecurringSettings] = useState<RecurringSettings | undefined>()
     const [useCustomB2BCustomer, setUseCustomB2BCustomer] = useState(false)
+    const [b2bClientSearch, setB2bClientSearch] = useState("")
+    const [b2bClientSearchOpen, setB2bClientSearchOpen] = useState(false)
+    const [employeeSearch, setEmployeeSearch] = useState("")
+    const [employeeSearchOpen, setEmployeeSearchOpen] = useState(false)
     const customerType = useMemo(() => (bookingType === 'business' || bookingType === 'recurring' ? 'b2b' : 'b2c'), [bookingType]);
 
     const [b2cSearchQuery, setB2cSearchQuery] = useState("")
@@ -1022,53 +1026,112 @@ export default function BookingsPage() {
                     <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
                       {bookingType === "business" ? (
                         <>
-                          <Field>
-                            <FieldLabel>Select B2B Client *</FieldLabel>
-                            <Select
-                              value={formData.b2bClientId || ""}
-                              onValueChange={(value) => setFormData({ ...formData, b2bClientId: value, b2bEmployeeId: undefined })}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select a B2B client" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {b2bClients
-                                  .filter((c) => c.status === "active")
-                                  .map((client) => (
-                                    <SelectItem key={client.id} value={client.id}>
-                                      {client.companyName} - {client.contactPerson}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                          </Field>
-                          {formData.b2bClientId && (
-                            <>
-                            <Field>
-                              <FieldLabel>Select Employee *</FieldLabel>
-                              <Select
-                                value={formData.b2bEmployeeId || ""}
-                                onValueChange={(value) => setFormData({ ...formData, b2bEmployeeId: value })}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select an employee" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {b2bEmployees
-                                    .filter((e) => e.b2bClientId === formData.b2bClientId && e.status === "approved" && e.canLogin)
-                                    .map((employee) => (
-                                      <SelectItem key={employee.id} value={employee.id}>
-                                        {employee.name} - {employee.employeeId}
-                                      </SelectItem>
-                                    ))}
-                                  {b2bEmployees.filter((e) => e.b2bClientId === formData.b2bClientId && e.status === "approved" && e.canLogin).length === 0 && (
-                                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                                      No approved employees found for this client
-                                    </div>
-                                  )}
-                                </SelectContent>
-                              </Select>
-                            </Field>
+                           <Field>
+                             <FieldLabel>Select B2B Client *</FieldLabel>
+                             <Popover open={b2bClientSearchOpen} onOpenChange={setB2bClientSearchOpen}>
+                               <PopoverTrigger asChild>
+                                 <div className="relative">
+                                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                   <Input
+                                     placeholder="Search client..."
+                                     value={b2bClientSearch}
+                                     onChange={(e) => {
+                                       setB2bClientSearch(e.target.value)
+                                       if (e.target.value.length > 0) setB2bClientSearchOpen(true)
+                                       else setB2bClientSearchOpen(false)
+                                     }}
+                                     className="pl-10"
+                                   />
+                                 </div>
+                               </PopoverTrigger>
+                               <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                                 <Command>
+                                   <CommandInput placeholder="Type to search..." />
+                                   <CommandList>
+                                     <CommandEmpty>
+                                       <div className="p-4 text-sm text-center">No clients found.</div>
+                                     </CommandEmpty>
+                                     <CommandGroup>
+                                       {b2bClients
+                                         .filter((c) => c.status === "active")
+                                         .filter((c) => !b2bClientSearch || c.companyName.toLowerCase().includes(b2bClientSearch.toLowerCase()) || c.contactPerson.toLowerCase().includes(b2bClientSearch.toLowerCase()))
+                                         .map((client) => (
+                                           <CommandItem
+                                             key={client.id}
+                                             onSelect={() => {
+                                               setFormData(prev => ({ ...prev, b2bClientId: client.id, b2bEmployeeId: undefined }))
+                                               setB2bClientSearch(client.companyName)
+                                               setB2bClientSearchOpen(false)
+                                             }}
+                                           >
+                                             <div className="flex items-center justify-between w-full">
+                                               <div>
+                                                 <p>{client.companyName}</p>
+                                                 <p className="text-xs text-muted-foreground">{client.contactPerson}</p>
+                                               </div>
+                                             </div>
+                                           </CommandItem>
+                                         ))}
+                                     </CommandGroup>
+                                   </CommandList>
+                                 </Command>
+                               </PopoverContent>
+                             </Popover>
+                           </Field>
+                            {formData.b2bClientId && (
+                             <>
+                             <Field>
+                               <FieldLabel>Select Employee *</FieldLabel>
+                               <Popover open={employeeSearchOpen} onOpenChange={setEmployeeSearchOpen}>
+                                 <PopoverTrigger asChild>
+                                   <div className="relative">
+                                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                     <Input
+                                       placeholder="Search employee..."
+                                       value={employeeSearch}
+                                       onChange={(e) => {
+                                         setEmployeeSearch(e.target.value)
+                                         if (e.target.value.length > 0) setEmployeeSearchOpen(true)
+                                         else setEmployeeSearchOpen(false)
+                                       }}
+                                       className="pl-10"
+                                     />
+                                   </div>
+                                 </PopoverTrigger>
+                                 <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                                   <Command>
+                                     <CommandInput placeholder="Type to search..." />
+                                     <CommandList>
+                                       <CommandEmpty>
+                                         <div className="p-4 text-sm text-center">No employees found.</div>
+                                       </CommandEmpty>
+                                       <CommandGroup>
+                                         {b2bEmployees
+                                           .filter((e) => e.b2bClientId === formData.b2bClientId && e.status === "approved" && e.canLogin)
+                                           .filter((e) => !employeeSearch || e.name.toLowerCase().includes(employeeSearch.toLowerCase()) || e.employeeId.toLowerCase().includes(employeeSearch.toLowerCase()))
+                                           .map((employee) => (
+                                             <CommandItem
+                                               key={employee.id}
+                                               onSelect={() => {
+                                                 setFormData(prev => ({ ...prev, b2bEmployeeId: employee.id }))
+                                                 setEmployeeSearch(`${employee.name} - ${employee.employeeId}`)
+                                                 setEmployeeSearchOpen(false)
+                                               }}
+                                             >
+                                               <div className="flex items-center justify-between w-full">
+                                                 <div>
+                                                   <p>{employee.name}</p>
+                                                   <p className="text-xs text-muted-foreground">{employee.employeeId}</p>
+                                                 </div>
+                                               </div>
+                                             </CommandItem>
+                                           ))}
+                                       </CommandGroup>
+                                     </CommandList>
+                                   </Command>
+                                 </PopoverContent>
+                               </Popover>
+                             </Field>
                             <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-3">
                               <div>
                                 <p className="text-sm font-medium text-gray-900">Use custom customer</p>
