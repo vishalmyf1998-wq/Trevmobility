@@ -182,6 +182,12 @@ export default function BookingsPage() {
       setBookingType(isB2BUser ? "business" : "trev");
     }, [isB2BUser]);
 
+    useEffect(() => {
+      if (bookingType !== "recurring") {
+        setFormData(prev => ({ ...prev, fareGroupId: "" }))
+      }
+    }, [bookingType]);
+
     const handleCustomerTypeChange = (type: "b2c" | "b2b") => {
       setBookingType(type === 'b2c' ? 'trev' : 'business');
     }
@@ -1396,8 +1402,12 @@ export default function BookingsPage() {
                 {step === 3 && (
                   <div className="max-w-3xl">
                     <div className="mb-6">
-                      <h2 className="text-2xl font-bold text-gray-900">Select Fare & Car</h2>
-                      <p className="text-gray-500 mt-1">Choose a fare group, then select a car category</p>
+                      <h2 className="text-2xl font-bold text-gray-900">
+                        {bookingType === "recurring" ? "Select Fare & Car" : "Select Car"}
+                      </h2>
+                      <p className="text-gray-500 mt-1">
+                        {bookingType === "recurring" ? "Choose a fare group, then select a car category" : "Choose a car category for your trip"}
+                      </p>
                     </div>
                     <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-6">
                       <Field>
@@ -1413,70 +1423,66 @@ export default function BookingsPage() {
                           </SelectContent>
                         </Select>
                       </Field>
-                      <Field>
-                        <FieldLabel>Fare Group *</FieldLabel>
-                        <Select value={formData.fareGroupId || ""} onValueChange={(value) => setFormData({...formData, fareGroupId: value, carCategoryId: ""})}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select fare group" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {fareGroups
-                              .filter(fg => {
-                                if (bookingType === "business") return fg.type === "B2B"
-                                if (bookingType === "recurring") return fg.type === "Recurring"
-                                return fg.type === "B2C"
-                              })
-                              .map(fg => (
-                                <SelectItem key={fg.id} value={fg.id}>{fg.name}</SelectItem>
-                              ))}
-                            {fareGroups.filter(fg => {
-                              if (bookingType === "business") return fg.type === "B2B"
-                              if (bookingType === "recurring") return fg.type === "Recurring"
-                              return fg.type === "B2C"
-                            }).length === 0 && (
-                              <div className="px-2 py-1.5 text-sm text-muted-foreground">No fare groups available</div>
-                            )}
-                          </SelectContent>
-                        </Select>
-                      </Field>
-                      {formData.fareGroupId && (
-                        <div>
-                          <h4 className="text-sm font-medium text-gray-700 mb-3">Select Car Category</h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {carCategories.map(cat => {
-                              const isSelected = formData.carCategoryId === cat.id;
-                              return (
-                                <button
-                                  key={cat.id}
-                                  type="button"
-                                  onClick={() => setFormData({...formData, carCategoryId: cat.id})}
-                                  className={`p-6 rounded-2xl border-2 text-left transition-all ${
-                                    isSelected
-                                      ? "border-blue-500 bg-blue-50 shadow-lg"
-                                      : "border-gray-200 bg-white hover:border-gray-300 hover:shadow"
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between mb-3">
-                                    <Car className={`h-8 w-8 ${isSelected ? "text-blue-500" : "text-gray-400"}`} />
-                                    {isSelected && <CheckCircle className="h-5 w-5 text-blue-500" />}
-                                  </div>
-                                  <h3 className="font-semibold text-gray-900">{cat.name}</h3>
-                                  <p className="text-sm text-gray-500 mt-1">{cat.description || "Standard sedan"}</p>
-                                  <div className="mt-4 pt-4 border-t border-gray-200">
-                                    <span className="text-2xl font-bold text-gray-900">₹ {formData.estimatedFare > 0 ? formData.estimatedFare.toFixed(0) : "---"}</span>
-                                    <span className="text-sm text-gray-500 ml-1">est.</span>
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
+                      {bookingType === "recurring" && (
+                        <Field>
+                          <FieldLabel>Fare Group *</FieldLabel>
+                          <Select value={formData.fareGroupId || ""} onValueChange={(value) => setFormData({...formData, fareGroupId: value, carCategoryId: ""})}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select fare group" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {fareGroups
+                                .filter(fg => fg.type === "Recurring")
+                                .map(fg => (
+                                  <SelectItem key={fg.id} value={fg.id}>{fg.name}</SelectItem>
+                                ))}
+                              {fareGroups.filter(fg => fg.type === "Recurring").length === 0 && (
+                                <div className="px-2 py-1.5 text-sm text-muted-foreground">No recurring fare groups available</div>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </Field>
                       )}
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700 mb-3">Select Car Category</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {carCategories.map(cat => {
+                            const isSelected = formData.carCategoryId === cat.id;
+                            return (
+                              <button
+                                key={cat.id}
+                                type="button"
+                                onClick={() => setFormData({...formData, carCategoryId: cat.id})}
+                                className={`p-6 rounded-2xl border-2 text-left transition-all ${
+                                  isSelected
+                                    ? "border-blue-500 bg-blue-50 shadow-lg"
+                                    : "border-gray-200 bg-white hover:border-gray-300 hover:shadow"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-3">
+                                  <Car className={`h-8 w-8 ${isSelected ? "text-blue-500" : "text-gray-400"}`} />
+                                  {isSelected && <CheckCircle className="h-5 w-5 text-blue-500" />}
+                                </div>
+                                <h3 className="font-semibold text-gray-900">{cat.name}</h3>
+                                <p className="text-sm text-gray-500 mt-1">{cat.description || "Standard sedan"}</p>
+                                <div className="mt-4 pt-4 border-t border-gray-200">
+                                  <span className="text-2xl font-bold text-gray-900">₹ {formData.estimatedFare > 0 ? formData.estimatedFare.toFixed(0) : "---"}</span>
+                                  <span className="text-sm text-gray-500 ml-1">est.</span>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                       <div className="flex justify-between pt-4">
                         <Button type="button" variant="outline" onClick={() => setStep(2)} size="lg">
                           <ArrowLeft className="mr-2 h-4 w-4" /> Back
                         </Button>
-                        <Button type="button" onClick={handleNextStep} disabled={!formData.cityId || !formData.fareGroupId || !formData.carCategoryId} size="lg">
+                        <Button type="button" onClick={handleNextStep} disabled={
+                          bookingType === "recurring"
+                            ? !formData.cityId || !formData.fareGroupId || !formData.carCategoryId
+                            : !formData.cityId || !formData.carCategoryId
+                        } size="lg">
                           Next: Review <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                       </div>
