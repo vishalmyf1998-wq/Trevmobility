@@ -404,19 +404,19 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/30 p-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground">Welcome back! Here&apos;s your fleet overview.</p>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Dashboard</h1>
+          <p className="text-slate-500 mt-1">Welcome back! Here&apos;s your fleet overview.</p>
         </div>
         <div className="flex items-center gap-3">
           {/* Date Filter */}
           <div className="flex items-center gap-2">
             <Popover open={showCustomPicker} onOpenChange={setShowCustomPicker}>
               <PopoverTrigger asChild>
-                <Button variant="outline" className="min-w-[180px] justify-start">
+                <Button variant="outline" className="min-w-[180px] justify-start border-slate-200 hover:bg-slate-50 shadow-sm">
                   <CalendarDays className="mr-2 h-4 w-4" />
                   {formatDateRange()}
                 </Button>
@@ -480,7 +480,7 @@ export default function DashboardPage() {
               </PopoverContent>
             </Popover>
           </div>
-          <Button asChild>
+          <Button asChild className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/30">
             <Link href="/bookings">
               <Plus className="mr-2 h-4 w-4" />
               New Booking
@@ -491,18 +491,18 @@ export default function DashboardPage() {
 
       {/* Pending Actions Alert */}
       {pendingActions.length > 0 && (
-        <Card className="border-warning/50 bg-warning/5">
+        <Card className="border-amber-200/60 bg-amber-50/50 backdrop-blur-sm">
           <CardContent className="p-4">
             <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-warning mt-0.5" />
+              <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
               <div className="flex-1">
-                <p className="font-medium text-sm">Action Required</p>
+                <p className="font-medium text-sm text-slate-900">Action Required</p>
                 <div className="mt-1 flex flex-wrap gap-2">
                   {pendingActions.map((action, i) => (
                     <Link
                       key={i}
                       href={action.link}
-                      className="text-sm text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+                      className="text-sm text-slate-600 hover:text-slate-900 underline-offset-4 hover:underline"
                     >
                       {action.title}
                     </Link>
@@ -521,8 +521,8 @@ export default function DashboardPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Bookings</p>
-                <p className="text-2xl font-bold mt-1">{stats.filteredBookings}</p>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Bookings</p>
+                <p className="text-3xl font-bold text-slate-900 mt-1">{stats.filteredBookings}</p>
                 <div className="flex items-center gap-1 mt-1">
                   <span className="text-xs text-emerald-600 flex items-center">
                     <ArrowUpRight className="h-3 w-3" />
@@ -530,8 +530,8 @@ export default function DashboardPage() {
                   </span>
                 </div>
               </div>
-              <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                <CalendarCheck className="h-6 w-6 text-primary" />
+              <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-indigo-500/10 to-purple-500/10 flex items-center justify-center">
+                <CalendarCheck className="h-6 w-6 text-indigo-600" />
               </div>
             </div>
           </CardContent>
@@ -542,10 +542,10 @@ export default function DashboardPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Revenue</p>
-                <p className="text-2xl font-bold mt-1">{formatCurrency(stats.filteredRevenue)}</p>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Revenue</p>
+                <p className="text-3xl font-bold text-slate-900 mt-1">{formatCurrency(stats.filteredRevenue)}</p>
                 <div className="flex items-center gap-1 mt-1">
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-slate-500">
                     Total: {formatCurrency(stats.totalRevenue)}
                   </span>
                 </div>
@@ -562,8 +562,8 @@ export default function DashboardPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Fleet Status</p>
-                <p className="text-2xl font-bold mt-1">{stats.availableCars}/{stats.totalCars}</p>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Fleet Status</p>
+                <p className="text-3xl font-bold text-slate-900 mt-1">{stats.availableCars}/{stats.totalCars}</p>
                 <div className="flex items-center gap-1 mt-1">
                   <span className="text-xs text-amber-600 flex items-center">
                     <Car className="h-3 w-3 mr-1" />
@@ -571,8 +571,8 @@ export default function DashboardPage() {
                   </span>
                 </div>
               </div>
-              <div className="h-12 w-12 rounded-xl bg-accent/10 flex items-center justify-center">
-                <Car className="h-6 w-6 text-accent" />
+              <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-indigo-500/10 to-purple-500/10 flex items-center justify-center">
+                <Car className="h-6 w-6 text-indigo-600" />
               </div>
             </div>
           </CardContent>
@@ -583,8 +583,8 @@ export default function DashboardPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Active Drivers</p>
-                <p className="text-2xl font-bold mt-1">{stats.activeDrivers}/{stats.totalDrivers}</p>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active Drivers</p>
+                <p className="text-3xl font-bold text-slate-900 mt-1">{stats.activeDrivers}/{stats.totalDrivers}</p>
                 <div className="mt-1">
                   <Progress 
                     value={(stats.activeDrivers / Math.max(stats.totalDrivers, 1)) * 100} 
@@ -592,8 +592,8 @@ export default function DashboardPage() {
                   />
                 </div>
               </div>
-              <div className="h-12 w-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                <Users className="h-6 w-6 text-blue-600" />
+              <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-indigo-500/10 to-purple-500/10 flex items-center justify-center">
+                <Users className="h-6 w-6 text-indigo-600" />
               </div>
             </div>
           </CardContent>
@@ -602,62 +602,62 @@ export default function DashboardPage() {
 
       {/* Secondary Stats */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
-        <Card className="p-4">
+        <Card className="rounded-xl bg-white/80 backdrop-blur-sm border border-slate-200/60 shadow-md p-4">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+            <div className="h-10 w-10 rounded-xl bg-green-500/10 flex items-center justify-center">
               <CheckCircle2 className="h-5 w-5 text-green-600" />
             </div>
             <div>
               <p className="text-xl font-bold">{stats.completedBookings}</p>
-              <p className="text-xs text-muted-foreground">Completed</p>
+              <p className="text-xs text-slate-500">Completed</p>
             </div>
           </div>
         </Card>
         
-        <Card className="p-4">
+        <Card className="rounded-xl bg-white/80 backdrop-blur-sm border border-slate-200/60 shadow-md p-4">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
+            <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
               <Clock className="h-5 w-5 text-amber-600" />
             </div>
             <div>
               <p className="text-xl font-bold">{stats.pendingBookings}</p>
-              <p className="text-xs text-muted-foreground">Pending</p>
+              <p className="text-xs text-slate-500">Pending</p>
             </div>
           </div>
         </Card>
         
-        <Card className="p-4">
+        <Card className="rounded-xl bg-white/80 backdrop-blur-sm border border-slate-200/60 shadow-md p-4">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-red-500/10 flex items-center justify-center">
+            <div className="h-10 w-10 rounded-xl bg-red-500/10 flex items-center justify-center">
               <XCircle className="h-5 w-5 text-red-600" />
             </div>
             <div>
               <p className="text-xl font-bold">{stats.cancelledBookings}</p>
-              <p className="text-xs text-muted-foreground">Cancelled</p>
+              <p className="text-xs text-slate-500">Cancelled</p>
             </div>
           </div>
         </Card>
         
-        <Card className="p-4">
+        <Card className="rounded-xl bg-white/80 backdrop-blur-sm border border-slate-200/60 shadow-md p-4">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+            <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
               <DollarSign className="h-5 w-5 text-emerald-600" />
             </div>
             <div>
               <p className="text-xl font-bold">{formatCurrency(stats.collectedAmount)}</p>
-              <p className="text-xs text-muted-foreground">Collected</p>
+              <p className="text-xs text-slate-500">Collected</p>
             </div>
           </div>
         </Card>
         
-        <Card className="p-4">
+        <Card className="rounded-xl bg-white/80 backdrop-blur-sm border border-slate-200/60 shadow-md p-4">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
+            <div className="h-10 w-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
               <ArrowDownRight className="h-5 w-5 text-orange-600" />
             </div>
             <div>
               <p className="text-xl font-bold">{formatCurrency(stats.pendingAmount)}</p>
-              <p className="text-xs text-muted-foreground">Pending</p>
+              <p className="text-xs text-slate-500">Pending</p>
             </div>
           </div>
         </Card>
@@ -749,9 +749,9 @@ export default function DashboardPage() {
           <CardContent>
             {liveTrips.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Navigation className="h-10 w-10 text-muted-foreground/30" />
-                <p className="mt-3 text-sm text-muted-foreground">No active trips</p>
-                <p className="text-xs text-muted-foreground">Live trips will appear here</p>
+                <Navigation className="h-10 w-10 text-slate-500/30" />
+                <p className="mt-3 text-sm text-slate-500">No active trips</p>
+                <p className="text-xs text-slate-500">Live trips will appear here</p>
               </div>
             ) : (
               <div className="flex flex-col gap-3">
@@ -761,10 +761,10 @@ export default function DashboardPage() {
                   return (
                     <div
                       key={trip.id}
-                      className="flex items-center gap-3 rounded-lg border p-3"
+                      className="flex items-center gap-3 rounded-xl border border-slate-200/60 bg-white/60 backdrop-blur-sm p-4 shadow-sm hover:shadow-md hover:border-indigo-200/60 transition-all duration-200"
                     >
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Navigation className="h-5 w-5 text-primary" />
+                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500/10 to-purple-500/10 flex items-center justify-center">
+                        <Navigation className="h-5 w-5 text-indigo-600" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
@@ -775,18 +775,18 @@ export default function DashboardPage() {
                             {(trip.status || 'pending').replace('_', ' ')}
                           </Badge>
                         </div>
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                        <p className="text-xs text-slate-500 truncate mt-0.5">
                           {trip.pickupLocation} → {trip.dropLocation}
                         </p>
                         <div className="flex items-center gap-2 mt-1">
                           {driver && (
-                            <span className="text-xs text-muted-foreground flex items-center">
+                            <span className="text-xs text-slate-500 flex items-center">
                               <Users className="h-3 w-3 mr-1" />
                               {driver.name}
                             </span>
                           )}
                           {car && (
-                            <span className="text-xs text-muted-foreground flex items-center">
+                            <span className="text-xs text-slate-500 flex items-center">
                               <Car className="h-3 w-3 mr-1" />
                               {car.registrationNumber}
                             </span>
@@ -825,8 +825,8 @@ export default function DashboardPage() {
           <CardContent>
             {recentBookings.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
-                <CalendarCheck className="h-10 w-10 text-muted-foreground/30" />
-                <p className="mt-3 text-sm text-muted-foreground">No bookings yet</p>
+                <CalendarCheck className="h-10 w-10 text-slate-500/30" />
+                <p className="mt-3 text-sm text-slate-500">No bookings yet</p>
                 <Button variant="outline" size="sm" className="mt-3" asChild>
                   <Link href="/bookings">
                     <Plus className="mr-2 h-4 w-4" />
@@ -841,7 +841,7 @@ export default function DashboardPage() {
                   return (
                     <div
                       key={booking.id}
-                      className="flex items-center justify-between rounded-lg border p-3"
+                      className="flex items-center justify-between rounded-xl border border-slate-200/60 bg-white/60 backdrop-blur-sm p-4 shadow-sm hover:shadow-md hover:border-indigo-200/60 transition-all duration-200"
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
@@ -851,17 +851,17 @@ export default function DashboardPage() {
                           </Badge>
                         </div>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs text-slate-500">
                             {getTripTypeLabel(booking.tripType)}
                           </span>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs text-slate-500">
                             {category?.name}
                           </span>
                         </div>
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-medium">{formatCurrency(booking.grandTotal)}</p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-slate-500">
                           {new Date(booking.createdAt).toLocaleDateString('en-IN', {
                             day: 'numeric',
                             month: 'short'
@@ -942,11 +942,11 @@ export default function DashboardPage() {
                   <div key={category.id} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center">
-                        <Car className="h-4 w-4 text-muted-foreground" />
+                        <Car className="h-4 w-4 text-slate-500" />
                       </div>
                       <div>
                         <p className="text-sm font-medium">{category.name}</p>
-                        <p className="text-xs text-muted-foreground">{categoryCarCount} vehicles</p>
+                        <p className="text-xs text-slate-500">{categoryCarCount} vehicles</p>
                       </div>
                     </div>
                     <Badge variant="secondary">
@@ -957,7 +957,7 @@ export default function DashboardPage() {
               })}
               {carCategories.filter(c => c.isActive).length === 0 && (
                 <div className="text-center py-4">
-                  <p className="text-sm text-muted-foreground">No categories configured</p>
+                  <p className="text-sm text-slate-500">No categories configured</p>
                 </div>
               )}
             </div>
@@ -972,37 +972,37 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between rounded-lg bg-muted/50 p-3">
+              <div className="flex items-center justify-between rounded-xl bg-slate-50/80 border border-slate-200/60 p-3">
                 <div className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                  <Building2 className="h-4 w-4 text-slate-500" />
                   <span className="text-sm">B2B Clients</span>
                 </div>
                 <span className="text-sm font-medium">{stats.b2bClients}</span>
               </div>
-              <div className="flex items-center justify-between rounded-lg bg-muted/50 p-3">
+              <div className="flex items-center justify-between rounded-xl bg-slate-50/80 border border-slate-200/60 p-3">
                 <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <MapPin className="h-4 w-4 text-slate-500" />
                   <span className="text-sm">Service Cities</span>
                 </div>
                 <span className="text-sm font-medium">{cities.filter(c => c.isActive).length}</span>
               </div>
-              <div className="flex items-center justify-between rounded-lg bg-muted/50 p-3">
+              <div className="flex items-center justify-between rounded-xl bg-slate-50/80 border border-slate-200/60 p-3">
                 <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <FileText className="h-4 w-4 text-slate-500" />
                   <span className="text-sm">Fare Groups</span>
                 </div>
                 <span className="text-sm font-medium">{fareGroups.length}</span>
               </div>
-              <div className="flex items-center justify-between rounded-lg bg-muted/50 p-3">
+              <div className="flex items-center justify-between rounded-xl bg-slate-50/80 border border-slate-200/60 p-3">
                 <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <FileText className="h-4 w-4 text-slate-500" />
                   <span className="text-sm">Duty Slips</span>
                 </div>
                 <span className="text-sm font-medium">{dutySlips.length}</span>
               </div>
-              <div className="flex items-center justify-between rounded-lg bg-muted/50 p-3">
+              <div className="flex items-center justify-between rounded-xl bg-slate-50/80 border border-slate-200/60 p-3">
                 <div className="flex items-center gap-2">
-                  <Gift className="h-4 w-4 text-muted-foreground" />
+                  <Gift className="h-4 w-4 text-slate-500" />
                   <span className="text-sm">Promo Codes</span>
                 </div>
                 <span className="text-sm font-medium">{stats.activePromoCodes} active</span>
@@ -1039,13 +1039,13 @@ function ModuleCard({
 
   return (
     <Link href={href} className="group block">
-      <Card className="h-full transition-colors group-hover:border-primary/60">
+      <Card className="h-full transition-all duration-200 group-hover:border-indigo-300/60 group-hover:shadow-lg group-hover:shadow-indigo-500/10">
         <CardContent className="p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm text-muted-foreground">{title}</p>
+              <p className="text-sm text-slate-500">{title}</p>
               <p className="mt-1 truncate text-2xl font-bold">{value}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+              <p className="mt-1 text-xs text-slate-500">{description}</p>
             </div>
             <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${toneClasses[tone]}`}>
               <Icon className="h-5 w-5" />
@@ -1071,16 +1071,16 @@ function QuickAction({
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted"
+      className="flex items-center gap-3 rounded-xl border border-slate-200/60 bg-white/60 backdrop-blur-sm p-4 shadow-sm hover:shadow-md hover:border-indigo-200/60 hover:bg-indigo-50/30 transition-all duration-200"
     >
-      <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
-        <Icon className="h-4 w-4 text-primary" />
+      <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-500/10 to-purple-500/10 flex items-center justify-center">
+        <Icon className="h-4 w-4 text-indigo-600" />
       </div>
       <div className="flex-1">
         <p className="text-sm font-medium">{title}</p>
-        <p className="text-xs text-muted-foreground">{description}</p>
+        <p className="text-xs text-slate-500">{description}</p>
       </div>
-      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+      <ChevronRight className="h-4 w-4 text-slate-500" />
     </Link>
   )
 }
