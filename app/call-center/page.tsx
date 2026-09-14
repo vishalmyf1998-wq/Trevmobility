@@ -965,55 +965,6 @@ export default function CallCenterPage() {
               </Button>
             </div>
 
-            {/* Quick Reply Templates */}
-            <div className="mt-4 p-4 rounded-2xl bg-white/5 border border-white/10">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-xs font-bold text-white/70 uppercase tracking-wider flex items-center gap-1.5">
-                  <MessageSquare className="w-3.5 h-3.5 text-cyan-400" /> Quick Reply Templates
-                </h4>
-                {activeCall && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setShowTransferDialog(true)}
-                    className="h-7 rounded-lg bg-amber-500/10 border-amber-500/30 text-amber-400 text-[10px] font-bold hover:bg-amber-500/20"
-                  >
-                    <PhoneForwarded className="w-3 h-3 mr-1" /> Transfer
-                  </Button>
-                )}
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {quickReplyTemplates.map((template) => (
-                  <button
-                    key={template.id}
-                    onClick={() => {
-                      setQuickReplyText(template.text)
-                      toast.success(`Template: ${template.label}`)
-                    }}
-                    className="p-2.5 rounded-xl bg-white/5 hover:bg-cyan-500/10 border border-white/5 hover:border-cyan-500/20 text-left transition-all"
-                  >
-                    <p className="text-[11px] font-bold text-white">{template.label}</p>
-                    <p className="text-[10px] text-white/50 mt-0.5 line-clamp-2">{template.text.slice(0, 50)}...</p>
-                  </button>
-                ))}
-              </div>
-              {quickReplyText && (
-                <div className="mt-3 p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-cyan-300">{quickReplyText}</p>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setQuickReplyText('')}
-                      className="h-6 rounded-lg text-[10px] text-white/50 hover:text-white"
-                    >
-                      Clear
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-
             {/* Right: Context Mapping & Pre-call Setup */}
             <div className="lg:col-span-7 space-y-6">
               {/* Context Selector Card */}
@@ -1175,6 +1126,65 @@ export default function CallCenterPage() {
             </div>
           </div>
         </TabsContent>
+
+        {/* ============================================================ */}
+        {/* QUICK REPLY TEMPLATES — FULL WIDTH SECTION */}
+        {/* ============================================================ */}
+        <div className="mt-6 p-5 rounded-3xl bg-gradient-to-r from-cyan-500/5 to-indigo-500/5 border border-cyan-500/20 shadow-xl">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-sm font-bold text-white flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-cyan-400" /> Quick Reply Templates
+            </h4>
+            {activeCall && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowTransferDialog(true)}
+                className="h-8 rounded-xl bg-amber-500/10 border-amber-500/30 text-amber-400 text-xs font-bold hover:bg-amber-500/20"
+              >
+                <PhoneForwarded className="w-3.5 h-3.5 mr-1.5" /> Transfer Call
+              </Button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+            {quickReplyTemplates.map((template) => (
+              <button
+                key={template.id}
+                onClick={() => {
+                  setQuickReplyText(template.text)
+                  toast.success(`Template: ${template.label}`)
+                }}
+                className="p-4 rounded-2xl bg-[#0f1424]/60 hover:bg-cyan-500/10 border border-white/10 hover:border-cyan-500/30 text-left transition-all duration-200 hover:shadow-lg hover:shadow-cyan-500/10"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+                    <MessageSquare className="w-4 h-4 text-cyan-400" />
+                  </div>
+                  <p className="text-sm font-bold text-white">{template.label}</p>
+                </div>
+                <p className="text-xs text-white/60 leading-relaxed line-clamp-3">{template.text}</p>
+              </button>
+            ))}
+          </div>
+          {quickReplyText && (
+            <div className="mt-4 p-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/30">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-cyan-400" />
+                  <p className="text-sm text-cyan-300 font-medium">{quickReplyText}</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setQuickReplyText('')}
+                  className="h-7 rounded-lg text-xs text-white/50 hover:text-white hover:bg-white/10"
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* ============================================================ */}
         {/* TAB 2: CALL HISTORY & RECORDINGS */}
