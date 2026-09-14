@@ -868,39 +868,36 @@ export default function CallCenterPage() {
         {/* ============================================================ */}
         {/* TAB 1: LIVE DIALER & CONSOLE */}
         {/* ============================================================ */}
-        <TabsContent value="dialer" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Left: Softphone Dial Pad */}
-            <div className="lg:col-span-5 bg-[#0f1424] border border-white/10 rounded-3xl p-6 shadow-xl space-y-6">
+        <TabsContent value="dialer" className="space-y-5">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            <div className="lg:col-span-5 bg-[#0f1424] border border-white/10 rounded-2xl p-5 shadow-xl space-y-4">
               <div>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <PhoneCall className="w-5 h-5 text-indigo-400" /> Outbound Quick Dialer
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <PhoneCall className="w-4 h-4 text-indigo-400" /> Quick Dialer
                 </h3>
-                <p className="text-xs text-white/50">
-                  Virtual Caller ID: <span className="font-mono text-cyan-400 font-bold">{config.callerId}</span>
+                <p className="text-[11px] text-white/50 mt-0.5">
+                  Caller ID: <span className="font-mono text-cyan-400 font-bold">{config.callerId}</span>
                 </p>
               </div>
 
-              {/* Number Input Box */}
               <div className="relative">
                 <Input
                   value={dialPhoneNumber}
                   onChange={(e) => setDialPhoneNumber(e.target.value)}
                   placeholder="+91 99999 99999"
-                  className="h-14 bg-white/5 border-white/10 rounded-2xl text-center text-xl font-mono font-bold text-white tracking-wider focus:border-indigo-500"
+                  className="h-12 bg-white/5 border-white/10 rounded-xl text-center text-lg font-mono font-bold text-white tracking-wider focus:border-indigo-500"
                 />
                 {dialPhoneNumber && (
                   <button
                     onClick={handleDialPadBackspace}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-white/40 hover:text-white"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-white/40 hover:text-white"
                   >
                     ⌫
                   </button>
                 )}
               </div>
 
-              {/* Keypad Grid */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2">
                 {[
                   { digit: '1', sub: '' },
                   { digit: '2', sub: 'ABC' },
@@ -918,35 +915,32 @@ export default function CallCenterPage() {
                   <button
                     key={i}
                     onClick={() => handleDialPadPress(key.digit)}
-                    className="h-14 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-indigo-600/30 border border-white/5 text-white flex flex-col items-center justify-center transition-all active:scale-95 group"
+                    className="h-12 rounded-xl bg-white/5 hover:bg-white/10 active:bg-indigo-600/30 border border-white/5 text-white flex flex-col items-center justify-center transition-all active:scale-95 group"
                   >
-                    <span className="text-lg font-bold">{key.digit}</span>
-                    {key.sub && <span className="text-[9px] text-white/40 group-hover:text-white/70">{key.sub}</span>}
+                    <span className="text-base font-bold">{key.digit}</span>
+                    {key.sub && <span className="text-[8px] text-white/40 group-hover:text-white/70">{key.sub}</span>}
                   </button>
                 ))}
               </div>
 
-              {/* Dial Button */}
               <Button
                 onClick={handleInitiateCall}
                 disabled={isDialing || Boolean(activeCall)}
-                className="w-full h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base shadow-xl shadow-emerald-600/25 flex items-center justify-center gap-2 transition-all active:scale-95"
+                className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition-all active:scale-95"
               >
-                <PhoneCall className="w-5 h-5 animate-pulse" />
+                <PhoneCall className="w-4 h-4 animate-pulse" />
                 {activeCall ? 'Call In Progress...' : isDialing ? 'Connecting...' : 'Dial Outbound Call'}
               </Button>
             </div>
 
-            {/* Right: Context Mapping & Pre-call Setup */}
-            <div className="lg:col-span-7 space-y-6">
-              {/* Context Selector Card */}
+            <div className="lg:col-span-7 space-y-5">
               <div className="p-5 rounded-2xl bg-[#0f1424] border border-white/10 shadow-xl space-y-4">
                 <div>
                   <h3 className="text-base font-bold text-white flex items-center gap-2">
                     <Layers className="w-4 h-4 text-cyan-400" /> Associate Context & Booking
                   </h3>
                   <p className="text-xs text-white/50 mt-1">
-                    Map this call to an active Booking, Customer, or Driver for complete operational history.
+                    Map this call to an active Booking, Customer, or Driver.
                   </p>
                 </div>
 
