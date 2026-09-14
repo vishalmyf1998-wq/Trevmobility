@@ -968,27 +968,27 @@ export default function CallCenterPage() {
             {/* Right: Context Mapping & Pre-call Setup */}
             <div className="lg:col-span-7 space-y-6">
               {/* Context Selector Card */}
-              <Card className="bg-[#0f1424] border-white/10 rounded-3xl p-6 shadow-xl space-y-5">
+              <div className="p-5 rounded-2xl bg-[#0f1424] border border-white/10 shadow-xl space-y-4">
                 <div>
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                    <Layers className="w-5 h-5 text-cyan-400" /> Associate Context & Booking
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-cyan-400" /> Associate Context & Booking
                   </h3>
-                  <p className="text-xs text-white/50">
+                  <p className="text-xs text-white/50 mt-1">
                     Map this call to an active Booking, Customer, or Driver for complete operational history.
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* Contact Type */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-wider text-white/50">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-white/50">
                       Party Type
                     </label>
                     <Select
                       value={selectedContactType}
                       onValueChange={(val: CallType) => setSelectedContactType(val)}
                     >
-                      <SelectTrigger className="h-11 bg-white/5 border-white/10 rounded-xl text-white text-xs font-bold">
+                      <SelectTrigger className="h-10 bg-white/5 border-white/10 rounded-xl text-white text-xs font-bold">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-[#121727] border-white/10 text-white text-xs">
@@ -1001,15 +1001,15 @@ export default function CallCenterPage() {
                   </div>
 
                   {/* Call Category */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-wider text-white/50">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-white/50">
                       Call Purpose / Category
                     </label>
                     <Select
                       value={selectedCategory}
                       onValueChange={(val: CallCategory) => setSelectedCategory(val)}
                     >
-                      <SelectTrigger className="h-11 bg-white/5 border-white/10 rounded-xl text-white text-xs font-bold">
+                      <SelectTrigger className="h-10 bg-white/5 border-white/10 rounded-xl text-white text-xs font-bold">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-[#121727] border-white/10 text-white text-xs">
@@ -1025,13 +1025,13 @@ export default function CallCenterPage() {
                 </div>
 
                 {/* Booking Linking Dropdown */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-white/50 flex items-center justify-between">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-white/50 flex items-center justify-between">
                     <span>Link Booking ID (Optional)</span>
-                    <span className="text-[11px] text-cyan-400 font-normal">Auto-fills phone</span>
+                    <span className="text-[10px] text-cyan-400 font-normal">Auto-fills phone</span>
                   </label>
                   <Select value={selectedBookingId} onValueChange={handleBookingSelect}>
-                    <SelectTrigger className="h-11 bg-white/5 border-white/10 rounded-xl text-white text-xs">
+                    <SelectTrigger className="h-10 bg-white/5 border-white/10 rounded-xl text-white text-xs">
                       <SelectValue placeholder="Select or search booking..." />
                     </SelectTrigger>
                     <SelectContent className="bg-[#121727] border-white/10 text-white text-xs max-h-64">
@@ -1046,18 +1046,18 @@ export default function CallCenterPage() {
                 </div>
 
                 {/* Pre-call Notes */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-white/50">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-white/50">
                     Call Purpose Notes
                   </label>
                   <Input
                     value={dialNotes}
                     onChange={(e) => setDialNotes(e.target.value)}
                     placeholder="e.g. Inquiring regarding baggage size, or updating flight delay..."
-                    className="h-11 bg-white/5 border-white/10 rounded-xl text-white text-xs placeholder:text-white/30"
+                    className="h-10 bg-white/5 border-white/10 rounded-xl text-white text-xs placeholder:text-white/30"
                   />
                 </div>
-              </Card>
+              </div>
 
               {/* Test Scenarios Panel for Instant Evaluation */}
               <div className="p-5 rounded-3xl bg-indigo-500/5 border border-indigo-500/20 space-y-3">
