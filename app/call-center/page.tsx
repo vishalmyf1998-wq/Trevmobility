@@ -76,7 +76,6 @@ import {
   PhoneOutgoing,
   PhoneMissed,
   PhoneOff,
-  PhoneForwarded,
   Search,
   Plus,
   Play,
@@ -85,8 +84,6 @@ import {
   Volume2,
   VolumeX,
   Download,
-  Sparkles,
-  CheckCircle2,
   AlertTriangle,
   Clock,
   Car,
@@ -109,7 +106,6 @@ import {
   ExternalLink,
   X,
   MapPin,
-  MessageSquare,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -171,19 +167,6 @@ export default function CallCenterPage() {
   // Agent Status & Queue Management
   const [agentStatus, setAgentStatus] = useState<'available' | 'busy' | 'offline'>('available')
   const [queueStats, setQueueStats] = useState({ waiting: 0, active: 0, avgWait: 0 })
-  const [quickReplyText, setQuickReplyText] = useState('')
-  const [showTransferDialog, setShowTransferDialog] = useState(false)
-  const [transferTarget, setTransferTarget] = useState('')
-
-  // Quick Reply Templates
-  const quickReplyTemplates = [
-    { id: '1', label: '✅ Confirm Booking', text: 'Your booking has been confirmed. You will receive a driver update shortly.' },
-    { id: '2', label: '⏰ Running Late', text: 'Your driver is running slightly late. We are tracking the location and will update you shortly.' },
-    { id: '3', label: '❓ Enquiry', text: 'Thank you for calling. How can I help you today?' },
-    { id: '4', label: '🚫 Cancel', text: 'I understand you wish to cancel. Let me check the cancellation policy and assist you.' },
-    { id: '5', label: '💰 Refund', text: 'Your refund has been initiated. It will reflect in your account within 5-7 business days.' },
-    { id: '6', label: '🚗 Driver Issue', text: 'I have noted your concern about the driver. Our team will investigate and get back to you.' },
-  ]
 
   // Simulate live queue stats
   useEffect(() => {
@@ -1024,133 +1007,9 @@ export default function CallCenterPage() {
                   />
                 </div>
               </div>
-
-              {/* Test Scenarios Panel for Instant Evaluation */}
-              <div className="p-5 rounded-3xl bg-indigo-500/5 border border-indigo-500/20 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5" /> Quick Demo Scenarios
-                  </span>
-                  <span className="text-[11px] text-white/40">1-click simulation</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <button
-                    onClick={() =>
-                      simulateIncomingCall({
-                        contactName: 'Raghav Mehra (VIP)',
-                        fromNumber: '+91 98200 11223',
-                        contactType: 'customer',
-                        bookingNumber: 'BK-2026-095',
-                        pickupLocation: 'Terminal 3, IGI Airport',
-                        dropLocation: 'DLF Phase 5, Gurugram',
-                        fare: 1650,
-                      })
-                    }
-                    className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-left transition-all text-xs"
-                  >
-                    <p className="font-bold text-white">🛬 Airport Customer</p>
-                    <p className="text-[11px] text-white/50 truncate">Luggage & arrival query</p>
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      simulateIncomingCall({
-                        contactName: 'Driver Rakesh Yadav',
-                        fromNumber: '+91 98711 33445',
-                        contactType: 'driver',
-                        bookingNumber: 'BK-2026-092',
-                        pickupLocation: 'Sector 62, Noida',
-                        dropLocation: 'Connaught Place, Delhi',
-                        fare: 890,
-                      })
-                    }
-                    className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-left transition-all text-xs"
-                  >
-                    <p className="font-bold text-white">🚗 Toll Jam Alert</p>
-                    <p className="text-[11px] text-white/50 truncate">Driver reporting route delay</p>
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      simulateIncomingCall({
-                        contactName: 'Shalini Singhal (Accenture)',
-                        fromNumber: '+91 98109 88776',
-                        contactType: 'corporate',
-                        bookingNumber: 'BK-2026-089',
-                        pickupLocation: 'Cyber City, Gurugram',
-                        dropLocation: 'Aerocity, Delhi',
-                        fare: 1100,
-                      })
-                    }
-                    className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-left transition-all text-xs"
-                  >
-                    <p className="font-bold text-white">💼 B2B Corporate</p>
-                    <p className="text-[11px] text-white/50 truncate">GST invoice consolidation</p>
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
         </TabsContent>
-
-        {/* ============================================================ */}
-        {/* QUICK REPLY TEMPLATES — FULL WIDTH SECTION */}
-        {/* ============================================================ */}
-        <div className="mt-6 p-5 rounded-3xl bg-gradient-to-r from-cyan-500/5 to-indigo-500/5 border border-cyan-500/20 shadow-xl">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="text-sm font-bold text-white flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-cyan-400" /> Quick Reply Templates
-            </h4>
-            {activeCall && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setShowTransferDialog(true)}
-                className="h-8 rounded-xl bg-amber-500/10 border-amber-500/30 text-amber-400 text-xs font-bold hover:bg-amber-500/20"
-              >
-                <PhoneForwarded className="w-3.5 h-3.5 mr-1.5" /> Transfer Call
-              </Button>
-            )}
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-            {quickReplyTemplates.map((template) => (
-              <button
-                key={template.id}
-                onClick={() => {
-                  setQuickReplyText(template.text)
-                  toast.success(`Template: ${template.label}`)
-                }}
-                className="p-4 rounded-2xl bg-[#0f1424]/60 hover:bg-cyan-500/10 border border-white/10 hover:border-cyan-500/30 text-left transition-all duration-200 hover:shadow-lg hover:shadow-cyan-500/10"
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
-                    <MessageSquare className="w-4 h-4 text-cyan-400" />
-                  </div>
-                  <p className="text-sm font-bold text-white">{template.label}</p>
-                </div>
-                <p className="text-xs text-white/60 leading-relaxed line-clamp-3">{template.text}</p>
-              </button>
-            ))}
-          </div>
-          {quickReplyText && (
-            <div className="mt-4 p-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/30">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-cyan-400" />
-                  <p className="text-sm text-cyan-300 font-medium">{quickReplyText}</p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setQuickReplyText('')}
-                  className="h-7 rounded-lg text-xs text-white/50 hover:text-white hover:bg-white/10"
-                >
-                  Clear
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
 
         {/* ============================================================ */}
         {/* TAB 2: CALL HISTORY & RECORDINGS */}
@@ -2114,63 +1973,6 @@ export default function CallCenterPage() {
               </DialogFooter>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* ============================================================ */}
-      {/* TRANSFER CALL DIALOG */}
-      {/* ============================================================ */}
-      <Dialog open={showTransferDialog} onOpenChange={setShowTransferDialog}>
-        <DialogContent className="bg-[#0f1424] border-white/10 text-white max-w-md rounded-3xl p-6">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
-              <PhoneForwarded className="w-5 h-5 text-amber-400" /> Transfer Call
-            </DialogTitle>
-            <DialogDescription className="text-xs text-white/50">
-              Transfer the active call to another agent or department.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3 mt-2">
-            <label className="text-xs font-bold uppercase tracking-wider text-white/50">
-              Transfer To
-            </label>
-            <Select value={transferTarget} onValueChange={setTransferTarget}>
-              <SelectTrigger className="h-11 bg-white/5 border-white/10 rounded-xl text-white text-xs">
-                <SelectValue placeholder="Select agent or department" />
-              </SelectTrigger>
-              <SelectContent className="bg-[#121727] border-white/10 text-white text-xs">
-                <SelectItem value="agent-2">Agent 2 — Support Desk</SelectItem>
-                <SelectItem value="agent-3">Agent 3 — Billing</SelectItem>
-                <SelectItem value="agent-4">Agent 4 — Operations</SelectItem>
-                <SelectItem value="supervisor">Supervisor — Team Lead</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <DialogFooter className="gap-2 mt-4">
-            <Button
-              variant="ghost"
-              onClick={() => setShowTransferDialog(false)}
-              className="rounded-xl text-xs text-white/60 hover:text-white"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                if (!transferTarget) {
-                  toast.error('Please select a transfer target')
-                  return
-                }
-                toast.success(`Call transferred to ${transferTarget}`)
-                setShowTransferDialog(false)
-                setTransferTarget('')
-              }}
-              className="rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-4"
-            >
-              <PhoneForwarded className="w-3 h-3 mr-1" /> Transfer
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
