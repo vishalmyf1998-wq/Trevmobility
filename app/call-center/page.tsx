@@ -478,97 +478,69 @@ export default function CallCenterPage() {
   ]
 
   return (
-    <div className="space-y-6 pb-20">
-      {/* Top Header & Ambient Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#0c101d] via-[#12182b] to-[#0c101d] border border-white/10 p-6 md:p-8 shadow-2xl">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-1/3 -mb-10 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 shadow-inner shrink-0">
-              <Headset className="w-7 h-7 text-indigo-400" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2.5">
-                <h1 className="text-3xl font-black tracking-tight text-white">
-                  Exotel Call Center
-                </h1>
-                <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs px-2.5 py-0.5 flex items-center gap-1.5 font-bold">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-                  Cloud Telephony Online
-                </Badge>
-              </div>
-              <p className="text-sm font-medium text-white/60 mt-1">
-                Integrated Telephony Hub: Inbound & Outbound Calling, Call Recordings, AI Intelligence & Automated Follow-ups
-              </p>
-            </div>
+    <div className="space-y-5 pb-20">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-500/20 border border-indigo-500/40">
+            <Headset className="w-6 h-6 text-indigo-400" />
           </div>
-
-          {/* Quick Actions */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Agent Status Toggle */}
-            <div className="flex items-center gap-1 bg-white/5 rounded-xl p-1 border border-white/10">
-              {(['available', 'busy', 'offline'] as const).map((status) => (
-                <button
-                  key={status}
-                  onClick={() => handleAgentStatusChange(status)}
-                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all ${
-                    agentStatus === status
-                      ? status === 'available' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                      : status === 'busy' ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30'
-                      : 'bg-slate-600 text-white'
-                      : 'text-white/50 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
-
-            {/* Live Queue Stats */}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
-              <div className="flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5 text-cyan-400" />
-                <span className="text-[11px] font-bold text-cyan-300">
-                  Q: {queueStats.waiting} waiting • {queueStats.active} active • {queueStats.avgWait}s avg
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-white">Call Center</h1>
+              <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
                 </span>
-              </div>
+                Online
+              </Badge>
             </div>
-
-            {/* Simulate Inbound Button */}
-            <Button
-              onClick={() => simulateIncomingCall()}
-              variant="outline"
-              className="rounded-xl border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 font-bold text-xs h-10 px-3.5 shadow-sm"
-              title="Trigger a test inbound call screen-pop"
-            >
-              <PhoneIncoming className="w-4 h-4 mr-2 text-indigo-400 animate-pulse" />
-              Simulate Inbound Call
-            </Button>
-
-            {/* Reset Demo Data Button */}
-            <Button
-              onClick={() => {
-                resetDemoCallData()
-                refreshData()
-                toast.success('Sample telephony data reset!')
-              }}
-              variant="ghost"
-              size="icon"
-              className="rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-white h-10 w-10"
-              title="Reset sample calls"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </Button>
+            <p className="text-sm text-white/50">Inbound & Outbound Calling Hub</p>
           </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1 border border-white/10">
+            {(['available', 'busy', 'offline'] as const).map((status) => (
+              <button
+                key={status}
+                onClick={() => handleAgentStatusChange(status)}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition-all ${
+                  agentStatus === status
+                    ? status === 'available' ? 'bg-emerald-500 text-white'
+                    : status === 'busy' ? 'bg-amber-500 text-white'
+                    : 'bg-slate-600 text-white'
+                    : 'text-white/50 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-[11px] font-bold text-cyan-300">
+            <Users className="w-3.5 h-3.5" />
+            Q:{queueStats.waiting} • {queueStats.active} active
+          </div>
+          <Button
+            onClick={() => simulateIncomingCall()}
+            variant="outline"
+            className="rounded-lg border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 font-bold text-xs h-9 px-3"
+          >
+            <PhoneIncoming className="w-3.5 h-3.5 mr-1.5" /> Simulate Call
+          </Button>
+          <Button
+            onClick={() => { resetDemoCallData(); refreshData(); toast.success('Reset!') }}
+            variant="ghost"
+            size="icon"
+            className="rounded-lg bg-white/5 border border-white/10 text-white/70 hover:text-white h-9 w-9"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </Button>
         </div>
       </div>
 
-      {/* Primary KPI Metrics Bar */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {/* Total Calls */}
         <Card className="bg-[#0f1424]/80 border-white/10 shadow-sm backdrop-blur-xl">
