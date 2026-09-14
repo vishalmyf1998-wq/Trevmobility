@@ -84,6 +84,7 @@ import {
   Volume2,
   VolumeX,
   Download,
+  CheckCircle2,
   AlertTriangle,
   Clock,
   Car,
