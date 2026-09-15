@@ -15,8 +15,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { MapPin, RefreshCw, Zap, Leaf, Clock, Phone, ChevronDown, BatteryCharging, ChevronUp, AlertCircle, AlertTriangle, PhoneCall, ShieldAlert, History, Map, ClipboardList, Banknote, Download, FileText, Edit3, XCircle, CheckCircle, Gauge, User, Headset, Car, Wallet, Copy, MessageCircle, MoreHorizontal, ThumbsUp, ThumbsDown, Target, Tag, Save, Printer, Trash2, Plane, Train, GitCompare, Paperclip, FileImage, Plus } from 'lucide-react';
+import { MapPin, RefreshCw, Zap, Leaf, Clock, Phone, ChevronDown, BatteryCharging, ChevronUp, AlertCircle, AlertTriangle, PhoneCall, ShieldAlert, History, Map, ClipboardList, Banknote, Download, FileText, Edit3, XCircle, CheckCircle, Gauge, User, Headset, Car, Wallet, Copy, MessageCircle, MoreHorizontal, ThumbsUp, ThumbsDown, Target, Tag, Save, Printer, Trash2, Plane, Train, GitCompare, Paperclip, FileImage, Plus, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { useAdmin } from "@/lib/admin-context";
+import { useTelephony } from "@/lib/telephony-context";
+import { formatDuration } from "@/lib/exotel";
 import { toast } from "sonner";
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Skeleton } from "@/components/ui/skeleton";
@@ -517,7 +519,8 @@ function ActiveRideDashboard() {
     selectedCity,
     setSelectedCity,
     dispatchCenters = []
-  } = useAdmin();
+} = useAdmin();
+  const { callLogs } = useTelephony();
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -546,6 +549,8 @@ function ActiveRideDashboard() {
   const [carModelFilter, setCarModelFilter] = useState('all');
   const [hoveredDriverId, setHoveredDriverId] = useState<string | null>(null);
   const [assigningRideId, setAssigningRideId] = useState<string | null>(null);
+  const [callSummaryRide, setCallSummaryRide] = useState<any>(null);
+  const [isCallSummaryDialogOpen, setIsCallSummaryDialogOpen] = useState(false);
   const [lastAllocationTime, setLastAllocationTime] = useState<Date | null>(null);
   const [nextAllocationTime, setNextAllocationTime] = useState<Date | null>(null);
 
@@ -1761,19 +1766,27 @@ function ActiveRideDashboard() {
                                                }}>
                                                    <GitCompare className="h-4 w-4 mr-2 text-slate-500" /> Change & Variations
                                                </DropdownMenuItem>
-                                               <DropdownMenuItem className="cursor-pointer font-medium text-slate-700" onClick={(e) => { 
-                                                   e.stopPropagation(); 
-                                                   setDocsRideTarget(ride);
-                                                   setIsDocsDialogOpen(true);
-                                               }}>
-                                                   <Paperclip className="h-4 w-4 mr-2 text-slate-500" /> View Documents
-                                               </DropdownMenuItem>
-                                               <DropdownMenuItem className="text-red-600 focus:text-red-700 focus:bg-red-50 cursor-pointer font-medium" onClick={(e) => { 
-                                                   e.stopPropagation(); 
-                                                   setCancelRideTarget(ride);
-                                                   setCancelReason("");
-                                                   setIsCancelDialogOpen(true);
-                                               }}>
+<DropdownMenuItem className="cursor-pointer font-medium text-slate-700" onClick={(e) => { 
+                                                    e.stopPropagation(); 
+                                                    setDocsRideTarget(ride);
+                                                    setIsDocsDialogOpen(true);
+                                                }}>
+                                                    <Paperclip className="h-4 w-4 mr-2 text-slate-500" /> View Documents
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem className="cursor-pointer font-medium text-slate-700" onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setCallSummaryRide(ride);
+                                                    setIsCallSummaryDialogOpen(true);
+                                                }}>
+                                                    <PhoneCall className="h-4 w-4 mr-2 text-emerald-500" /> Call Summary
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator className="bg-slate-100" />
+                                                <DropdownMenuItem className="text-red-600 focus:text-red-700 focus:bg-red-50 cursor-pointer font-medium" onClick={(e) => { 
+                                                    e.stopPropagation(); 
+                                                    setCancelRideTarget(ride);
+                                                    setCancelReason("");
+                                                    setIsCancelDialogOpen(true);
+                                                }}>
                                                    <XCircle className="h-4 w-4 mr-2" /> Cancel Booking
                                                </DropdownMenuItem>
                                                <DropdownMenuSeparator className="bg-slate-100" />
@@ -3390,6 +3403,101 @@ function ActiveRideDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Call Summary Dialog */}
+      {callSummaryRide && (
+        <Dialog open={isCallSummaryDialogOpen} onOpenChange={setIsCallSummaryDialogOpen}>
+          <DialogContent className="max-w-2xl rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <PhoneCall className="w-5 h-5 text-emerald-500" /> Call Summary — {callSummaryRide.originalBooking?.bookingNumber}
+              </DialogTitle>
+              <DialogDescription>
+                All calls associated with this booking
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 max-h-96 overflow-y-auto">
+              {callSummaryRide.originalBooking?.customerPhone && (
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <p className="text-xs font-bold text-slate-500 uppercase">Customer</p>
+                  <p className="text-sm font-medium text-slate-900">{callSummaryRide.originalBooking.customerName}</p>
+                  <p className="text-xs text-slate-500 font-mono">{callSummaryRide.originalBooking.customerPhone}</p>
+                </div>
+              )}
+
+              {callSummaryRide.originalBooking?.driverId && (
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <p className="text-xs font-bold text-slate-500 uppercase">Driver</p>
+                  <p className="text-sm font-medium text-slate-900">
+                    {drivers.find(d => d.id === callSummaryRide.originalBooking.driverId)?.name || 'Assigned'}
+                  </p>
+                  <p className="text-xs text-slate-500 font-mono">
+                    {drivers.find(d => d.id === callSummaryRide.originalBooking.driverId)?.phone || ''}
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <h4 className="text-sm font-bold text-slate-700">Call History</h4>
+                {callLogs.filter(c => 
+                  c.bookingId === callSummaryRide.originalBooking?.id ||
+                  c.bookingNumber === callSummaryRide.originalBooking?.bookingNumber ||
+                  c.customerPhone === callSummaryRide.originalBooking?.customerPhone ||
+                  c.toNumber === callSummaryRide.originalBooking?.customerPhone ||
+                  c.fromNumber === callSummaryRide.originalBooking?.customerPhone
+                ).length === 0 ? (
+                  <p className="text-sm text-slate-400 text-center py-4">No calls recorded for this booking</p>
+                ) : (
+                  <div className="space-y-2">
+                    {callLogs.filter(c => 
+                      c.bookingId === callSummaryRide.originalBooking?.id ||
+                      c.bookingNumber === callSummaryRide.originalBooking?.bookingNumber ||
+                      c.customerPhone === callSummaryRide.originalBooking?.customerPhone ||
+                      c.toNumber === callSummaryRide.originalBooking?.customerPhone ||
+                      c.fromNumber === callSummaryRide.originalBooking?.customerPhone
+                    ).map((call, i) => (
+                      <div key={i} className="p-3 rounded-xl border border-slate-200 bg-white">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            {call.direction === 'inbound' ? (
+                              <ArrowDownLeft className="w-4 h-4 text-cyan-500" />
+                            ) : (
+                              <ArrowUpRight className="w-4 h-4 text-indigo-500" />
+                            )}
+                            <span className="text-sm font-medium text-slate-900">
+                              {call.direction === 'inbound' ? 'Inbound' : 'Outbound'}
+                            </span>
+                          </div>
+                          <Badge className={
+                            call.status === 'answered' ? 'bg-emerald-100 text-emerald-700' :
+                            call.status === 'missed' ? 'bg-amber-100 text-amber-700' :
+                            'bg-red-100 text-red-700'
+                          }>
+                            {call.status}
+                          </Badge>
+                        </div>
+                        <div className="mt-2 text-xs text-slate-600 space-y-1">
+                          <p><span className="font-medium">From:</span> {call.fromNumber}</p>
+                          <p><span className="font-medium">To:</span> {call.toNumber}</p>
+                          <p><span className="font-medium">Time:</span> {new Date(call.createdAt).toLocaleString()}</p>
+                          <p><span className="font-medium">Duration:</span> {formatDuration(call.durationSeconds)}</p>
+                          {call.customerName && <p><span className="font-medium">Contact:</span> {call.customerName}</p>}
+                          {call.notes && <p><span className="font-medium">Notes:</span> {call.notes}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsCallSummaryDialogOpen(false)} className="rounded-xl">Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <FreeDriversSidebar
         freeDrivers={freeDrivers}
