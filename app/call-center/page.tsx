@@ -100,7 +100,6 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   Calendar,
-  Layers,
   Check,
   Zap,
   BarChart3,
@@ -674,7 +673,62 @@ export default function CallCenterPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="space-y-2 text-xs">
+
+                  {/* Customer Analytics */}
+                  {(() => {
+                    const rides = openIncomingTabs.get(activeIncomingTab)!.rides
+                    const completedRides = rides.filter(r => r.status === 'completed')
+                    const totalRevenue = rides.reduce((sum, r) => sum + (r.grandTotal || 0), 0)
+                    const firstRide = rides.length > 0 ? rides[rides.length - 1] : null
+                    const memberSince = firstRide?.pickupDate ? new Date(firstRide.pickupDate) : null
+                    const now = new Date()
+                    const monthsOld = memberSince ? Math.max(1, Math.round((now.getTime() - memberSince.getTime()) / (1000 * 60 * 60 * 24 * 30))) : 0
+                    
+                    // Booking type breakdown
+                    const typeCounts: Record<string, number> = {}
+                    rides.forEach(r => {
+                      const t = r.tripType || 'city_ride'
+                      typeCounts[t] = (typeCounts[t] || 0) + 1
+                    })
+                    
+                    return (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="p-2 rounded-lg bg-white/5">
+                            <p className="text-[10px] text-white/40 uppercase">Total Rides</p>
+                            <p className="text-lg font-bold text-cyan-400">{rides.length}</p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-white/5">
+                            <p className="text-[10px] text-white/40 uppercase">Completed</p>
+                            <p className="text-lg font-bold text-emerald-400">{completedRides.length}</p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-white/5">
+                            <p className="text-[10px] text-white/40 uppercase">Total Revenue</p>
+                            <p className="text-lg font-bold text-amber-400">₹{totalRevenue.toLocaleString()}</p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-white/5">
+                            <p className="text-[10px] text-white/40 uppercase">Member Since</p>
+                            <p className="text-lg font-bold text-purple-400">{monthsOld} mo</p>
+                          </div>
+                        </div>
+                        
+                        {Object.keys(typeCounts).length > 0 && (
+                          <div>
+                            <p className="text-[10px] text-white/40 uppercase mb-1">Booking Types</p>
+                            <div className="flex flex-wrap gap-1">
+                              {Object.entries(typeCounts).map(([type, count]) => (
+                                <Badge key={type} className="text-[9px] bg-indigo-500/10 text-indigo-300 border-indigo-500/20">
+                                  {type.replace('_', ' ')}: {count}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
+
+                  <div className="space-y-2 text-xs mt-3">
                     <div className="flex justify-between">
                       <span className="text-white/50">Contact Type:</span>
                       <span className="font-bold text-white capitalize">
@@ -916,99 +970,6 @@ export default function CallCenterPage() {
                 <PhoneCall className="w-4 h-4 animate-pulse" />
                 {activeCall ? 'Call In Progress...' : isDialing ? 'Connecting...' : 'Dial Outbound Call'}
               </Button>
-            </div>
-
-            <div className="lg:col-span-7 space-y-5">
-              <div className="p-5 rounded-2xl bg-[#0f1424] border border-white/10 shadow-xl space-y-4">
-                <div>
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-cyan-400" /> Associate Context & Booking
-                  </h3>
-                  <p className="text-xs text-white/50 mt-1">
-                    Map this call to an active Booking, Customer, or Driver.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Contact Type */}
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-white/50">
-                      Party Type
-                    </label>
-                    <Select
-                      value={selectedContactType}
-                      onValueChange={(val: CallType) => setSelectedContactType(val)}
-                    >
-                      <SelectTrigger className="h-10 bg-white/5 border-white/10 rounded-xl text-white text-xs font-bold">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-[#121727] border-white/10 text-white text-xs">
-                        <SelectItem value="customer">B2C Customer</SelectItem>
-                        <SelectItem value="driver">Driver Partner</SelectItem>
-                        <SelectItem value="corporate">B2B Corporate Account</SelectItem>
-                        <SelectItem value="support">Support Desk</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Call Category */}
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-white/50">
-                      Call Purpose / Category
-                    </label>
-                    <Select
-                      value={selectedCategory}
-                      onValueChange={(val: CallCategory) => setSelectedCategory(val)}
-                    >
-                      <SelectTrigger className="h-10 bg-white/5 border-white/10 rounded-xl text-white text-xs font-bold">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-[#121727] border-white/10 text-white text-xs">
-                        <SelectItem value="booking_enquiry">Booking Enquiry</SelectItem>
-                        <SelectItem value="complaint">Customer Complaint</SelectItem>
-                        <SelectItem value="driver_issue">Driver & Route Issue</SelectItem>
-                        <SelectItem value="cancellation">Ride Cancellation</SelectItem>
-                        <SelectItem value="payment">Payment & Invoice</SelectItem>
-                        <SelectItem value="general">General Support</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Booking Linking Dropdown */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-white/50 flex items-center justify-between">
-                    <span>Link Booking ID (Optional)</span>
-                    <span className="text-[10px] text-cyan-400 font-normal">Auto-fills phone</span>
-                  </label>
-                  <Select value={selectedBookingId} onValueChange={handleBookingSelect}>
-                    <SelectTrigger className="h-10 bg-white/5 border-white/10 rounded-xl text-white text-xs">
-                      <SelectValue placeholder="Select or search booking..." />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#121727] border-white/10 text-white text-xs max-h-64">
-                      <SelectItem value="none">-- No Booking Link --</SelectItem>
-                      {bookings.slice(0, 15).map((b) => (
-                        <SelectItem key={b.id} value={b.id}>
-                          {b.bookingNumber} — {b.customerName} ({b.customerPhone}) [{b.pickupLocation?.slice(0, 20)}...]
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Pre-call Notes */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-white/50">
-                    Call Purpose Notes
-                  </label>
-                  <Input
-                    value={dialNotes}
-                    onChange={(e) => setDialNotes(e.target.value)}
-                    placeholder="e.g. Inquiring regarding baggage size, or updating flight delay..."
-                    className="h-10 bg-white/5 border-white/10 rounded-xl text-white text-xs placeholder:text-white/30"
-                  />
-                </div>
-              </div>
             </div>
           </div>
         </TabsContent>
